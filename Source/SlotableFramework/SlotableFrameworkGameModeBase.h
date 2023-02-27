@@ -13,5 +13,5 @@ UCLASS()
 class SLOTABLEFRAMEWORK_API ASlotableFrameworkGameModeBase : public AGameModeBase
 {
 	GENERATED_BODY()
-	
+
 };
