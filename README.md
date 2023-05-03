@@ -7,7 +7,7 @@ Slotables - An object in an inventory. The framework allows these to take "passi
 
 Inventory - Inventories of slotables. These can be dynamic or static, in terms of how many slotables they can contain. They can also be preset with slotables, which can be locked.
 
-Constituent - Building blocks of a slotable which can be reused to share functionality between slotables. These are themselves supposed to be scriptable by blueprints with targeters, operators, and events. They offer a wide range of replication options as well as runtime game data injection functionality.
+Constituent - Building blocks of a slotable which can be reused to share functionality between slotables. These are themselves supposed to be scriptable by blueprints with targeters, operators, and events.
 
 Forms - An APawn that is capable of holding slotables. This is just a conceptual definition, as technically anything with the right components can be considered a "form".
 
