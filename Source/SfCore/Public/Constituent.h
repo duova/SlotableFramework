@@ -24,4 +24,8 @@ public:
 	void Initialize();
 
 	void Deinitialize();
+
+private:
+	UPROPERTY(Replicated)
+	uint8 ActivationState;
 };

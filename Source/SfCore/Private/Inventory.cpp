@@ -194,17 +194,13 @@ void UInventory::TradeSlotablesBetweenInventories(USlotable* SlotableA, USlotabl
 	       TEXT("Attempted to trade slotables between change locked inventories."));
 	DeinitializeSlotable(SlotableA);
 	DeinitializeSlotable(SlotableB);
-
-	//Swap outers to ensure replication works as intended.
-	AActor* OuterA = SlotableA->GetTypedOuter<AActor>();
-	AActor* OuterB = SlotableB->GetTypedOuter<AActor>();
-	SlotableA->Rename(nullptr, OuterB, REN_ForceNoResetLoaders);
-	SlotableB->Rename(nullptr, OuterA, REN_ForceNoResetLoaders);
-
-	InventoryA->Slotables[IndexA] = SlotableB;
-	InventoryB->Slotables[IndexB] = SlotableA;
-	InitializeSlotable(SlotableA);
-	InitializeSlotable(SlotableB);
+	InventoryA->Slotables[IndexA] = DuplicateObject(SlotableB, SlotableA->GetTypedOuter<AActor>());
+	InventoryB->Slotables[IndexB] = DuplicateObject(SlotableA, SlotableB->GetTypedOuter<AActor>());
+	//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
+	SlotableA->Destroy();
+	SlotableB->Destroy();
+	InitializeSlotable(InventoryA->Slotables[IndexA]);
+	InitializeSlotable(InventoryB->Slotables[IndexB]);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, InventoryA);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, InventoryB);
 }
