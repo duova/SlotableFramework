@@ -3,7 +3,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Inventory.h"
 #include "Components/ActorComponent.h"
+#include "Net/UnrealNetwork.h"
 #include "FormCoreComponent.generated.h"
 
 /*
@@ -17,15 +19,34 @@ class SFCORE_API UFormCoreComponent : public UActorComponent
 	GENERATED_BODY()
 
 public:
-	// Sets default values for this component's properties
 	UFormCoreComponent();
-
-protected:
-	// Called when the game starts
-	virtual void BeginPlay() override;
-
-public:
-	// Called every frame
+	
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
 	                           FActorComponentTickFunction* ThisTickFunction) override;
+
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	
+	UFUNCTION(BlueprintGetter)
+	TArray<UInventory*> GetInventories();
+
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
+	UInventory* AddInventory(const TSubclassOf<UInventory>& InventoryClass);
+
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
+	void RemoveInventoryByIndex(const int32 Index);
+
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
+	bool RemoveInventory(UInventory* Inventory);
+
+protected:
+	virtual void BeginPlay() override;
+
+	virtual void BeginDestroy() override;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	TArray<TSubclassOf<UInventory>> DefaultInventoryClasses;
+
+private:
+	UPROPERTY(Replicated, VisibleAnywhere)
+	TArray<UInventory*> Inventories;
 };
