@@ -14,6 +14,7 @@ UFormCoreComponent::UFormCoreComponent()
 void UFormCoreComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	if (!GetOwner()->HasAuthority()) return;
 	for (TSubclassOf<UInventory> InventoryClass : DefaultInventoryClasses)
 	{
 		AddInventory(InventoryClass);
@@ -23,6 +24,7 @@ void UFormCoreComponent::BeginPlay()
 void UFormCoreComponent::BeginDestroy()
 {
 	Super::BeginDestroy();
+	if (!GetOwner()->HasAuthority()) return;
 	for (int32 i = 0; i < Inventories.Num(); i++)
 	{
 		//We clear index 0 because the list shifts down.
@@ -90,6 +92,7 @@ void UFormCoreComponent::RemoveInventoryByIndex(const int32 Index)
 
 bool UFormCoreComponent::RemoveInventory(UInventory* Inventory)
 {
+	//Authority checking done by RemoveInventoryByIndex().
 	if (!Inventory) return false;
 	const int32 Index = Inventories.Find(Inventory);
 	if (Index == INDEX_NONE) return false;

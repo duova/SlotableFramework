@@ -7,9 +7,14 @@
 
 UInventory::UInventory()
 {
+	if (!HasAuthority()) return;
+	checkf(Capacity <= 128, TEXT("The capacity of an inventory may not exceed 128."))
 	for (auto SlotableClass : InitialSlotableClasses)
 	{
-		AddSlotable(SlotableClass);
+		USlotable* SlotableInstance = CreateUninitializedSlotable(SlotableClass);
+		Slotables.Emplace(SlotableInstance);
+		InitializeSlotable(SlotableInstance);
+		MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
 	}
 }
 
@@ -25,14 +30,22 @@ void UInventory::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifeti
 void UInventory::BeginDestroy()
 {
 	UObject::BeginDestroy();
+	if (!HasAuthority()) return;
 	for (int32 i = 0; i < Slotables.Num(); i++)
 	{
 		//We clear index 0 because the list shifts down.
-		RemoveSlotableByIndex(0, true);
+		if (USlotable* Slotable = Slotables[0])
+		{
+			DeinitializeSlotable(Slotable);
+			//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
+			Slotable->Destroy();
+		}
+		Slotables.RemoveAt(0);
+		MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
 	}
 }
 
-USlotable* UInventory::CreateUninitializedSlotable(const TSubclassOf<USlotable>& SlotableClass)
+USlotable* UInventory::CreateUninitializedSlotable(const TSubclassOf<USlotable>& SlotableClass) const
 {
 	ErrorIfNoAuthority();
 	if (!SlotableClass || SlotableClass->HasAnyClassFlags(CLASS_Abstract)) return nullptr;
@@ -83,27 +96,42 @@ void UInventory::RemoveSlotableByIndex(const int32 Index, const bool bRemoveSlot
 	}
 	checkf(!bIsChangeLocked, TEXT("Attempted to remove slotable from a change locked inventory."));
 	checkf(Index < 0 || Index >= Slotables.Num(), TEXT("Attempted to remove slotable with an index out of range."));
-	USlotable* Slotable = Slotables[Index];
-	if (Slotable)
-	{
-		DeinitializeSlotable(Slotable);
-		//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
-		Slotable->Destroy();
-	}
 	if (bRemoveSlot)
 	{
+		if (USlotable* Slotable = Slotables[Index])
+		{
+			DeinitializeSlotable(Slotable);
+			//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
+			Slotable->Destroy();
+		}
 		Slotables.RemoveAt(Index);
+	}
+	else
+	{
+		SetSlotable(EmptySlotableClass, Index, false);
 	}
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
 }
 
-USlotable* UInventory::SetSlotable(const TSubclassOf<USlotable>& SlotableClass, const int32 Index)
+USlotable* UInventory::SetSlotable(const TSubclassOf<USlotable>& SlotableClass, const int32 Index,
+                                   const bool bSlotMustBeNullOrEmpty)
 {
 	ErrorIfNoAuthority();
 	checkf(!bIsChangeLocked, TEXT("Attempted to set a slotable in a change locked inventory."));
 	checkf(Index < 0 || Index >= Slotables.Num(), TEXT("Attempted to set a slotable with an index out of range."));
+	USlotable* CurrentSlotable = Slotables[Index];
+	if (CurrentSlotable)
+	{
+		if (bSlotMustBeNullOrEmpty)
+		{
+			checkf(CurrentSlotable->GetClass() == EmptySlotableClass,
+			       TEXT("Attempted to set a slotable with an index out of range."));
+		}
+		DeinitializeSlotable(CurrentSlotable);
+		//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
+		CurrentSlotable->Destroy();
+	}
 	USlotable* SlotableInstance = CreateUninitializedSlotable(SlotableClass);
-	RemoveSlotableByIndex(Index, false);
 	Slotables[Index] = SlotableInstance;
 	InitializeSlotable(SlotableInstance);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
@@ -127,7 +155,8 @@ bool UInventory::SwapSlotables(USlotable* SlotableA, USlotable* SlotableB)
 {
 	ErrorIfNoAuthority();
 	if (!SlotableA || !SlotableB) return false;
-	checkf(Slotables.Contains(SlotableA) && Slotables.Contains(SlotableB), TEXT("Attempted to swap slotables between inventories."));
+	checkf(Slotables.Contains(SlotableA) && Slotables.Contains(SlotableB),
+	       TEXT("Attempted to swap slotables between inventories."));
 	SwapSlotablesByIndex(Slotables.Find(SlotableA), Slotables.Find(SlotableA));
 	return true;
 }
@@ -136,23 +165,64 @@ void UInventory::SwapSlotablesByIndex(const int32 IndexA, const int32 IndexB)
 {
 	ErrorIfNoAuthority();
 	checkf(!bIsChangeLocked, TEXT("Attempted to swap slotables in a change locked inventory."));
-	checkf(IndexA < 0 || IndexA >= Slotables.Num() || IndexB < 0 || IndexB >= Slotables.Num(), TEXT("Attempted to swap slotables with an index out of range."));
+	checkf(IndexA < 0 || IndexA >= Slotables.Num() || IndexB < 0 || IndexB >= Slotables.Num(),
+	       TEXT("Attempted to swap slotables with an index out of range."));
 	checkf(IndexA != IndexB, TEXT("Attempted to swap slotable with itself."));
-	checkf(Slotables[IndexA] && Slotables[IndexB], TEXT("Attempted to swap slotables with index referring to a nullptr"));
+	checkf(Slotables[IndexA] && Slotables[IndexB],
+	       TEXT("Attempted to swap slotables with index referring to a nullptr"));
+	DeinitializeSlotable(Slotables[IndexA]);
+	DeinitializeSlotable(Slotables[IndexB]);
 	USlotable* TempSlotablePtr = Slotables[IndexA];
 	Slotables[IndexA] = Slotables[IndexB];
 	Slotables[IndexB] = TempSlotablePtr;
+	InitializeSlotable(Slotables[IndexA]);
+	InitializeSlotable(Slotables[IndexB]);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
 }
 
+void UInventory::TradeSlotablesBetweenInventories(USlotable* SlotableA, USlotable* SlotableB)
+{
+	//Cannot be made static as authority check needs to be made.
+	ErrorIfNoAuthority();
+	checkf(SlotableA && SlotableB, TEXT("Attempted to trade slotables with a nullptr."));
+	checkf(SlotableA != SlotableB, TEXT("Attempted to trade slotable with itself."));
+	UInventory* InventoryA = SlotableA->OwningInventory;
+	UInventory* InventoryB = SlotableB->OwningInventory;
+	const int8 IndexA = InventoryA->GetSlotables().Find(SlotableA);
+	const int8 IndexB = InventoryB->GetSlotables().Find(SlotableB);
+	checkf(!InventoryA->bIsChangeLocked && !InventoryB->bIsChangeLocked,
+	       TEXT("Attempted to trade slotables between change locked inventories."));
+	DeinitializeSlotable(SlotableA);
+	DeinitializeSlotable(SlotableB);
+
+	//Swap outers to ensure replication works as intended.
+	AActor* OuterA = SlotableA->GetTypedOuter<AActor>();
+	AActor* OuterB = SlotableB->GetTypedOuter<AActor>();
+	SlotableA->Rename(nullptr, OuterB, REN_ForceNoResetLoaders);
+	SlotableB->Rename(nullptr, OuterA, REN_ForceNoResetLoaders);
+
+	InventoryA->Slotables[IndexA] = SlotableB;
+	InventoryB->Slotables[IndexB] = SlotableA;
+	InitializeSlotable(SlotableA);
+	InitializeSlotable(SlotableB);
+	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, InventoryA);
+	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, InventoryB);
+}
+
+//Must be called after the slotable has been placed in an inventory.
 void UInventory::InitializeSlotable(USlotable* Slotable)
 {
 	GetOwner()->AddReplicatedSubObject(Slotable);
-	//Call events.
+	Slotable->OwningInventory = this;
+	MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, OwningInventory, Slotable);
+	Slotable->Initialize();
 }
 
+//Must be called before the slotable is removed from an inventory.
 void UInventory::DeinitializeSlotable(USlotable* Slotable)
 {
-	//Call events.
+	Slotable->Deinitialize();
+	Slotable->OwningInventory = nullptr;
+	MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, OwningInventory, Slotable);
 	GetOwner()->RemoveReplicatedSubObject(Slotable);
 }

@@ -34,7 +34,7 @@ public:
 	void RemoveSlotableByIndex(const int32 Index, const bool bRemoveSlot);
 	
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	USlotable* SetSlotable(const TSubclassOf<USlotable>& SlotableClass, const int32 Index);
+	USlotable* SetSlotable(const TSubclassOf<USlotable>& SlotableClass, const int32 Index, const bool bSlotMustBeNullOrEmpty);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	USlotable* InsertSlotable(const TSubclassOf<USlotable>& SlotableClass, const int32 Index);
@@ -44,6 +44,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	void SwapSlotablesByIndex(const int32 IndexA, const int32 IndexB);
+
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
+	void TradeSlotablesBetweenInventories(USlotable* SlotableA, USlotable* SlotableB);
 
 protected:
 
@@ -62,7 +65,7 @@ protected:
 	bool bIsChangeLocked;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	int32 Capacity;
+	int32 Capacity = int32();
 
 	/*
 	 * Called after a slotable is added to an inventory.
@@ -78,5 +81,5 @@ private:
 	UPROPERTY(Replicated, VisibleAnywhere)
 	TArray<USlotable*> Slotables;
 
-	USlotable* CreateUninitializedSlotable(const TSubclassOf<USlotable>& SlotableClass);
+	USlotable* CreateUninitializedSlotable(const TSubclassOf<USlotable>& SlotableClass) const;
 };

@@ -59,3 +59,8 @@ void USfObject::ErrorIfNoAuthority() const
 	checkf(Owner != nullptr, TEXT("Invalid owner."));
 	checkf(Owner->HasAuthority(), TEXT("Called without authority."));
 }
+
+bool USfObject::HasAuthority() const
+{
+	return GetOwner() && GetOwner()->HasAuthority();
+}

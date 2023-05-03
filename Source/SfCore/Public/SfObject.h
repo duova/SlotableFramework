@@ -21,6 +21,9 @@ public:
 		return GetTypedOuter<AActor>();
 	}
 
+	UFUNCTION(BlueprintPure)
+	bool HasAuthority() const;
+
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	virtual bool IsSupportedForNetworking() const override;

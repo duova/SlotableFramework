@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "SfObject.h"
+#include "Slotable.h"
 #include "Constituent.generated.h"
 
 /**
@@ -13,5 +14,14 @@ UCLASS(Blueprintable)
 class SFCORE_API UConstituent : public USfObject
 {
 	GENERATED_BODY()
+
+public:
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)
+	USlotable* OwningSlotable;
+	
+	void Initialize();
+
+	void Deinitialize();
 };
