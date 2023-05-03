@@ -8,7 +8,7 @@
 #include "Net/UnrealNetwork.h"
 #include "FormCoreComponent.generated.h"
 
-/*
+/**
  * The FormCoreComponent is responsible for the core logic of a form.
  * Forms should extend APawn or ACharacter. This component must be replicated.
  * The component mainly holds the slotable hierarchy and its functions.

@@ -8,8 +8,9 @@
 #include "Inventory.generated.h"
 
 /**
- * An inventory for slotables.
- * Can be dynamic or fixed size.
+ * Inventories of slotables.
+ * These can be dynamic or static, in terms of how many slotables they can contain.
+ * They can also be preset with slotables, which can be locked.
  */
 UCLASS(Blueprintable)
 class SFCORE_API UInventory : public USfObject

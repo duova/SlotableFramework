@@ -8,6 +8,9 @@
 
 /**
  * Base object for objects in the slotable hierarchy.
+ * Routes remote function calls through the outer's NetDriver,
+ * enables blueprint push model replication,
+ * and provides utility functions.
  */
 UCLASS()
 class SFCORE_API USfObject : public UObject

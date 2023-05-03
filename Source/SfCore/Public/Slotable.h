@@ -7,7 +7,12 @@
 #include "Slotable.generated.h"
 
 /**
- * A representation of anything in an inventory from an item to an ability.
+ * An object in an inventory.
+ * The framework allows these to take "passive" or "active" actions.
+ * Passive actions hook into events, while active actions are triggered by inputs.
+ * In theory this can represent anything from an in-game item to a status effect to an ability.
+ * A slotable is itself only supposed to be a container for constituents,
+ * which composes a slotables functionality.
  */
 UCLASS()
 class SFCORE_API USlotable : public USfObject
