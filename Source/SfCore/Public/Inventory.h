@@ -60,13 +60,13 @@ protected:
 	TSubclassOf<USlotable> EmptySlotableClass;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	bool bIsDynamic;
+	uint8 bIsDynamic:1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	bool bIsChangeLocked;
+	uint8 bIsChangeLocked:1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	int32 Capacity = int32();
+	uint8 Capacity = uint8();
 
 	/*
 	 * Called after a slotable is added to an inventory.

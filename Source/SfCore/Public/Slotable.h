@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "SfObject.h"
+#include "Constituent.h"
 #include "Slotable.generated.h"
 
 /**
@@ -26,7 +27,7 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)
-	UInventory* OwningInventory;
+	class UInventory* OwningInventory;
 	
 	UFUNCTION(BlueprintGetter)
 	TArray<UConstituent*> GetConstituents();

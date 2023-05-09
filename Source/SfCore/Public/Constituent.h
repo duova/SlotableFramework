@@ -4,12 +4,43 @@
 
 #include "CoreMinimal.h"
 #include "SfObject.h"
-#include "Slotable.h"
 #include "Constituent.generated.h"
 
 /**
  * Building blocks of a slotable which can be reused to share functionality between slotables.
  * These are supposed to be scriptable in a blueprint class with targeters, operators, and events.
+ *
+ * ***Details***
+ *
+ * The activation state is an integer that represents a state. Conceptually every integer state represents a discrete
+ * event that happens with the constituent. Examples of this are a spell being casted, a gun being fired, a reload
+ * starting, a reload finishing, cooldown ending. Anything that happens or changes to the constituents properties should
+ * be considered a state, however simultaneous events can be considered a singular state. For example, a spell being casted
+ * and the cooldown starting are represented by entering the same state as they happen simultaneously. Implementing a
+ * constituent in blueprints involves determining the flow of the state machine, then implementing the results of
+ * entering each state. 
+ *
+ * ***State Driver***
+ * 
+ * The flow of the state machine is determined by a set of nodes referred to as the state driver. Blueprint events are
+ * provided as inputs to a state driver, which are processed by nodes that check different conditions as desired by
+ * the designer, and finally calls the ChangeState blueprint function once conditions are reached. As a rule, state
+ * drivers may not make any changes to the game state.
+ *
+ * ***State Reactor***
+ *
+ * The results of entering each state is defined by another set of nodes referred to as the state reactor. This begins
+ * with a blueprint event that indicates the new state that has been entered and which network role this state reactor
+ * is a definition for. The server network role can use any node in order to produce any effects on the server, which
+ * should be synchronized to the client if relevant. However, the simulated and autonomous roles are limited to nodes
+ * that are for presentation and not simulation. Three state reactors, one for each role, should be implemented for each
+ * state that the constituent can enter. In addition, the predicted role, which executes on both the server and autonomous
+ * client conditionally, can also be implemented only with nodes marked Predicted_. The autonomous role and the predicted
+ * role do not have to be implemented for non-player forms. Game state condition checking should always be done completely
+ * by the state driver before entering a state, so reactors should not have game state condition checks, only presentation
+ * related checks. (eg. a stat check should be in the state driver, but a check of whether a UI section is overflowing
+ * should be in the reactor) In addition, state reactions should be instantaneous, and delayed effects should be put into
+ * another state. Audiovisual effects obviously cannot be instantaneous, but they should be called instantaneously.
  */
 UCLASS(Blueprintable)
 class SFCORE_API UConstituent : public USfObject
@@ -17,62 +48,17 @@ class SFCORE_API UConstituent : public USfObject
 	GENERATED_BODY()
 
 public:
+	
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)
-	USlotable* OwningSlotable;
+	class USlotable* OwningSlotable;
 
+	//Note: Slotables should async load all assets on init and unload on deinit.
 	void Initialize();
-
+	
 	void Deinitialize();
 
 private:
-	/**
-	 * ***************************************************************
-	 * 
-	 * Slotable Framework Prediction (SFP)
-	 * 
-	 * ***************************************************************
-	 *
-	 * ***High Level Goals***
-	 *
-	 * The high level goals of SFP is similar to Unreal's Gameplay Ability Prediction, in that it also focuses on allowing
-	 * designers to script abilities in blueprint while not having to pay much attention to prediction details.
-	 * 
-	 * However, since the Slotable Framework is a more genre specific implementation of abilities, it does not predict certain
-	 * things that GAS does, while predicting some things that GAS does not. There are three tenets that SFP follows when
-	 * deciding what should or should not be predicted and how it should be predicted:
-	 *
-	 * 1 - Prediction should be optimized for competitive integrity of a game built on top of the framework.
-	 * 
-	 * It is essential that cooldowns are predicted because it will affect the rate of fire of abilities. The expected
-	 * ability cooldown is 500ms, where a 200ms delay to being able to use an ability is absurd. Focusing on competitive
-	 * integrity also means that rollback should have the least disruption to gameplay possible. This means visual
-	 * rollback smoothing should be short if even implemented. Projectiles and spawned objects should not be predicted
-	 * as it is jarring and the predicted projectile will not be an accurate representation (likely that it can miss while
-	 * looking like it hit). Predicted visual effects (which in most games last a few hundred ms) should be enough to
-	 * mitigate the spawn delay felt under reasonable circumstances.
-	 * 
-	 * 2 - Balance between the audiovisual obviousness and prediction complexity.
-	 *
-	 * SFP does not intend to predict any change where the variables that will be dirtied are difficult or impossible to
-	 * trace. For example, the addition of status effects (which should be implemented as a slotable), as the visual
-	 * changes for the client are minimal (likely to be HUD changes where a 200ms delay will not be very noticeable).
-	 * It is also highly complex to predict as in the SF model, slotable addition is not particularly limited in its
-	 * effects as it is blueprint scripted. The variables dirtied as a result of prediction cannot be effectively
-	 * tracked for rollback, and a specific rollback implementation must be created for each case.
-	 *
-	 * 3 - The preferred manner of prediction is one where a predicted audiovisual effect is used to cover up the latency
-	 * of a state change where the costs of potential rollback too high for the change to be predicted.
-	 * 
-	 * Audiovisual effects (animations, VFX, SFX) are the focus of SFP as they have a huge impact on game feel, and SFP
-	 * has a purpose built set of features that attempts to make predicting these effects as straightforward as possible
-	 * for designers. As a continuation of the status effect case, it is possible to simply predict an audiovisual effect
-	 * that is executed with the addition of a status effect/slotable in order to cover up the latency. (eg. The delay of
-	 * a status effect that causes stat changes, HUD changes, and mana changes will be registered by the player simply
-	 * as casting time if there is a predicted visual effect that is instantly started on activation.)
-	 *
-	 * ***Implementation Details***
-	 * 
-	 */
+	
 };

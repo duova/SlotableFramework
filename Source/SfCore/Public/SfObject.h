@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
+#include "SfCoreClasses.h"
 #include "SfObject.generated.h"
 
 /**
