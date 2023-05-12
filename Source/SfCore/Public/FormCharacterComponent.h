@@ -26,10 +26,7 @@
 	 * It is essential that cooldowns are predicted because it will affect the rate of fire of abilities. The expected
 	 * ability cooldown is 500ms, where a 100ms delay to being able to use an ability is absurd. Focusing on competitive
 	 * integrity also means that rollback should have the least disruption to gameplay possible. This means visual
-	 * rollback smoothing should be short if even implemented. Projectiles and spawned objects should not be predicted
-	 * as it is jarring and the predicted projectile will not be an accurate representation (likely that it can miss while
-	 * looking like it hit). Predicted visual effects (which in most games last a few hundred ms) should be enough to
-	 * mitigate the spawn delay felt under reasonable circumstances.
+	 * rollback smoothing should be short if even implemented.
 	 * 
 	 * 2 - Balance between the audiovisual obviousness and prediction complexity.
 	 *
@@ -48,7 +45,8 @@
 	 * for designers. As a continuation of the status effect case, it is possible to simply predict an audiovisual effect
 	 * that is executed with the addition of a status effect/slotable in order to cover up the latency. (eg. The delay of
 	 * a status effect that causes stat changes, HUD changes, and mana changes will be registered by the player simply
-	 * as casting time if there is a predicted visual effect that is instantly started on activation.)
+	 * as casting time if there is a predicted visual effect that is instantly started on activation.) This also goes for
+	 * objects spawned by slotables.
 	 *
 	 * ***Implementation Details***
 	 *
@@ -102,6 +100,44 @@
 	 * tick. If it is part of a playback, we save the given clip and wait until the next actual tick, where we play the
 	 * saved clip starting from the timestamp copied from TimeSinceStateChange. Otherwise, we simply play the clip. Some
 	 * smoothing features may be implemented to reduce how jarring the rollback is.
+	 * Material changes can also be predicted. It has a similar implementation to the above but instead of playing clips,
+	 * the provided nodes are wrappers for set parameter on material functions. They offer curves to set how the material
+	 * parameters should change.
+	 * Two custom anim notifies are added. First there is the anim notify equivalent of the material change nodes. Second
+	 * there is a notify that spawns actors on sockets, with a curve to set the position and rotation of them over time.
+	 * These lightweight actors are given a value for time every tick, and the implementer is expected to produce effects
+	 * based on that time value, so that the sequence of actions can start in the middle. Both of these are designed for
+	 * rollback.
+	 *
+	 * Projectiles, Hitscans, and Hit Effects
+	 *
+	 * Projectiles are predicted in order to keep consistency in the game - so players are not expected to lead their
+	 * projectiles more or less based on ping. The autonomous client will fire the projectile and simulate instantly when
+	 * they are supposed to fired the projectile. When the fire event gets to the server, we fire from where the autonomous
+	 * client is on the server, but we forward the trajectory by half-RTT, so that in real time, the projectile is in the
+	 * same place on the autonomous client and on the server. However, the autonomous client fired at a simulated client
+	 * that is delayed by RTT, whereas on the server, the target is only delayed by half-RTT compared to the autonomous
+	 * client. Therefore, we still need to perform lag compensation and check the projectile's trajectory against colliders
+	 * half-RTT back in time. This prediction model favors the autonomous client. For everyone else, they see a projectile
+	 * being spawned projectile velocity * half-RTT in front of where it should be, and they also are lag compensated by
+	 * half-RTT.
+	 * To make sure the target player is relatively content with this model, we can interpolate the initial spawning on
+	 * the non-shooter clients to make it look like a fast projectile was slowed down, rather than a projectile being
+	 * spawned in front of the shooter. The idea of this model is that we make half of the latency visible to the player,
+	 * so that they can better react to it, but lag compensate the rest so that it does not seem incredibly obvious. Unlike
+	 * some other projectile prediction models, this one does not need exceptions for rewinding (for reactive ability use)
+	 * as only the target's collider needs to be rewound, not their state. This is because the projectile on the server
+	 * is actually accurate to the autonomous client, and there is no need to lag compensate for time, only location as
+	 * the autonomous client fired at a half-RTT movement late target. What this means is that the autonomous client can
+	 * only mispredict a landed hit by half-RTT, and they will instantly see why afterwards. For the owning client of the
+	 * target, if their reactive ability (of some form of invulnerability for example) is registered first on the server,
+	 * they cannot get hit even if rewound.
+	 * Hitscans/line traces are to be lag compensated/rewound in location by RTT. This favors the autonomous client in
+	 * terms of actually hitting the shot, but favors the target in using a state change to counteract the effects of the
+	 * shot.
+	 * Basic hit effects are to be produced by the predicted projectile hit. Major hit effects and actual state changes
+	 * are to be produced on confirmation.
+	 * Projectiles that are either very slow or are not directly aimed by the autonomous client should not be predicted.
 	 * 
 	 * Slotable & Tag Slotable Changes
 	 *

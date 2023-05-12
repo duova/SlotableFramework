@@ -29,18 +29,26 @@
  *
  * ***State Reactor***
  *
+ * Note: FP is first person and TP is third person
+ *
  * The results of entering each state is defined by another set of nodes referred to as the state reactor. This begins
  * with a blueprint event that indicates the new state that has been entered and which network role this state reactor
  * is a definition for. The server network role can use any node in order to produce any effects on the server, which
- * should be synchronized to the client if relevant. However, the simulated and autonomous roles are limited to nodes
- * that are for presentation and not simulation. Three state reactors, one for each role, should be implemented for each
- * state that the constituent can enter. In addition, the predicted role, which executes on both the server and autonomous
- * client conditionally, can also be implemented only with nodes marked Predicted_. The autonomous role and the predicted
- * role do not have to be implemented for non-player forms. Game state condition checking should always be done completely
- * by the state driver before entering a state, so reactors should not have game state condition checks, only presentation
- * related checks. (eg. a stat check should be in the state driver, but a check of whether a UI section is overflowing
- * should be in the reactor) In addition, state reactions should be instantaneous, and delayed effects should be put into
- * another state. Audiovisual effects obviously cannot be instantaneous, but they should be called instantaneously.
+ * should be synchronized to the client if relevant. However, the simulated FP, simulated TP, and autonomous roles are
+ * limited to nodes that are for presentation and not simulation. Four state reactors, one for each role, should be implemented
+ * for each state that the constituent can enter. In addition, the predicted role, which executes on both the server and
+ * autonomous client conditionally, can also be implemented only with nodes marked Predicted_. The autonomous role and
+ * the predicted role do not have to be implemented for non-player forms. Game state condition checking should always be
+ * done completely by the state driver before entering a state, so reactors should not have game state condition checks,
+ * only presentation related checks. (eg. a stat check should be in the state driver, but a check of whether a UI section
+ * is overflowing should be in the reactor) In addition, state reactions should be instantaneous, and delayed effects
+ * should be put into another state. Audiovisual effects obviously cannot be instantaneous, but they should be called
+ * instantaneously.
+ *
+ * Note: SF has special implementations for audiovisual effects (including audio, niagara, animations, and material
+ * property changes). These should be used instead of directly producing these effects. The nodes are marked Predicted_,
+ * Simulated_, and Autonomous_ (the last one is more rare since usually they are Predicted). They are designed to guarantee
+ * that the effects work with complex networking scenarios such as rollback and relevancy.
  */
 UCLASS(Blueprintable)
 class SFCORE_API UConstituent : public USfObject
