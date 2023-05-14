@@ -68,6 +68,7 @@ UInventory* UFormCoreComponent::AddInventory(const TSubclassOf<UInventory>& Inve
 	Inventories.Emplace(InventoryInstance);
 	GetOwner()->AddReplicatedSubObject(InventoryInstance);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, Inventories, this);
+	InventoryInstance->ServerInitialize();
 	return InventoryInstance;
 }
 
@@ -84,6 +85,7 @@ void UFormCoreComponent::RemoveInventoryByIndex(const int32 Index)
 		return;
 	}
 	GetOwner()->RemoveReplicatedSubObject(Inventory);
+	Inventory->ServerDeinitialize();
 	//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
 	Inventory->Destroy();
 	Inventories.RemoveAt(Index);

@@ -8,12 +8,20 @@
 
 USlotable::USlotable()
 {
-	if (!HasAuthority()) return;
-	for (auto ConstituentClass : InitialConstituentClasses)
+	if (HasAuthority())
 	{
-		UConstituent* ConstituentInstance = CreateUninitializedConstituent(ConstituentClass);
-		Constituents.Emplace(ConstituentInstance);
-		MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, Constituents, this);
+		//We don't instantly init as on the server we need to make sure the slotable is in an inventory first.
+		for (auto ConstituentClass : InitialConstituentClasses)
+		{
+			UConstituent* ConstituentInstance = CreateUninitializedConstituent(ConstituentClass);
+			Constituents.Emplace(ConstituentInstance);
+			MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, Constituents, this);
+		}
+	}
+	else
+	{
+		//We can init instantly as client slotables are only instantiated from being in an inventory already.
+		ClientInitialize();
 	}
 }
 
@@ -37,53 +45,69 @@ TArray<UConstituent*> USlotable::GetConstituents()
 	return ConstituentsCopy;
 }
 
-void USlotable::Initialize()
+void USlotable::ClientInitialize()
+{
+	//Call events.
+}
+
+void USlotable::ServerInitialize()
 {
 	for (UConstituent* Constituent : Constituents)
 	{
-		InitializeConstituent(Constituent);
+		ServerInitializeConstituent(Constituent);
 	}
 	//Call events.
 }
 
-void USlotable::Deinitialize()
+void USlotable::ClientDeinitialize()
+{
+	//Call events.
+}
+
+void USlotable::ServerDeinitialize()
 {
 	//Call events.
 	for (UConstituent* Constituent : Constituents)
 	{
-		DeinitializeConstituent(Constituent);
+		ServerDeinitializeConstituent(Constituent);
 	}
 }
 
 void USlotable::BeginDestroy()
 {
 	Super::BeginDestroy();
-	if (!HasAuthority()) return;
-	for (int32 i = 0; i < Constituents.Num(); i++)
+	if (HasAuthority())
 	{
-		//We clear index 0 because the list shifts down. 
-		if (UConstituent* Constituent = Constituents[0])
+		for (int32 i = 0; i < Constituents.Num(); i++)
 		{
-			DeinitializeConstituent(Constituent);
-			//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
-			Constituent->Destroy();
+			//We clear index 0 because the list shifts down. 
+			if (UConstituent* Constituent = Constituents[0])
+			{
+				ServerDeinitializeConstituent(Constituent);
+				//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
+				Constituent->Destroy();
+			}
+			Constituents.RemoveAt(0);
+			MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, Constituents, this);
 		}
-		Constituents.RemoveAt(0);
-		MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, Constituents, this);
+	}
+	else
+	{
+		ClientDeinitialize();
 	}
 }
 
-void USlotable::InitializeConstituent(UConstituent* Constituent)
+void USlotable::ServerInitializeConstituent(UConstituent* Constituent)
 {
 	GetOwner()->AddReplicatedSubObject(Constituent);
 	Constituent->OwningSlotable = this;
 	MARK_PROPERTY_DIRTY_FROM_NAME(UConstituent, OwningSlotable, Constituent);
-	Constituent->Initialize();
+	Constituent->ServerInitialize();
 }
 
-void USlotable::DeinitializeConstituent(UConstituent* Constituent)
+void USlotable::ServerDeinitializeConstituent(UConstituent* Constituent)
 {
-	Constituent->Deinitialize();
+	Constituent->ServerDeinitialize();
 	Constituent->OwningSlotable = nullptr;
 	MARK_PROPERTY_DIRTY_FROM_NAME(UConstituent, OwningSlotable, Constituent);
 	GetOwner()->RemoveReplicatedSubObject(Constituent);

@@ -7,14 +7,20 @@
 
 UInventory::UInventory()
 {
-	if (!HasAuthority()) return;
-	checkf(Capacity <= 128, TEXT("The capacity of an inventory may not exceed 128."))
-	for (auto SlotableClass : InitialSlotableClasses)
+	if (HasAuthority())
 	{
-		USlotable* SlotableInstance = CreateUninitializedSlotable(SlotableClass);
-		Slotables.Emplace(SlotableInstance);
-		InitializeSlotable(SlotableInstance);
-		MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
+		checkf(Capacity <= 128, TEXT("The capacity of an inventory may not exceed 128."))
+		for (auto SlotableClass : InitialSlotableClasses)
+		{
+			USlotable* SlotableInstance = CreateUninitializedSlotable(SlotableClass);
+			Slotables.Emplace(SlotableInstance);
+			InitializeSlotable(SlotableInstance);
+			MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
+		}
+	}
+	else
+	{
+		ClientInitialize();
 	}
 }
 
@@ -30,18 +36,24 @@ void UInventory::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifeti
 void UInventory::BeginDestroy()
 {
 	UObject::BeginDestroy();
-	if (!HasAuthority()) return;
-	for (int32 i = 0; i < Slotables.Num(); i++)
+	if (HasAuthority())
 	{
-		//We clear index 0 because the list shifts down.
-		if (USlotable* Slotable = Slotables[0])
+		for (int32 i = 0; i < Slotables.Num(); i++)
 		{
-			DeinitializeSlotable(Slotable);
-			//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
-			Slotable->Destroy();
+			//We clear index 0 because the list shifts down.
+			if (USlotable* Slotable = Slotables[0])
+			{
+				DeinitializeSlotable(Slotable);
+				//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
+				Slotable->Destroy();
+			}
+			Slotables.RemoveAt(0);
+			MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
 		}
-		Slotables.RemoveAt(0);
-		MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
+	}
+	else
+	{
+		ClientDeinitialize();
 	}
 }
 
@@ -205,19 +217,39 @@ void UInventory::TradeSlotablesBetweenInventories(USlotable* SlotableA, USlotabl
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, InventoryB);
 }
 
+void UInventory::ClientInitialize()
+{
+	//Call events.
+}
+
+void UInventory::ServerInitialize()
+{
+	//Call events.
+}
+
+void UInventory::ClientDeinitialize()
+{
+	//Call events.
+}
+
+void UInventory::ServerDeinitialize()
+{
+	//Call events.
+}
+
 //Must be called after the slotable has been placed in an inventory.
 void UInventory::InitializeSlotable(USlotable* Slotable)
 {
 	GetOwner()->AddReplicatedSubObject(Slotable);
 	Slotable->OwningInventory = this;
 	MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, OwningInventory, Slotable);
-	Slotable->Initialize();
+	Slotable->ServerInitialize();
 }
 
 //Must be called before the slotable is removed from an inventory.
 void UInventory::DeinitializeSlotable(USlotable* Slotable)
 {
-	Slotable->Deinitialize();
+	Slotable->ServerDeinitialize();
 	Slotable->OwningInventory = nullptr;
 	MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, OwningInventory, Slotable);
 	GetOwner()->RemoveReplicatedSubObject(Slotable);

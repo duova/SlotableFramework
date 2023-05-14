@@ -5,6 +5,23 @@
 
 #include "Net/UnrealNetwork.h"
 
+UConstituent::UConstituent()
+{
+	if (!HasAuthority())
+	{
+		ClientInitialize();
+	}
+}
+
+void UConstituent::BeginDestroy()
+{
+	Super::BeginDestroy();
+	if (!HasAuthority())
+	{
+		ClientDeinitialize();	
+	}
+}
+
 void UConstituent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -14,12 +31,22 @@ void UConstituent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, OwningSlotable, DefaultParams);
 }
 
-void UConstituent::Initialize()
+void UConstituent::ClientInitialize()
+{
+	
+}
+
+void UConstituent::ServerInitialize()
 {
 	//Call events.
 }
 
-void UConstituent::Deinitialize()
+void UConstituent::ClientDeinitialize()
+{
+	
+}
+
+void UConstituent::ServerDeinitialize()
 {
 	//Call events.
 }

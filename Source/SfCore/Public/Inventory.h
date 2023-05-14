@@ -21,7 +21,10 @@ public:
 	UInventory();
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
-	
+
+	/**
+	 * Read-only copy of constituents.
+	 */
 	UFUNCTION(BlueprintGetter)
 	TArray<USlotable*> GetSlotables();
 
@@ -49,6 +52,14 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	void TradeSlotablesBetweenInventories(USlotable* SlotableA, USlotable* SlotableB);
 
+	void ClientInitialize();
+
+	void ServerInitialize();
+	
+	void ClientDeinitialize();
+
+	void ServerDeinitialize();
+
 protected:
 
 	virtual void BeginDestroy() override;
@@ -68,12 +79,12 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	uint8 Capacity = uint8();
 
-	/*
+	/**
 	 * Called after a slotable is added to an inventory.
 	 */
 	void InitializeSlotable(USlotable* Slotable);
 
-	/*
+	/**
 	 * Called before a slotable is removed from an inventory.
 	 */
 	void DeinitializeSlotable(USlotable* Slotable);

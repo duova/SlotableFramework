@@ -132,6 +132,8 @@
 	 * only mispredict a landed hit by half-RTT, and they will instantly see why afterwards. For the owning client of the
 	 * target, if their reactive ability (of some form of invulnerability for example) is registered first on the server,
 	 * they cannot get hit even if rewound.
+	 * Since projectiles have a predictable trajectory, if we replay and realise that we've fired a projectile on the client,
+	 * we can simply spawn the projectile ahead in time to make sure the server projectile is represented on the client.
 	 * Hitscans/line traces are to be lag compensated/rewound in location by RTT. This favors the autonomous client in
 	 * terms of actually hitting the shot, but favors the target in using a state change to counteract the effects of the
 	 * shot.
@@ -139,7 +141,7 @@
 	 * are to be produced on confirmation.
 	 * Projectiles that are either very slow or are not directly aimed by the autonomous client should not be predicted.
 	 * 
-	 * Slotable & Tag Slotable Changes
+	 * Slotable & Card Changes
 	 *
 	 * We do not fully predict slotable changes because slotables are capable of producing non-rollback safe effects. We
 	 * do, however, want to know what slotables might have been added as certain other slotables might be dependent on
@@ -149,7 +151,9 @@
 	 * To do so we keep a list of gameplay tags on each inventory to represent the slotables that should be in the
 	 * inventory. These tags can be repeated. Instead of adding and removing slotables, we add and remove these tags
 	 * when slotable changes are predicted to happen on the autonomous client (by Predicted_ functions). These tags are
-	 * replicated and will correct the client ones when the server makes these slotable changes.
+	 * replicated and will correct the client for any missing additions or deletions, while the client will be responsible
+	 * for realising the state that brought about a change was rolled back and revert predicted changes. This works exactly
+	 * the same for Cards.
 	 *
 	 * Movement Speed Change
 	 *
@@ -160,6 +164,90 @@
 	 * Predicted_)
 	 */
 
+class FSavedMove_Sf : public FSavedMove_Character
+{
+public:
+	FSavedMove_Sf();
+	
+	typedef FSavedMove_Character Super;
+	
+	//Movement inputs.
+	uint8 bWantsToSprint:1;
+
+	//Number of input sets to enable.
+	uint8 EnabledInputSets:2;
+	
+	//Additional inputs.
+	uint8 PrimaryInputSet;
+	uint8 SecondaryInputSet;
+	uint8 TertiaryInputSet;
+
+	float PredictedNetClock;
+	
+	TArray<uint8> ConstituentStates;
+
+	virtual void Clear() override;
+	virtual void SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& NewAccel,
+		FNetworkPredictionData_Client_Character& ClientData) override;
+	virtual void PrepMoveFor(ACharacter* C) override;
+	virtual uint8 GetCompressedFlags() const override;
+};
+
+class FNetworkPredictionData_Client_Sf : public FNetworkPredictionData_Client_Character
+{
+public:
+	explicit FNetworkPredictionData_Client_Sf(const UCharacterMovementComponent& ClientMovement);
+
+	typedef FNetworkPredictionData_Client_Character Super;
+
+	virtual FSavedMovePtr AllocateNewMove() override;
+};
+
+struct FSfNetworkMoveData : FCharacterNetworkMoveData
+{
+	//Number of input sets to enable.
+	uint8 EnabledInputSets:2;
+	
+	//Additional inputs.
+	uint8 PrimaryInputSet;
+	uint8 SecondaryInputSet;
+	uint8 TertiaryInputSet;
+
+	float PredictedNetClock;
+	
+	TArray<uint8> ConstituentStates;
+	
+	FSfNetworkMoveData();
+
+	virtual bool Serialize(UCharacterMovementComponent& CharacterMovement, FArchive& Ar, UPackageMap* PackageMap, ENetworkMoveType MoveType) override;
+
+	virtual void ClientFillNetworkMoveData(const FSavedMove_Character& ClientMove, ENetworkMoveType MoveType) override;
+};
+
+struct FSfNetworkMoveDataContainer : FCharacterNetworkMoveDataContainer
+{
+	FSfNetworkMoveData NewSfMove;
+	FSfNetworkMoveData PendingSfMove;
+	FSfNetworkMoveData OldSfMove;
+
+	FSfNetworkMoveDataContainer();
+};
+
+struct FSfMoveResponseDataContainer : FCharacterMoveResponseDataContainer
+{
+	TArray<uint8> ConstituentStates;
+
+	float PredictedNetClock;
+
+	//Quantize100
+	TArray<uint16> TimeSinceStateChange;
+
+	FSfMoveResponseDataContainer();
+
+	virtual void ServerFillResponseData(const UCharacterMovementComponent& CharacterMovement, const FClientAdjustment& PendingAdjustment) override;
+
+	virtual bool Serialize(UCharacterMovementComponent& CharacterMovement, FArchive& Ar, UPackageMap* PackageMap) override;
+};
 
 /**
 * The FormCharacterComponent is responsible for the movement and client prediction of a form.
@@ -176,15 +264,67 @@ class SFCORE_API UFormCharacterComponent : public UCharacterMovementComponent
 	GENERATED_BODY()
 
 public:
-	// Sets default values for this component's properties
 	UFormCharacterComponent();
 
+	virtual bool ShouldUsePackedMovementRPCs() const override;
+
+	virtual FNetworkPredictionData_Client* GetPredictionData_Client() const override;
+
+	virtual void ClientAdjustPosition_Implementation(float TimeStamp, FVector NewLoc, FVector NewVel, UPrimitiveComponent* NewBase, FName NewBaseBoneName, bool bHasBase, bool bBaseRelativePosition, uint8 ServerMovementMode, TOptional<FRotator> OptionalRotation) override;
+
+	//Movement inputs.
+	uint8 bWantsToSprint:1;
+
+	//Number of input sets to enable.
+	uint8 EnabledInputSets:2;
+	
+	//Additional inputs.
+	uint8 PrimaryInputSet;
+	uint8 SecondaryInputSet;
+	uint8 TertiaryInputSet;
+
+	//This is obviously not optimal as we are already sending the client TimeStamp. However, this is the most direct way
+	//of ensuring that time discrepancies will not cause more rollbacks - by having the clock incremented in tandem with
+	//the logic that uses it in PerformMovement. To save bandwidth we only serialize this to the server once every second,
+	//and the server will only issue a correction when necessary.
+	float PredictedNetClock;
+	//TODO: RPC TO RESET THIS VALUE WHEN CLOCK HITS MAX VALUE
+	uint32 NetClockNextInteger;
+
+	//+/- acceptable range.
+	UPROPERTY(EditAnywhere)
+	float NetClockAcceptableTolerance;
+
+	//We will only serialize to server on change.
+	//TODO: BELOW
+	//An expected issue is that a rollback will occur every time we add/remove a constituent as there will be a state desync.
+	//To solve this, we mark a constituent as being destroyed if we predict its destruction on the client. The iterator
+	//that collects the states will then skip the constituent to maintain a deterministic state order even if the client's
+	//constituent has not actually been destroyed yet. We do this on the server too in case the object is accessed before
+	//it is destroyed.
+	//For constituent creation, we preemptively insert a 0 state to where we believe a constituent will be created. It will
+	//still rollback if the server initializes the constituent with a non-zero state, but in that case we will have to rollback
+	//anyway to predict the state.
+	TArray<uint8> ConstituentStates;
+	TArray<uint8> OldConstituentStates;
+	TArray<uint16> TimeSinceStateChange;
+	uint8 bClientStatesAreDirty:1;
+	
 protected:
-	// Called when the game starts
 	virtual void BeginPlay() override;
 
-public:
-	// Called every frame
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
-	                           FActorComponentTickFunction* ThisTickFunction) override;
+	virtual void UpdateFromCompressedFlags(uint8 Flags) override;
+
+	virtual bool ServerCheckClientError(float ClientTimeStamp, float DeltaTime, const FVector& Accel, const FVector& ClientWorldLocation, const FVector& RelativeClientLocation, UPrimitiveComponent* ClientMovementBase, FName ClientBaseBoneName, uint8 ClientMovementMode) override;
+
+	virtual void MoveAutonomous(float ClientTimeStamp, float DeltaTime, uint8 CompressedFlags, const FVector& NewAccel) override;
+	
+	virtual bool SfServerCheckClientError();
+
+	virtual void UpdateFromAdditionInputs();
+
+private:
+	FSfNetworkMoveDataContainer SfNetworkMoveDataContainer;
+
+	FSfMoveResponseDataContainer SfMoveResponseDataContainer;
 };

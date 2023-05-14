@@ -28,13 +28,20 @@ public:
 
 	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)
 	class UInventory* OwningInventory;
-	
+
+	/**
+	 * Read-only copy of constituents.
+	 */
 	UFUNCTION(BlueprintGetter)
 	TArray<UConstituent*> GetConstituents();
 
-	void Initialize();
+	void ClientInitialize();
 
-	void Deinitialize();
+	void ServerInitialize();
+	
+	void ClientDeinitialize();
+
+	void ServerDeinitialize();
 
 protected:
 
@@ -46,12 +53,12 @@ protected:
 	/*
 	 * Called during slotable init.
 	 */
-	void InitializeConstituent(UConstituent* Constituent);
+	void ServerInitializeConstituent(UConstituent* Constituent);
 
 	/*
 	 * Called during slotable deinit.
 	 */
-	void DeinitializeConstituent(UConstituent* Constituent);
+	void ServerDeinitializeConstituent(UConstituent* Constituent);
 
 private:
 	UPROPERTY(Replicated, VisibleAnywhere)
