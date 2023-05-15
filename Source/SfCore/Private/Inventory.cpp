@@ -6,6 +6,10 @@
 #include "Net/UnrealNetwork.h"
 
 
+FInventoryObjectMetadata::FInventoryObjectMetadata(): Type(), InputEnabledConstituentsCount(0)
+{
+}
+
 FInventoryObjectMetadata::FInventoryObjectMetadata(const TSubclassOf<USlotable> SlotableClass):
 	Type(), InputEnabledConstituentsCount(0)
 {
@@ -27,6 +31,15 @@ FInventoryObjectMetadata::FInventoryObjectMetadata(const TSubclassOf<UCard> Card
 {
 	Type = EInventoryObjectType::Card;
 	Class = CardClass;
+}
+
+bool FInventoryObjectMetadata::operator==(const FInventoryObjectMetadata& Other) const
+{
+	if (Type == Other.Type && Class == Other.Class && InputEnabledConstituentsCount == Other.InputEnabledConstituentsCount)
+	{
+		return true;
+	}
+	return false;
 }
 
 UInventory::UInventory()
@@ -209,15 +222,32 @@ bool UInventory::HasSlotable(const TSubclassOf<USlotable>& SlotableClass)
 
 uint8 UInventory::SlotableCount(const TSubclassOf<USlotable>& SlotableClass)
 {
-	
+	uint8 Value = 0;
+	for (FInventoryObjectMetadata Element : Metadata)
+	{
+		if (Element.Type == EInventoryObjectType::Slotable && Element.Class == SlotableClass) Value++;
+	}
+	return Value;
 }
 
 bool UInventory::HasCard(const TSubclassOf<USlotable>& CardClass)
 {
+	bool Value = false;
+	for (FInventoryObjectMetadata Element : Metadata)
+	{
+		if (Element.Type == EInventoryObjectType::Card && Element.Class == CardClass) Value = true;
+	}
+	return Value;
 }
 
-bool UInventory::GetCard(const TSubclassOf<USlotable>& CardClass)
+UCard* UInventory::GetCard(const TSubclassOf<USlotable>& CardClass)
 {
+	UCard* Value = nullptr;
+	for (UCard* Card : Cards)
+	{
+		if (Card->GetClass() == CardClass) Value = Card;
+	}
+	return Value;
 }
 
 void UInventory::InsertSlotableMetadataAtEnd(const TSubclassOf<USlotable>& SlotableClass)

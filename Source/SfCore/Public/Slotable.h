@@ -27,7 +27,7 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UPROPERTY(ReplicatedUsing = OnRep_OwningInventory, Replicated, BlueprintReadOnly, VisibleAnywhere)
-	UInventory* OwningInventory;
+	class UInventory* OwningInventory;
 
 	/**
 	 * Read-only copy of constituents.

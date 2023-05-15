@@ -27,15 +27,30 @@ struct FInventoryObjectMetadata
 {
 	GENERATED_BODY()
 
-	EInventoryObjectType Type:2;
-	
+	UPROPERTY()
+	EInventoryObjectType Type;
+
+	UPROPERTY()
 	TSubclassOf<UObject> Class;
-	
+
+	UPROPERTY()
 	uint8 InputEnabledConstituentsCount;
 
+	FInventoryObjectMetadata();
+	
 	explicit FInventoryObjectMetadata(const TSubclassOf<USlotable> SlotableClass);
 
 	explicit FInventoryObjectMetadata(const TSubclassOf<UCard> CardClass);
+
+	bool operator==(const FInventoryObjectMetadata& Other) const;
+
+	friend FArchive& operator<<(FArchive& Ar, FInventoryObjectMetadata& Metadata)
+	{
+		Ar.SerializeBits(&Metadata.Type, 2);
+		Ar << Metadata.Class;
+		Ar << Metadata.InputEnabledConstituentsCount;
+		return Ar;
+	}
 };
 
 /**
@@ -128,7 +143,7 @@ public:
 
 	//Only on client.
 	UFUNCTION(BlueprintGetter)
-	bool GetCard(const TSubclassOf<USlotable>& CardClass);
+	UCard* GetCard(const TSubclassOf<USlotable>& CardClass);
 
 	void ClientInitialize();
 

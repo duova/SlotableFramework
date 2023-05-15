@@ -5,6 +5,10 @@
 
 #include "Net/UnrealNetwork.h"
 
+FConstituentStateData::FConstituentStateData(): CurrentState(0), PreviousState(0), bClientCorrecting(0)
+{
+}
+
 FConstituentStateData::FConstituentStateData(const uint8 CurrentState, const uint8 PreviousState, const bool bClientCorrecting):
 	CurrentState(CurrentState),
 	PreviousState(PreviousState),

@@ -3,7 +3,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Inventory.h"
 #include "Card.generated.h"
 
 /**
@@ -27,7 +26,7 @@ public:
 	virtual void BeginDestroy() override;
 
 	UPROPERTY(BlueprintReadOnly)
-	UInventory* OwningInventory;
+	class UInventory* OwningInventory;
 
 	void Initialize();
 

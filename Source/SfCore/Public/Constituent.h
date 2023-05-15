@@ -17,6 +17,8 @@ struct FConstituentStateData
 
 	uint8 bClientCorrecting:1;
 
+	FConstituentStateData();
+	
 	FConstituentStateData(uint8 CurrentState, uint8 PreviousState, bool bClientCorrecting);
 };
 

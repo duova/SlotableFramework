@@ -3,6 +3,8 @@
 
 #include "SfObject.h"
 
+#include "FormCharacterComponent.h"
+
 void USfObject::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -55,7 +57,11 @@ void USfObject::Destroy()
 
 bool USfObject::IsFormCharacter() const
 {
-	return GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass());
+	if (GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()))
+	{
+		return true;
+	}
+	return false;
 }
 
 UFormCharacterComponent* USfObject::GetFormCharacter() const

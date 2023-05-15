@@ -75,7 +75,7 @@
 	 * and time. When state changes on the server, an RPC is simply called to run the autonomous and simulated state reactors
 	 * on the relevant clients.
 	 *
-	 * Cooldown
+	 * Cooldown & Timers
 	 *
 	 * Server_PredictiveTimer nodes offer timer prediction to state reactors. These are supposed to be called on the server
 	 * state reactor and uses a UENUM as a cross-network identifier. These timers call an event with the identifier when
