@@ -6,6 +6,20 @@
 #include "SfObject.h"
 #include "Constituent.generated.h"
 
+USTRUCT(BlueprintType)
+struct FConstituentStateData
+{
+	GENERATED_BODY()
+	
+	uint8 CurrentState;
+
+	uint8 PreviousState;
+
+	uint8 bClientCorrecting:1;
+
+	FConstituentStateData(uint8 CurrentState, uint8 PreviousState, bool bClientCorrecting);
+};
+
 /**
  * Building blocks of a slotable which can be reused to share functionality between slotables.
  * These are supposed to be scriptable in a blueprint class with targeters, operators, and events.
@@ -63,7 +77,7 @@ public:
 	
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)
+	UPROPERTY(ReplicatedUsing = OnRep_OwningSlotable, Replicated, BlueprintReadOnly, VisibleAnywhere)
 	class USlotable* OwningSlotable;
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere)
@@ -81,4 +95,8 @@ public:
 	void ServerDeinitialize();
 
 private:
+	UFUNCTION()
+	void OnRep_OwningSlotable();
+
+	uint8 bAwaitingClientInit:1;
 };

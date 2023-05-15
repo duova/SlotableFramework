@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
 #include "SfCoreClasses.h"
+#include "FormCharacterComponent.h"
 #include "SfObject.generated.h"
 
 /**
@@ -38,6 +39,10 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	void Destroy();
+
+	bool IsFormCharacter() const;
+
+	UFormCharacterComponent* GetFormCharacter() const;
 
 protected:
 	void ErrorIfNoAuthority() const;

@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Inventory.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "FormCharacterComponent.generated.h"
 
@@ -148,12 +149,12 @@
 	 * their addition. For example, we have an ability that grant a certain buff to the player, and another that can only
 	 * be activated if the player has that buff. We would want the player to be able to activate the second ability instantly
 	 * after they have activated the first, which means the buff (a slotable) must be in some way added as a prediction.
-	 * To do so we keep a list of gameplay tags on each inventory to represent the slotables that should be in the
-	 * inventory. These tags can be repeated. Instead of adding and removing slotables, we add and remove these tags
-	 * when slotable changes are predicted to happen on the autonomous client (by Predicted_ functions). These tags are
+	 * To do so we keep a list of classes on each inventory to represent the slotables that should be in the
+	 * inventory. These classes can be repeated. Instead of adding and removing slotables, we add and remove these classes
+	 * when slotable changes are predicted to happen on the autonomous client (by Predicted_ functions). These classes are
 	 * replicated and will correct the client for any missing additions or deletions, while the client will be responsible
-	 * for realising the state that brought about a change was rolled back and revert predicted changes. This works exactly
-	 * the same for Cards.
+	 * for realising the state that brought about a change was rolled back and revert predicted changes.
+	 * Card changes on the other hand have relatively deterministic behaviour, and as such can be fully predicted.
 	 *
 	 * Movement Speed Change
 	 *
@@ -186,6 +187,8 @@ public:
 	
 	TArray<uint8> ConstituentStates;
 
+	TArray<TSubclassOf<UObject>> MetadataClasses;
+
 	virtual void Clear() override;
 	virtual void SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& NewAccel,
 		FNetworkPredictionData_Client_Character& ClientData) override;
@@ -217,6 +220,8 @@ struct FSfNetworkMoveData : FCharacterNetworkMoveData
 	
 	TArray<uint8> ConstituentStates;
 	
+	TArray<TSubclassOf<UObject>> MetadataClasses;
+	
 	FSfNetworkMoveData();
 
 	virtual bool Serialize(UCharacterMovementComponent& CharacterMovement, FArchive& Ar, UPackageMap* PackageMap, ENetworkMoveType MoveType) override;
@@ -241,6 +246,8 @@ struct FSfMoveResponseDataContainer : FCharacterMoveResponseDataContainer
 
 	//Quantize100
 	TArray<uint16> TimeSinceStateChange;
+
+	TArray<FInventoryObjectMetadata> Metadata;
 
 	FSfMoveResponseDataContainer();
 
@@ -307,8 +314,23 @@ public:
 	//anyway to predict the state.
 	TArray<uint8> ConstituentStates;
 	TArray<uint8> OldConstituentStates;
+	//Quantize100
 	TArray<uint16> TimeSinceStateChange;
-	uint8 bClientStatesAreDirty:1;
+
+	//If true on client, normal tick should call a delegate before reverting to false.
+	uint8 bClientStatesWereCorrected:1;
+
+	//Ordered. MetadataClasses should be updated when changed.
+	TArray<TSubclassOf<UObject>> MetadataClasses;
+	TArray<TSubclassOf<UObject>> OldMetadataClasses;
+
+	//Ordered. Updated by server when a correction is needed, but otherwise not updated.
+	//Should only be used when bClientMetadataWasCorrected is true.
+	//Updated on server by form core.
+	TArray<FInventoryObjectMetadata> Metadata;
+
+	//If true on client, normal tick should call a delegate before reverting to false.
+	uint8 bClientMetadataWasCorrected:1;
 	
 protected:
 	virtual void BeginPlay() override;

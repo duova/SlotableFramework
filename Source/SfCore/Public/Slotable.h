@@ -13,7 +13,7 @@
  * Passive actions hook into events, while active actions are triggered by inputs.
  * In theory this can represent anything from an in-game item to a status effect to an ability.
  * A slotable is itself only supposed to be a container for constituents,
- * which composes a slotables functionality.
+ * which composes a slotable's functionality.
  */
 UCLASS()
 class SFCORE_API USlotable : public USfObject
@@ -26,8 +26,8 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)
-	class UInventory* OwningInventory;
+	UPROPERTY(ReplicatedUsing = OnRep_OwningInventory, Replicated, BlueprintReadOnly, VisibleAnywhere)
+	UInventory* OwningInventory;
 
 	/**
 	 * Read-only copy of constituents.
@@ -43,12 +43,12 @@ public:
 
 	void ServerDeinitialize();
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	TArray<TSubclassOf<UConstituent>> InitialConstituentClasses;
+
 protected:
 
 	virtual void BeginDestroy() override;
-	
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	TArray<TSubclassOf<UConstituent>> InitialConstituentClasses;
 
 	/*
 	 * Called during slotable init.
@@ -65,4 +65,9 @@ private:
 	TArray<UConstituent*> Constituents;
 
 	UConstituent* CreateUninitializedConstituent(const TSubclassOf<UConstituent>& ConstituentClass) const;
+
+	uint8 bAwaitingClientInit:1;
+
+	UFUNCTION()
+	void OnRep_OwningInventory();
 };

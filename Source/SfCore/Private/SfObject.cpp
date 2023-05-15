@@ -53,6 +53,16 @@ void USfObject::Destroy()
 	}
 }
 
+bool USfObject::IsFormCharacter() const
+{
+	return GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass());
+}
+
+UFormCharacterComponent* USfObject::GetFormCharacter() const
+{
+	return Cast<UFormCharacterComponent>(GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()));
+}
+
 void USfObject::ErrorIfNoAuthority() const
 {
 	const AActor* Owner = GetOwner();

@@ -3,9 +3,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "FormCharacterComponent.h"
 #include "Inventory.h"
 #include "Components/ActorComponent.h"
-#include "Net/UnrealNetwork.h"
 #include "FormCoreComponent.generated.h"
 
 /**
@@ -25,18 +25,21 @@ public:
 	                           FActorComponentTickFunction* ThisTickFunction) override;
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
-	
+
+	/**
+	 * Read-only copy of inventories.
+	 */
 	UFUNCTION(BlueprintGetter)
 	TArray<UInventory*> GetInventories();
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	UInventory* AddInventory(const TSubclassOf<UInventory>& InventoryClass);
+	UInventory* Server_AddInventory(const TSubclassOf<UInventory>& InventoryClass);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	void RemoveInventoryByIndex(const int32 Index);
+	void Server_RemoveInventoryByIndex(const int32 Index);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	bool RemoveInventory(UInventory* Inventory);
+	bool Server_RemoveInventory(UInventory* Inventory);
 
 protected:
 	virtual void BeginPlay() override;

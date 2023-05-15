@@ -6,8 +6,8 @@
 #include "GameFramework/Character.h"
 
 FSavedMove_Sf::FSavedMove_Sf()
-	: Super(), bWantsToSprint(0), EnabledInputSets(0), PrimaryInputSet(0), SecondaryInputSet(0), TertiaryInputSet(0),
-PredictedNetClock(0)
+	: bWantsToSprint(0), EnabledInputSets(0), PrimaryInputSet(0), SecondaryInputSet(0), TertiaryInputSet(0),
+	  PredictedNetClock(0)
 {
 	//We force no combine as we want to send all moves as soon as possible to reduce input latency.
 	bForceNoCombine = true;
@@ -24,10 +24,11 @@ void FSavedMove_Sf::Clear()
 	TertiaryInputSet = 0;
 	PredictedNetClock = 0;
 	ConstituentStates.Empty();
+	MetadataClasses.Empty();
 }
 
 void FSavedMove_Sf::SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& NewAccel,
-	FNetworkPredictionData_Client_Character& ClientData)
+                               FNetworkPredictionData_Client_Character& ClientData)
 {
 	FSavedMove_Character::SetMoveFor(C, InDeltaTime, NewAccel, ClientData);
 
@@ -47,9 +48,10 @@ void FSavedMove_Sf::SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& 
 	{
 		TertiaryInputSet = CharacterComponent->TertiaryInputSet;
 	}
-	
+
 	PredictedNetClock = CharacterComponent->PredictedNetClock;
 	ConstituentStates = CharacterComponent->ConstituentStates;
+	MetadataClasses = CharacterComponent->MetadataClasses;
 }
 
 void FSavedMove_Sf::PrepMoveFor(ACharacter* C)
@@ -59,7 +61,7 @@ void FSavedMove_Sf::PrepMoveFor(ACharacter* C)
 	UFormCharacterComponent* CharacterComponent = Cast<UFormCharacterComponent>(C->GetCharacterMovement());
 
 	CharacterComponent->bWantsToSprint = bWantsToSprint;
-	
+
 	if (CharacterComponent->EnabledInputSets > 0)
 	{
 		CharacterComponent->PrimaryInputSet = PrimaryInputSet;
@@ -75,6 +77,7 @@ void FSavedMove_Sf::PrepMoveFor(ACharacter* C)
 
 	CharacterComponent->PredictedNetClock = PredictedNetClock;
 	CharacterComponent->ConstituentStates = ConstituentStates;
+	CharacterComponent->MetadataClasses = MetadataClasses;
 }
 
 uint8 FSavedMove_Sf::GetCompressedFlags() const
@@ -87,7 +90,7 @@ uint8 FSavedMove_Sf::GetCompressedFlags() const
 }
 
 FNetworkPredictionData_Client_Sf::FNetworkPredictionData_Client_Sf(const UCharacterMovementComponent& ClientMovement)
-: Super(ClientMovement)
+	: Super(ClientMovement)
 {
 }
 
@@ -97,7 +100,7 @@ FSavedMovePtr FNetworkPredictionData_Client_Sf::AllocateNewMove()
 }
 
 FSfNetworkMoveData::FSfNetworkMoveData()
-	: FCharacterNetworkMoveData(), EnabledInputSets(0), PrimaryInputSet(0), SecondaryInputSet(0), TertiaryInputSet(0),
+	: EnabledInputSets(0), PrimaryInputSet(0), SecondaryInputSet(0), TertiaryInputSet(0),
 	  PredictedNetClock(0)
 {
 }
@@ -106,21 +109,21 @@ bool FSfNetworkMoveData::Serialize(UCharacterMovementComponent& CharacterMovemen
                                    UPackageMap* PackageMap, ENetworkMoveType MoveType)
 {
 	UFormCharacterComponent* CharacterComponent = Cast<UFormCharacterComponent>(&CharacterMovement);
-	
+
 	NetworkMoveType = MoveType;
 
 	bool bLocalSuccess = true;
 	const bool bIsSaving = Ar.IsSaving();
 
 	Ar << TimeStamp;
-	
+
 	Acceleration.NetSerialize(Ar, PackageMap, bLocalSuccess);
 
 	Location.NetSerialize(Ar, PackageMap, bLocalSuccess);
 
 	// ControlRotation : FRotator handles each component zero/non-zero test; it uses a single signal bit for zero/non-zero, and uses 16 bits per component if non-zero.
 	ControlRotation.NetSerialize(Ar, PackageMap, bLocalSuccess);
-	
+
 	SerializeOptionalValue<uint8>(bIsSaving, Ar, CompressedMoveFlags, 0);
 
 	//We add our flags to serialization.
@@ -138,7 +141,8 @@ bool FSfNetworkMoveData::Serialize(UCharacterMovementComponent& CharacterMovemen
 	}
 
 	//Conditionally serialize the clock.
-	bool bDoSerializeClock = bIsSaving && static_cast<float>(CharacterComponent->NetClockNextInteger) < PredictedNetClock;
+	bool bDoSerializeClock = bIsSaving && static_cast<float>(CharacterComponent->NetClockNextInteger) <
+		PredictedNetClock;
 	Ar.SerializeBits(&bDoSerializeClock, 1);
 	if (bDoSerializeClock)
 	{
@@ -170,6 +174,22 @@ bool FSfNetworkMoveData::Serialize(UCharacterMovementComponent& CharacterMovemen
 		ConstituentStates = CharacterComponent->OldConstituentStates;
 	}
 
+	//Conditionally serialize metadata classes.
+	bool bDoSerializeClasses = bIsSaving && MetadataClasses != CharacterComponent->OldMetadataClasses;
+	Ar.SerializeBits(&bDoSerializeClasses, 1);
+	if (bDoSerializeClasses)
+	{
+		Ar << MetadataClasses;
+		//We set update OldMetadataClasses on both the server and client.
+		//The client version is what we use to check if we have attempted to send our latest changes already.
+		//The server version is what is used if the client indicates they have no updates.
+		CharacterComponent->OldMetadataClasses = MetadataClasses;
+	}
+	else if (!bIsSaving)
+	{
+		MetadataClasses = CharacterComponent->OldMetadataClasses;
+	}
+
 	if (MoveType == ENetworkMoveType::NewMove)
 	{
 		// Location, relative movement base, and ending movement mode is only used for error checking, so only save for the final move.
@@ -185,7 +205,7 @@ void FSfNetworkMoveData::ClientFillNetworkMoveData(const FSavedMove_Character& C
 {
 	FCharacterNetworkMoveData::ClientFillNetworkMoveData(ClientMove, MoveType);
 
-	const FSavedMove_Sf* SavedMove = Cast<FSavedMove_Sf>(&ClientMove);
+	const FSavedMove_Sf* SavedMove = static_cast<const FSavedMove_Sf*>(&ClientMove);
 
 	//Copy additional inputs.
 	EnabledInputSets = SavedMove->EnabledInputSets;
@@ -204,6 +224,7 @@ void FSfNetworkMoveData::ClientFillNetworkMoveData(const FSavedMove_Character& C
 
 	PredictedNetClock = SavedMove->PredictedNetClock;
 	ConstituentStates = SavedMove->ConstituentStates;
+	MetadataClasses = SavedMove->MetadataClasses;
 }
 
 FSfNetworkMoveDataContainer::FSfNetworkMoveDataContainer()
@@ -223,17 +244,18 @@ void FSfMoveResponseDataContainer::ServerFillResponseData(const UCharacterMoveme
 	FCharacterMoveResponseDataContainer::ServerFillResponseData(CharacterMovement, PendingAdjustment);
 
 	const UFormCharacterComponent* CharacterComponent = Cast<UFormCharacterComponent>(&CharacterMovement);
-	
+
 	PredictedNetClock = CharacterComponent->PredictedNetClock;
 	ConstituentStates = CharacterComponent->ConstituentStates;
 	TimeSinceStateChange = CharacterComponent->TimeSinceStateChange;
+	Metadata = CharacterComponent->Metadata;
 }
 
 bool FSfMoveResponseDataContainer::Serialize(UCharacterMovementComponent& CharacterMovement, FArchive& Ar,
-	UPackageMap* PackageMap)
+                                             UPackageMap* PackageMap)
 {
 	UFormCharacterComponent* CharacterComponent = Cast<UFormCharacterComponent>(&CharacterMovement);
-	
+
 	bool bLocalSuccess = true;
 	const bool bIsSaving = Ar.IsSaving();
 
@@ -267,7 +289,7 @@ bool FSfMoveResponseDataContainer::Serialize(UCharacterMovementComponent& Charac
 			CharacterComponent->OldConstituentStates = ConstituentStates;
 			if (!bIsSaving)
 			{
-				CharacterComponent->bClientStatesAreDirty = true;
+				CharacterComponent->bClientStatesWereCorrected = true;
 			}
 		}
 		else if (!bIsSaving)
@@ -276,7 +298,42 @@ bool FSfMoveResponseDataContainer::Serialize(UCharacterMovementComponent& Charac
 			ConstituentStates = CharacterComponent->ConstituentStates;
 			TimeSinceStateChange = TArray<uint16>();
 		}
-		
+
+		//Conditionally serialize metadata.
+		//Once again, we use OldMetadataClasses to check that we do not send what is unnecessary.
+		//We check against the last set of metadata classes sent by the client.
+		if (!bIsSaving || Metadata.Num() == CharacterComponent->OldMetadataClasses.Num())
+		{
+			bool Equal = true;
+			for (uint8 i = 0; i < Metadata.Num(); i++)
+			{
+				if (Metadata[i].Class != CharacterComponent->OldMetadataClasses[i]) Equal = false;
+			}
+			bool bDoSerializeMetadata = bIsSaving && Equal;
+			Ar.SerializeBits(&bDoSerializeMetadata, 1);
+			if (bDoSerializeMetadata)
+			{
+				Ar << Metadata;
+				//We update OldMetadataClasses on the client and server because we do not want it to immediately send the
+				//correction back to the server / send another correction.
+				TArray<TSubclassOf<UObject>> Classes;
+				for (FInventoryObjectMetadata Element : Metadata)
+				{
+					Classes.Add(Element.Class);
+				}
+				CharacterComponent->OldMetadataClasses = Classes;
+				if (!bIsSaving)
+				{
+					CharacterComponent->bClientMetadataWasCorrected = true;
+				}
+			}
+			else if (!bIsSaving)
+			{
+				//The client version is what is used if the server indicates that there are no corrections.
+				Metadata = CharacterComponent->Metadata;
+			}
+		}
+
 
 		if (bHasRotation)
 		{
@@ -305,7 +362,8 @@ bool FSfMoveResponseDataContainer::Serialize(UCharacterMovementComponent& Charac
 		{
 			if (FRootMotionSourceGroup* RootMotionSourceGroup = GetRootMotionSourceGroup(CharacterMovement))
 			{
-				RootMotionSourceGroup->NetSerialize(Ar, PackageMap, bLocalSuccess, 3 /*MaxNumRootMotionSourcesToSerialize*/);
+				RootMotionSourceGroup->NetSerialize(Ar, PackageMap, bLocalSuccess,
+				                                    3 /*MaxNumRootMotionSourcesToSerialize*/);
 			}
 		}
 
@@ -347,16 +405,19 @@ FNetworkPredictionData_Client* UFormCharacterComponent::GetPredictionData_Client
 }
 
 void UFormCharacterComponent::ClientAdjustPosition_Implementation(float TimeStamp, FVector NewLoc, FVector NewVel,
-	UPrimitiveComponent* NewBase, FName NewBaseBoneName, bool bHasBase, bool bBaseRelativePosition,
-	uint8 ServerMovementMode, TOptional<FRotator> OptionalRotation)
+                                                                  UPrimitiveComponent* NewBase, FName NewBaseBoneName,
+                                                                  bool bHasBase, bool bBaseRelativePosition,
+                                                                  uint8 ServerMovementMode,
+                                                                  TOptional<FRotator> OptionalRotation)
 {
 	Super::ClientAdjustPosition_Implementation(TimeStamp, NewLoc, NewVel, NewBase, NewBaseBoneName, bHasBase,
 	                                           bBaseRelativePosition, ServerMovementMode,
 	                                           OptionalRotation);
-	
+
 	PredictedNetClock = SfMoveResponseDataContainer.PredictedNetClock;
 	ConstituentStates = SfMoveResponseDataContainer.ConstituentStates;
 	TimeSinceStateChange = SfMoveResponseDataContainer.TimeSinceStateChange;
+	Metadata = SfMoveResponseDataContainer.Metadata;
 }
 
 void UFormCharacterComponent::BeginPlay()
@@ -367,14 +428,16 @@ void UFormCharacterComponent::BeginPlay()
 void UFormCharacterComponent::UpdateFromCompressedFlags(uint8 Flags)
 {
 	Super::UpdateFromCompressedFlags(Flags);
-	
+
 	//Get values from compressed flags.
 	bWantsToSprint = (Flags & FSavedMove_Character::FLAG_Custom_0) != 0;
 }
 
 bool UFormCharacterComponent::ServerCheckClientError(float ClientTimeStamp, float DeltaTime, const FVector& Accel,
-	const FVector& ClientWorldLocation, const FVector& RelativeClientLocation, UPrimitiveComponent* ClientMovementBase,
-	FName ClientBaseBoneName, uint8 ClientMovementMode)
+                                                     const FVector& ClientWorldLocation,
+                                                     const FVector& RelativeClientLocation,
+                                                     UPrimitiveComponent* ClientMovementBase,
+                                                     FName ClientBaseBoneName, uint8 ClientMovementMode)
 {
 	return Super::ServerCheckClientError(ClientTimeStamp, DeltaTime, Accel, ClientWorldLocation, RelativeClientLocation,
 	                                     ClientMovementBase,
@@ -382,7 +445,7 @@ bool UFormCharacterComponent::ServerCheckClientError(float ClientTimeStamp, floa
 }
 
 void UFormCharacterComponent::MoveAutonomous(float ClientTimeStamp, float DeltaTime, uint8 CompressedFlags,
-	const FVector& NewAccel)
+                                             const FVector& NewAccel)
 {
 	UpdateFromAdditionInputs();
 	Super::MoveAutonomous(ClientTimeStamp, DeltaTime, CompressedFlags, NewAccel);
@@ -391,7 +454,7 @@ void UFormCharacterComponent::MoveAutonomous(float ClientTimeStamp, float DeltaT
 bool UFormCharacterComponent::SfServerCheckClientError()
 {
 	const FSfNetworkMoveData* MoveData = static_cast<FSfNetworkMoveData*>(GetCurrentNetworkMoveData());
-	
+
 	if (MoveData->PredictedNetClock >= 0)
 	{
 		if (MoveData->PredictedNetClock > PredictedNetClock + NetClockAcceptableTolerance
@@ -400,9 +463,17 @@ bool UFormCharacterComponent::SfServerCheckClientError()
 			return true;
 		}
 	}
-	
+
 	if (MoveData->ConstituentStates != ConstituentStates) return true;
 
+	if (Metadata.Num() != MoveData->MetadataClasses.Num()) return true;
+	bool MetadataEqual = true;
+	for (uint8 i = 0; i < Metadata.Num(); i++)
+	{
+		if (Metadata[i].Class != MoveData->MetadataClasses[i]) MetadataEqual = false;
+	}
+	if (!MetadataEqual) return true;
+	
 	return false;
 }
 

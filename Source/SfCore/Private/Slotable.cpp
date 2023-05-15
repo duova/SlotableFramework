@@ -20,8 +20,7 @@ USlotable::USlotable()
 	}
 	else
 	{
-		//We can init instantly as client slotables are only instantiated from being in an inventory already.
-		ClientInitialize();
+		bAwaitingClientInit = true;
 	}
 }
 
@@ -120,4 +119,13 @@ UConstituent* USlotable::CreateUninitializedConstituent(const TSubclassOf<UConst
 	UConstituent* ConstituentInstance = NewObject<UConstituent>(GetOwner(), ConstituentClass);
 	checkf(ConstituentInstance, TEXT("Failed to create slotable."));
 	return ConstituentInstance;
+}
+
+void USlotable::OnRep_OwningInventory()
+{
+	if (bAwaitingClientInit)
+	{
+		bAwaitingClientInit = false;
+		ClientInitialize();
+	}
 }

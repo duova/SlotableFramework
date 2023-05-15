@@ -5,20 +5,28 @@
 
 #include "Net/UnrealNetwork.h"
 
+FConstituentStateData::FConstituentStateData(const uint8 CurrentState, const uint8 PreviousState, const bool bClientCorrecting):
+	CurrentState(CurrentState),
+	PreviousState(PreviousState),
+	bClientCorrecting(bClientCorrecting)
+{
+}
+
 UConstituent::UConstituent()
 {
 	if (!HasAuthority())
 	{
-		ClientInitialize();
+		bAwaitingClientInit = true;
 	}
 }
 
 void UConstituent::BeginDestroy()
 {
 	Super::BeginDestroy();
+	bIsBeingDestroyed = true;
 	if (!HasAuthority())
 	{
-		ClientDeinitialize();	
+		ClientDeinitialize();
 	}
 }
 
@@ -29,6 +37,15 @@ void UConstituent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DefaultParams.bIsPushBased = true;
 	DefaultParams.Condition = COND_None;
 	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, OwningSlotable, DefaultParams);
+}
+
+void UConstituent::OnRep_OwningSlotable()
+{
+	if (bAwaitingClientInit)
+	{
+		bAwaitingClientInit = false;
+		ClientInitialize();
+	}
 }
 
 void UConstituent::ClientInitialize()

@@ -3,13 +3,14 @@
 
 #include "SfCore/Public/FormCoreComponent.h"
 
+#include "Net/UnrealNetwork.h"
+
 UFormCoreComponent::UFormCoreComponent()
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	PrimaryComponentTick.bCanEverTick = true;
 	bReplicateUsingRegisteredSubObjectList = true;
 	SetIsReplicatedByDefault(true);
 }
-
 
 void UFormCoreComponent::BeginPlay()
 {
@@ -17,7 +18,7 @@ void UFormCoreComponent::BeginPlay()
 	if (!GetOwner()->HasAuthority()) return;
 	for (TSubclassOf<UInventory> InventoryClass : DefaultInventoryClasses)
 	{
-		AddInventory(InventoryClass);
+		Server_AddInventory(InventoryClass);
 	}
 }
 
@@ -28,7 +29,7 @@ void UFormCoreComponent::BeginDestroy()
 	for (int32 i = 0; i < Inventories.Num(); i++)
 	{
 		//We clear index 0 because the list shifts down.
-		RemoveInventoryByIndex(0);
+		Server_RemoveInventoryByIndex(0);
 	}
 }
 
@@ -36,6 +37,10 @@ void UFormCoreComponent::TickComponent(float DeltaTime, ELevelTick TickType,
                                        FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	for (UInventory* Element : Inventories)
+	{
+		Element->Tick(DeltaTime);
+	}
 }
 
 void UFormCoreComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -57,7 +62,7 @@ TArray<UInventory*> UFormCoreComponent::GetInventories()
 	return InventoriesCopy;
 }
 
-UInventory* UFormCoreComponent::AddInventory(const TSubclassOf<UInventory>& InventoryClass)
+UInventory* UFormCoreComponent::Server_AddInventory(const TSubclassOf<UInventory>& InventoryClass)
 {
 	if (!InventoryClass || InventoryClass->HasAnyClassFlags(CLASS_Abstract)) return nullptr;
 	const AActor* Owner = GetOwner();
@@ -72,7 +77,7 @@ UInventory* UFormCoreComponent::AddInventory(const TSubclassOf<UInventory>& Inve
 	return InventoryInstance;
 }
 
-void UFormCoreComponent::RemoveInventoryByIndex(const int32 Index)
+void UFormCoreComponent::Server_RemoveInventoryByIndex(const int32 Index)
 {
 	const AActor* Owner = GetOwner();
 	checkf(Owner, TEXT("Invalid Owner."));
@@ -92,12 +97,12 @@ void UFormCoreComponent::RemoveInventoryByIndex(const int32 Index)
 	MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, Inventories, this);
 }
 
-bool UFormCoreComponent::RemoveInventory(UInventory* Inventory)
+bool UFormCoreComponent::Server_RemoveInventory(UInventory* Inventory)
 {
-	//Authority checking done by RemoveInventoryByIndex().
+	//Authority checking done by Server_RemoveInventoryByIndex().
 	if (!Inventory) return false;
 	const int32 Index = Inventories.Find(Inventory);
 	if (Index == INDEX_NONE) return false;
-	RemoveInventoryByIndex(Index);
+	Server_RemoveInventoryByIndex(Index);
 	return true;
 }
