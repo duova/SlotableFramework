@@ -55,17 +55,37 @@ void USfObject::Destroy()
 	}
 }
 
-bool USfObject::IsFormCharacter() const
+bool USfObject::IsFormCharacter()
 {
-	if (GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()))
+	if (FormCharacterComponent) return true;
+	if (bDoesNotHaveFormCharacter) return false;
+	if (UFormCharacterComponent* Component = Cast<UFormCharacterComponent>(GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass())))
 	{
+		Component = FormCharacterComponent;
+		bDoesNotHaveFormCharacter = false;
 		return true;
+	}
+	else
+	{
+		bDoesNotHaveFormCharacter = true;
 	}
 	return false;
 }
 
-UFormCharacterComponent* USfObject::GetFormCharacter() const
+UFormCharacterComponent* USfObject::GetFormCharacter()
 {
+	if (FormCharacterComponent) return FormCharacterComponent;
+	if (bDoesNotHaveFormCharacter) return nullptr;
+	UFormCharacterComponent* Component = Cast<UFormCharacterComponent>(GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()));
+	if (Component)
+	{
+		FormCharacterComponent = Component;
+		bDoesNotHaveFormCharacter = false;
+	}
+	else
+	{
+		bDoesNotHaveFormCharacter = true;
+	}
 	return Cast<UFormCharacterComponent>(GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()));
 }
 

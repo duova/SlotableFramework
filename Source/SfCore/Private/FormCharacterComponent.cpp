@@ -275,33 +275,18 @@ bool FSfMoveResponseDataContainer::Serialize(UCharacterMovementComponent& Charac
 		//We add our variables to serialization.
 		Ar << CharacterComponent->PredictedNetClock;
 
-		//Conditionally serialize constituent states.
-		//Once again, we use OldConstituentStates to check that we do not send what is unnecessary.
-		//We check against the last set of states sent by the client.
-		bool bDoSerializeStates = bIsSaving && ConstituentStates != CharacterComponent->OldConstituentStates;
-		Ar.SerializeBits(&bDoSerializeStates, 1);
-		if (bDoSerializeStates)
+		if (!bIsSaving)
 		{
-			Ar << CharacterComponent->ConstituentStates;
-			Ar << CharacterComponent->TimeSinceStateChange;
-			//We update OldConstituentData on the client and server because we do not want it to immediately send the
-			//correction back to the server / send another correction.
-			CharacterComponent->OldConstituentStates = ConstituentStates;
-			if (!bIsSaving)
-			{
-				CharacterComponent->bClientStatesWereCorrected = true;
-			}
+			CharacterComponent->bClientOnPlayback = true;
 		}
-		else if (!bIsSaving)
-		{
-			//The client version is what is used if the server indicates that there are no corrections.
-			ConstituentStates = CharacterComponent->ConstituentStates;
-			TimeSinceStateChange = TArray<uint16>();
-		}
+
+		//We need to resimulate the state changes to resimulate the metadata changes, since the slotable/card changes are
+		//called from within state reactors. Therefore we must serialize state if we serialize metadata.
 
 		//Conditionally serialize metadata.
 		//Once again, we use OldMetadataClasses to check that we do not send what is unnecessary.
 		//We check against the last set of metadata classes sent by the client.
+		bool bDoSerializeMetadata;
 		if (!bIsSaving || Metadata.Num() == CharacterComponent->OldMetadataClasses.Num())
 		{
 			bool Equal = true;
@@ -309,7 +294,7 @@ bool FSfMoveResponseDataContainer::Serialize(UCharacterMovementComponent& Charac
 			{
 				if (Metadata[i].Class != CharacterComponent->OldMetadataClasses[i]) Equal = false;
 			}
-			bool bDoSerializeMetadata = bIsSaving && Equal;
+			bDoSerializeMetadata = bIsSaving && Equal;
 			Ar.SerializeBits(&bDoSerializeMetadata, 1);
 			if (bDoSerializeMetadata)
 			{
@@ -324,7 +309,7 @@ bool FSfMoveResponseDataContainer::Serialize(UCharacterMovementComponent& Charac
 				CharacterComponent->OldMetadataClasses = Classes;
 				if (!bIsSaving)
 				{
-					CharacterComponent->bClientMetadataWasCorrected = true;
+					CharacterComponent->bClientMetadataWasCorrected = true; //We should only resimulate metadata changes if true.
 				}
 			}
 			else if (!bIsSaving)
@@ -333,8 +318,31 @@ bool FSfMoveResponseDataContainer::Serialize(UCharacterMovementComponent& Charac
 				Metadata = CharacterComponent->Metadata;
 			}
 		}
-
-
+		
+		//Conditionally serialize constituent states.
+		//Once again, we use OldConstituentStates to check that we do not send what is unnecessary.
+		//We check against the last set of states sent by the client.
+		//Here we make sure that we serialize states as well if we serialized metadata.
+		bool bDoSerializeStates = bIsSaving && (bDoSerializeMetadata || ConstituentStates != CharacterComponent->OldConstituentStates);
+		Ar.SerializeBits(&bDoSerializeStates, 1);
+		if (bDoSerializeStates)
+		{
+			Ar << CharacterComponent->ConstituentStates;
+			Ar << CharacterComponent->TimeSinceStateChange;
+			//We update OldConstituentData on the client and server because we do not want it to immediately send the
+			//correction back to the server / send another correction.
+			CharacterComponent->OldConstituentStates = ConstituentStates;
+			if (!bIsSaving)
+			{
+				CharacterComponent->bClientStatesWereCorrected = true; //Only resimulate state changes if true.
+			}
+		}
+		else if (!bIsSaving)
+		{
+			ConstituentStates = CharacterComponent->ConstituentStates;
+			TimeSinceStateChange = TArray<uint16>();
+		}
+		
 		if (bHasRotation)
 		{
 			ClientAdjustment.NewRot.NetSerialize(Ar, PackageMap, bLocalSuccess);

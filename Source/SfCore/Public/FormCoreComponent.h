@@ -3,7 +3,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "FormCharacterComponent.h"
 #include "Inventory.h"
 #include "Components/ActorComponent.h"
 #include "FormCoreComponent.generated.h"
@@ -41,6 +40,15 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	bool Server_RemoveInventory(UInventory* Inventory);
 
+	UFUNCTION(BlueprintCallable)
+	void Client_SetToFirstPerson();
+
+	UFUNCTION(BlueprintCallable)
+	void Client_SetToThirdPerson();
+
+	UFUNCTION(BlueprintGetter)
+	bool IsFirstPerson();
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -52,4 +60,7 @@ protected:
 private:
 	UPROPERTY(Replicated, VisibleAnywhere)
 	TArray<UInventory*> Inventories;
+
+	UPROPERTY(VisibleAnywhere)
+	uint8 bIsFirstPerson:1;
 };

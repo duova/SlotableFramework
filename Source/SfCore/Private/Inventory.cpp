@@ -80,6 +80,10 @@ UInventory::UInventory()
 void UInventory::Tick(float DeltaTime)
 {
 	CheckAndUpdateCardsWithMetadata();
+	for (USlotable* Slotable : Slotables)
+	{
+		Slotable->Tick(DeltaTime);
+	}
 }
 
 void UInventory::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

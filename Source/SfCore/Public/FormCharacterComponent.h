@@ -163,6 +163,13 @@
 	 * slotables. As such, every normal slotable is simply given a +/- multiplicative/additive movement speed modifier,
 	 * which is applied by the slotable change functions to the CMC movement speed variable automatically. (These are
 	 * Predicted_)
+	 *
+	 * Delay
+	 * Most Predicted_ nodes have a delay float that will delay the execution of the node by the given time. This is to
+	 * allow for delaying functionality by allowing the Predicted_ implementation to know about the delay, so it can account
+	 * for it during playback. For example, if the state changed 100ms before playback finished, then a FX node will start
+	 * the expected effects 100ms late. However, this would not work if the effect was in fact delayed by a non-prediction
+	 * safe timer node, altering the starting time.
 	 */
 
 class FSavedMove_Sf : public FSavedMove_Character
@@ -295,29 +302,30 @@ public:
 	//the logic that uses it in PerformMovement. To save bandwidth we only serialize this to the server once every second,
 	//and the server will only issue a correction when necessary.
 	float PredictedNetClock;
-	//TODO: RPC TO RESET THIS VALUE WHEN CLOCK HITS MAX VALUE
+	//TODO: RESET BOTH VALUES WHEN CLOCK HITS MAX VALUE
 	uint32 NetClockNextInteger;
 
 	//+/- acceptable range.
 	UPROPERTY(EditAnywhere)
-	float NetClockAcceptableTolerance;
+	float NetClockAcceptableTolerance = 0.05f;
 
 	//We will only serialize to server on change.
-	//TODO: BELOW
 	//An expected issue is that a rollback will occur every time we add/remove a constituent as there will be a state desync.
-	//To solve this, we mark a constituent as being destroyed if we predict its destruction on the client. The iterator
-	//that collects the states will then skip the constituent to maintain a deterministic state order even if the client's
-	//constituent has not actually been destroyed yet. We do this on the server too in case the object is accessed before
-	//it is destroyed.
-	//For constituent creation, we preemptively insert a 0 state to where we believe a constituent will be created. It will
-	//still rollback if the server initializes the constituent with a non-zero state, but in that case we will have to rollback
-	//anyway to predict the state.
+	//To solve this, we predict slotable changes by adding/removing metadata instead. The metadata will contain the number
+	//constituent states on each slotable, and are in the same order. Therefore, we can send state data that is most likely
+	//equivilent to the server state data by back filling the missing slotable states with 0. It will still rollback if
+	//the server initializes a constituent with a non-zero state, but in that case we will have to rollback anyway to
+	//resimulate the new state accordingly.
+	//Note that this is representative of PredictedConstituentState in Constituent and not ConstituentState.
 	TArray<uint8> ConstituentStates;
 	TArray<uint8> OldConstituentStates;
-	//Quantize100
+	//Quantize100. The state reactor of the current state is called and then "fast forwarded" by this time to ensure that
+	//even if another state change does not happen during replay, we still have the correct time on the previous state
+	//change.
 	TArray<uint16> TimeSinceStateChange;
 
 	//If true on client, normal tick should call a delegate before reverting to false.
+	//If this is false, we shouldn't resimulate any state changes.
 	uint8 bClientStatesWereCorrected:1;
 
 	//Ordered. MetadataClasses should be updated when changed.
@@ -330,7 +338,12 @@ public:
 	TArray<FInventoryObjectMetadata> Metadata;
 
 	//If true on client, normal tick should call a delegate before reverting to false.
+	//If this is false, we shouldn't resimulate any metadata changes.
 	uint8 bClientMetadataWasCorrected:1;
+	
+	//Client is currently on playback.
+	//If true on client, normal tick should call a delegate before reverting to false.
+	uint8 bClientOnPlayback:1;
 	
 protected:
 	virtual void BeginPlay() override;

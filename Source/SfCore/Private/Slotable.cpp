@@ -24,6 +24,14 @@ USlotable::USlotable()
 	}
 }
 
+void USlotable::Tick(float DeltaTime)
+{
+	for (UConstituent* Constituent : Constituents)
+	{
+		Constituent->Tick(DeltaTime);
+	}
+}
+
 void USlotable::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);

@@ -7,19 +7,16 @@
 #include "Constituent.generated.h"
 
 USTRUCT(BlueprintType)
-struct FConstituentStateData
+struct FSfPredictionFlags
 {
 	GENERATED_BODY()
-	
-	uint8 CurrentState;
 
-	uint8 PreviousState;
+	uint8 bClientStatesWereCorrected:1;
+	uint8 bClientMetadataWasCorrected:1;
+	uint8 bClientOnPlayback:1;
+	uint8 bIsServer:1;
 
-	uint8 bClientCorrecting:1;
-
-	FConstituentStateData();
-	
-	FConstituentStateData(uint8 CurrentState, uint8 PreviousState, bool bClientCorrecting);
+	FSfPredictionFlags(const bool bClientStatesWereCorrected, const bool bClientMetadataWasCorrected, const bool bClientOnPlayback, const bool bIsServer);
 };
 
 /**
@@ -28,7 +25,7 @@ struct FConstituentStateData
  *
  * ***Details***
  *
- * The activation state is an integer that represents a state. Conceptually every integer state represents a discrete
+ * The constituent state is an integer that represents a state. Conceptually every integer state represents a discrete
  * event that happens with the constituent. Examples of this are a spell being casted, a gun being fired, a reload
  * starting, a reload finishing, cooldown ending. Anything that happens or changes to the constituents properties should
  * be considered a state, however simultaneous events can be considered a singular state. For example, a spell being casted
@@ -40,8 +37,8 @@ struct FConstituentStateData
  * 
  * The flow of the state machine is determined by a set of nodes referred to as the state driver. Blueprint events are
  * provided as inputs to a state driver, which are processed by nodes that check different conditions as desired by
- * the designer, and finally calls the ChangeState blueprint function once conditions are reached. As a rule, state
- * drivers may not make any changes to the game state.
+ * the designer, and finally calls the ChangeConstituentState blueprint function once conditions are reached. As a rule,
+ * state drivers may not make any changes to the game state directly.
  *
  * ***State Reactor***
  *
@@ -58,8 +55,8 @@ struct FConstituentStateData
  * done completely by the state driver before entering a state, so reactors should not have game state condition checks,
  * only presentation related checks. (eg. a stat check should be in the state driver, but a check of whether a UI section
  * is overflowing should be in the reactor) In addition, state reactions should be instantaneous, and delayed effects
- * should be put into another state. Audiovisual effects obviously cannot be instantaneous, but they should be called
- * instantaneously.
+ * should be put into another state (most Predicted_ nodes have a delay variable that can be used for short delays).
+ * Audiovisual effects obviously cannot be instantaneous, but they should be called instantaneously.
  *
  * Note: SF has special implementations for audiovisual effects (including audio, niagara, animations, and material
  * property changes). These should be used instead of directly producing these effects. The nodes are marked Predicted_,
@@ -74,6 +71,8 @@ class SFCORE_API UConstituent : public USfObject
 public:
 
 	UConstituent();
+
+	void Tick(float DeltaTime);
 	
 	virtual void BeginDestroy() override;
 	
@@ -85,8 +84,6 @@ public:
 	UPROPERTY(BlueprintReadOnly, EditAnywhere)
 	uint8 bEnableInputsAndPrediction:1;
 
-	uint8 bIsBeingDestroyed:1;
-
 	//Note: Slotables should async load all assets on init and unload on deinit.
 	void ClientInitialize();
 
@@ -95,10 +92,46 @@ public:
 	void ClientDeinitialize();
 
 	void ServerDeinitialize();
+	
+	//From is used to make a sanity check to prevent unexpected behaviour. It does not crash the game, it will only
+	//make sure that an unexpected state change will consistently fail.
+	UFUNCTION(BlueprintCallable)
+	bool ChangeConstituentState(uint8 From, uint8 To);
 
+	UFUNCTION(BlueprintImplementableEvent)
+	void Server_OnEnterConstituentState(const uint8 State);
+
+	//Only use functions marked Predicted_.
+	UFUNCTION(BlueprintImplementableEvent)
+	void Predicted_OnEnterConstituentState(const uint8 State, const FSfPredictionFlags PredictionFlags);
+
+	//TimeSinceStateChange does not increment past 655 seconds.
+	
+	UFUNCTION(BlueprintImplementableEvent)
+	void Autonomous_OnEnterConstituentState(const uint8 State, const float TimeSinceStateChange);
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void SimulatedFP_OnEnterConstituentState(const uint8 State, const float TimeSinceStateChange);
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void SimulatedTP_OnEnterConstituentState(const uint8 State, const float TimeSinceStateChange);
+	
+	UFUNCTION()
+	void OnRep_ConstituentState();
+	
 private:
 	UFUNCTION()
 	void OnRep_OwningSlotable();
 
 	uint8 bAwaitingClientInit:1;
+
+	uint8 PredictedConstituentState;
+
+	UPROPERTY(Replicated, ReplicatedUsing = OnRep_ConstituentState)
+	uint8 ConstituentState;
+
+	//Quantize100. Only mark dirty when ConstituentState is changed. This is for replicating effects that started right
+	//before relevancy.
+	UPROPERTY(Replicated)
+	uint16 TimeSinceStateChange;
 };

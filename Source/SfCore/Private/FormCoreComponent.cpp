@@ -71,6 +71,8 @@ UInventory* UFormCoreComponent::Server_AddInventory(const TSubclassOf<UInventory
 	UInventory* InventoryInstance = NewObject<UInventory>(GetOwner(), InventoryClass);
 	checkf(InventoryInstance, TEXT("Failed to create inventory."));
 	Inventories.Emplace(InventoryInstance);
+	InventoryInstance->OwningFormCore = this;
+	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, OwningFormCore, InventoryInstance);
 	GetOwner()->AddReplicatedSubObject(InventoryInstance);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, Inventories, this);
 	InventoryInstance->ServerInitialize();
@@ -105,4 +107,41 @@ bool UFormCoreComponent::Server_RemoveInventory(UInventory* Inventory)
 	if (Index == INDEX_NONE) return false;
 	Server_RemoveInventoryByIndex(Index);
 	return true;
+}
+
+void UFormCoreComponent::Client_SetToFirstPerson()
+{
+	bIsFirstPerson = true;
+	//Refresh state reactor to use new one. (ie. use effects from the new perspective)
+	for (UInventory* Inventory : Inventories)
+	{
+		for (USlotable* Slotable : Inventory->GetSlotables())
+		{
+			for (UConstituent* Constituent : Slotable->GetConstituents())
+			{
+				Constituent->OnRep_ConstituentState();
+			}
+		}
+	}
+}
+
+void UFormCoreComponent::Client_SetToThirdPerson()
+{
+	bIsFirstPerson = false;
+	//Refresh state reactor to use new one. (ie. use effects from the new perspective)
+	for (UInventory* Inventory : Inventories)
+	{
+		for (USlotable* Slotable : Inventory->GetSlotables())
+		{
+			for (UConstituent* Constituent : Slotable->GetConstituents())
+			{
+				Constituent->OnRep_ConstituentState();
+			}
+		}
+	}
+}
+
+bool UFormCoreComponent::IsFirstPerson()
+{
+	return bIsFirstPerson;
 }

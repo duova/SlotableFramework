@@ -39,10 +39,16 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	void Destroy();
 
-	class UFormCharacterComponent* GetFormCharacter() const;
+	class UFormCharacterComponent* GetFormCharacter();
 	
-	bool IsFormCharacter() const;
+	bool IsFormCharacter();
 
 protected:
 	void ErrorIfNoAuthority() const;
+
+private:
+	UPROPERTY()
+	UFormCharacterComponent* FormCharacterComponent;
+
+	uint8 bDoesNotHaveFormCharacter:1;
 };

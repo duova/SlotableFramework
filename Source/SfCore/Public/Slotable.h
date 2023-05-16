@@ -24,6 +24,8 @@ public:
 
 	USlotable();
 
+	void Tick(float DeltaTime);
+	
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UPROPERTY(ReplicatedUsing = OnRep_OwningInventory, Replicated, BlueprintReadOnly, VisibleAnywhere)

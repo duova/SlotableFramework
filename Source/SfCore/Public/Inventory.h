@@ -76,6 +76,9 @@ public:
 	UFUNCTION(BlueprintGetter)
 	TArray<USlotable*> GetSlotables();
 
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)
+	class UFormCoreComponent* OwningFormCore;
+
 	UFUNCTION(BlueprintGetter)
 	TArray<USlotable*> GetSlotablesOfType(const TSubclassOf<USlotable>& SlotableClass);
 	
