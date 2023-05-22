@@ -7,12 +7,103 @@
 #include "FormCoreComponent.h"
 #include "Net/UnrealNetwork.h"
 
-FSfPredictionFlags::FSfPredictionFlags(const bool bClientStatesWereCorrected, const bool bClientMetadataWasCorrected,
+FSfPredictionFlags::FSfPredictionFlags(): bClientPredictedLastActionSetWasCorrected(0), bClientMetadataWasCorrected(0),
+                                          bClientOnPlayback(0), bIsServer(0)
+{
+}
+
+FSfPredictionFlags::FSfPredictionFlags(const bool bClientPredictedLastActionSetWasCorrected,
+                                       const bool bClientMetadataWasCorrected,
                                        const bool bClientOnPlayback, const bool bIsServer):
-	bClientStatesWereCorrected(bClientStatesWereCorrected), bClientMetadataWasCorrected(bClientMetadataWasCorrected),
+	bClientPredictedLastActionSetWasCorrected(bClientPredictedLastActionSetWasCorrected),
+	bClientMetadataWasCorrected(bClientMetadataWasCorrected),
 	bClientOnPlayback(bClientOnPlayback),
 	bIsServer(bIsServer)
 {
+}
+
+FActionSet::FActionSet(): NumActionsIncludingZero(0), ActionZero(0), ActionOne(0), ActionTwo(0), ActionThree(0),
+                          WorldTime(0)
+{
+}
+
+FActionSet::FActionSet(const float CurrentWorldTime, const uint8 ActionZero, const uint8 ActionOne,
+                       const uint8 ActionTwo, const uint8 ActionThree): NumActionsIncludingZero(0),
+                                                                        ActionZero(ActionZero), ActionOne(ActionOne),
+                                                                        ActionTwo(ActionTwo),
+                                                                        ActionThree(ActionThree),
+                                                                        WorldTime(CurrentWorldTime)
+{
+	checkf(ActionZero != 0, TEXT("Created ActionSet with no action zero."));
+	UConstituent::ErrorIfIdNotWithinRange(ActionZero);
+	if (ActionOne != 0)
+	{
+		NumActionsIncludingZero = 1;
+		UConstituent::ErrorIfIdNotWithinRange(ActionOne);
+	}
+	if (ActionTwo != 0)
+	{
+		NumActionsIncludingZero = 2;
+		checkf(ActionOne != 0, TEXT("Created ActionSet with action two but no action one."));
+		UConstituent::ErrorIfIdNotWithinRange(ActionTwo);
+	}
+	if (ActionThree != 0)
+	{
+		NumActionsIncludingZero = 3;
+		checkf(ActionTwo != 0, TEXT("Created ActionSet with action three but no action two."));
+		UConstituent::ErrorIfIdNotWithinRange(ActionThree);
+	}
+}
+
+bool FActionSet::TryAddActionCheckIfSameFrame(const float CurrentWorldTime, const uint8 Action)
+{
+	if (CurrentWorldTime != WorldTime) return false;
+	UConstituent::ErrorIfIdNotWithinRange(Action);
+	if (NumActionsIncludingZero == 0)
+	{
+		ActionOne = Action;
+	}
+	else if (NumActionsIncludingZero == 1)
+	{
+		ActionTwo = Action;
+	}
+	else if (NumActionsIncludingZero == 2)
+	{
+		ActionThree = Action;
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("Action dropped because too many actions were executed in one frame."))
+	}
+	return true;
+}
+
+bool FActionSet::operator==(const FActionSet& Other) const
+{
+	if (WorldTime == Other.WorldTime && NumActionsIncludingZero == Other.NumActionsIncludingZero &&
+		ActionZero == Other.ActionZero && ActionOne == Other.ActionOne && ActionTwo == Other.ActionTwo && ActionThree ==
+		Other.ActionThree)
+		return true;
+	return false;
+}
+
+TArray<uint8> FActionSet::ToArray() const
+{
+	TArray<uint8> Array;
+	Array.Add(ActionZero);
+	if (NumActionsIncludingZero > 0)
+	{
+		Array.Add(ActionOne);
+	}
+	if (NumActionsIncludingZero > 1)
+	{
+		Array.Add(ActionTwo);
+	}
+	if (NumActionsIncludingZero > 2)
+	{
+		Array.Add(ActionThree);
+	}
+	return Array;
 }
 
 UConstituent::UConstituent()
@@ -27,9 +118,9 @@ void UConstituent::Tick(float DeltaTime)
 {
 	//Stop incrementing if about to hit max value. Note that this will do so 655 seconds after state change.
 	//-1 for rounding differences.
-	if (TimeSinceStateChange < 65534 - DeltaTime * 100.0)
+	if (TimeSinceLastActionSet < 65534 - DeltaTime * 100.0)
 	{
-		TimeSinceStateChange += DeltaTime * 100.0;
+		TimeSinceLastActionSet += DeltaTime * 100.0;
 	}
 }
 
@@ -49,8 +140,8 @@ void UConstituent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DefaultParams.bIsPushBased = true;
 	DefaultParams.Condition = COND_None;
 	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, OwningSlotable, DefaultParams);
-	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, ConstituentState, DefaultParams);
-	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, TimeSinceStateChange, DefaultParams);
+	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, LastActionSet, DefaultParams);
+	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, TimeSinceLastActionSet, DefaultParams);
 }
 
 void UConstituent::OnRep_OwningSlotable()
@@ -77,76 +168,95 @@ void UConstituent::ClientDeinitialize()
 
 void UConstituent::ServerDeinitialize()
 {
+	OwningSlotable->OwningInventory->RemoveCardsOfOwner(InstanceId);
 	//Call events.
 }
 
-bool UConstituent::ChangeConstituentState(const uint8 From, const uint8 To)
+void UConstituent::ExecuteAction(const uint8 ActionId, const bool bIsPredictableContext)
 {
-	if (ConstituentState != From)
-	{
-		return false;
-	}
-	if (GetOwner()->GetLocalRole() == ROLE_SimulatedProxy) return false;
+	if (GetOwner()->GetLocalRole() == ROLE_SimulatedProxy) UE_LOG(LogTemp, Error,
+	                                                              TEXT("Tried to ExecuteAction as simulated proxy."));
+	ErrorIfIdNotWithinRange(ActionId);
 	if (HasAuthority())
 	{
-		ConstituentState = To;
-		Server_OnEnterConstituentState(ConstituentState);
-		TimeSinceStateChange = 0;
-		MARK_PROPERTY_DIRTY_FROM_NAME(UConstituent, ConstituentState, this);
-		//We only mark this dirty when we change state.
-		MARK_PROPERTY_DIRTY_FROM_NAME(UConstituent, TimeSinceStateChange, this);
-	}
-	if (bEnableInputsAndPrediction && IsFormCharacter())
-	{
-		//Predicted_ is run on server and client.
-		//Don't have to cache FormCharacter because getter already caches.
-		if (HasAuthority())
+		const float ServerWorldTime = GetOwner()->GetWorld()->GetTimeSeconds();
+		if (bIsPredictableContext)
 		{
-			PredictedConstituentState = To;
-			//On server the node implementations are to just run whatever is necessary on the server, like movement.
-			Predicted_OnEnterConstituentState(ConstituentState, FSfPredictionFlags(false, false, false, true));
-		}
-		else
-		{
-			if (!GetFormCharacter()->bClientStatesWereCorrected && GetFormCharacter()->bClientOnPlayback)
+			//If the action is executed in a predictable context, we want to update PredictedLastActionSet so the predicted
+			//client's version can get checked in FormCharacter if necessary.
+			//We first try to add the action to the existing set if the set was created in this frame. If not we build a
+			//new set.
+			if (!PredictedLastActionSet.TryAddActionCheckIfSameFrame(ServerWorldTime, ActionId))
 			{
-				//If the state was not rolled back, we should not resimulate state changes on playback, as everything
-				//should be working correctly in actual client time.
-				return false;
+				PredictedLastActionSet = FActionSet(ServerWorldTime, ActionId);
 			}
-			//If we are aren't playing back, we want to predict the state change.
-			//If we are playing back and the states were corrected, we want to repredict those states and their reactors.
-			PredictedConstituentState = To;
-			//Don't have to cache FormCharacter because getter already caches.
-			Predicted_OnEnterConstituentState(ConstituentState,
-			                                  FSfPredictionFlags(GetFormCharacter()->bClientStatesWereCorrected,
-			                                                     GetFormCharacter()->bClientMetadataWasCorrected,
-			                                                     GetFormCharacter()->bClientOnPlayback, false));
+			if (bEnableInputsAndPrediction && IsFormCharacter())
+			{
+				Predicted_OnExecute(ActionId, FSfPredictionFlags(false, false, false, true));
+			}
 		}
+		//LastActionSet always needs to be updated if we execute an action, no matter the context.
+		if (!LastActionSet.TryAddActionCheckIfSameFrame(ServerWorldTime, ActionId))
+		{
+			LastActionSet = FActionSet(ServerWorldTime, ActionId);
+		}
+		Server_OnExecute(ActionId);
+		//We replicate this so that simulated proxies can know how long their previous action has ran for after they
+		//become relevant.
+		TimeSinceLastActionSet = 0;
+		MARK_PROPERTY_DIRTY_FROM_NAME(UConstituent, LastActionSet, this);
+		//We only mark this dirty when we execute.
+		MARK_PROPERTY_DIRTY_FROM_NAME(UConstituent, TimeSinceLastActionSet, this);
 	}
-	if (ConstituentState == To)
+	else if (bEnableInputsAndPrediction && IsFormCharacter() && bIsPredictableContext && GetOwner()->GetLocalRole() ==
+		ROLE_AutonomousProxy)
 	{
-		return true;
+		//On client we only want to execute if we are predicting.
+		const float ClientWorldTime = GetOwner()->GetWorld()->GetTimeSeconds();
+		//Same concept of checking whether to add or build the set like above.
+		if (!PredictedLastActionSet.TryAddActionCheckIfSameFrame(ClientWorldTime, ActionId))
+		{
+			PredictedLastActionSet = FActionSet(ClientWorldTime, ActionId);
+		}
+		const UFormCharacterComponent* FormCharacter = GetFormCharacter();
+		Predicted_OnExecute(ActionId, FSfPredictionFlags(FormCharacter->bClientStatesWereCorrected,
+		                                           FormCharacter->bClientMetadataWasCorrected,
+		                                           FormCharacter->bClientOnPlayback, false));
 	}
 	//Other roles change their states OnRep.
-	return false;
 }
 
-void UConstituent::OnRep_ConstituentState()
+void UConstituent::ErrorIfIdNotWithinRange(const uint8 Id)
+{
+	checkf(Id < 64, TEXT("Action id not within range."));
+}
+
+int32 UConstituent::GetInstanceId()
+{
+	return InstanceId;
+}
+
+void UConstituent::OnRep_LastActionSet()
 {
 	if (GetOwner()->GetLocalRole() == ROLE_AutonomousProxy)
 	{
-		Autonomous_OnEnterConstituentState(ConstituentState, static_cast<float>(TimeSinceStateChange) / 100.0);
+		for (const uint8 Id : LastActionSet.ToArray())
+		{
+			Autonomous_OnExecute(Id, static_cast<float>(TimeSinceLastActionSet) / 100.0);
+		}
 	}
 	if (GetOwner()->GetLocalRole() == ROLE_SimulatedProxy)
 	{
-		if (OwningSlotable->OwningInventory->OwningFormCore->IsFirstPerson())
+		for (const uint8 Id : LastActionSet.ToArray())
 		{
-			SimulatedFP_OnEnterConstituentState(ConstituentState, static_cast<float>(TimeSinceStateChange) / 100.0);
-		}
-		else
-		{
-			SimulatedTP_OnEnterConstituentState(ConstituentState, static_cast<float>(TimeSinceStateChange) / 100.0);
+			if (OwningSlotable->OwningInventory->OwningFormCore->IsFirstPerson())
+			{
+				SimulatedFP_OnExecute(Id, static_cast<float>(TimeSinceLastActionSet) / 100.0);
+			}
+			else
+			{
+				SimulatedTP_OnExecute(Id, static_cast<float>(TimeSinceLastActionSet) / 100.0);
+			}
 		}
 	}
 }

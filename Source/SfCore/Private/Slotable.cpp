@@ -4,17 +4,20 @@
 #include "Slotable.h"
 
 #include "Constituent.h"
+#include "Inventory.h"
 #include "Net/UnrealNetwork.h"
 
 USlotable::USlotable()
 {
 	if (HasAuthority())
 	{
+		checkf(InitialConstituentClasses.Num() < 33, TEXT("Only 32 constituents can be in a slotable."));
 		//We don't instantly init as on the server we need to make sure the slotable is in an inventory first.
+		Constituents.Reserve(InitialConstituentClasses.Num());
 		for (auto ConstituentClass : InitialConstituentClasses)
 		{
 			UConstituent* ConstituentInstance = CreateUninitializedConstituent(ConstituentClass);
-			Constituents.Emplace(ConstituentInstance);
+			Constituents.Add(ConstituentInstance);
 			MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, Constituents, this);
 		}
 	}
@@ -52,6 +55,19 @@ TArray<UConstituent*> USlotable::GetConstituents()
 	return ConstituentsCopy;
 }
 
+TArray<UConstituent*> USlotable::GetConstituentsOfClass(const TSubclassOf<UConstituent> ConstituentClass)
+{
+	TArray<UConstituent*> ConstituentsOfClass;
+	for (UConstituent* Constituent : Constituents)
+	{
+		if (Constituent->GetClass() == ConstituentClass)
+		{
+			ConstituentsOfClass.Add(Constituent);
+		}
+	}
+	return ConstituentsOfClass;
+}
+
 void USlotable::ClientInitialize()
 {
 	//Call events.
@@ -80,6 +96,11 @@ void USlotable::ServerDeinitialize()
 	}
 }
 
+void USlotable::AssignConstituentInstanceId(UConstituent* Constituent)
+{
+	OwningInventory->AssignConstituentInstanceId(Constituent);
+}
+
 void USlotable::BeginDestroy()
 {
 	Super::BeginDestroy();
@@ -96,6 +117,7 @@ void USlotable::BeginDestroy()
 			}
 			Constituents.RemoveAt(0);
 			MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, Constituents, this);
+			
 		}
 	}
 	else
@@ -108,6 +130,7 @@ void USlotable::ServerInitializeConstituent(UConstituent* Constituent)
 {
 	GetOwner()->AddReplicatedSubObject(Constituent);
 	Constituent->OwningSlotable = this;
+	AssignConstituentInstanceId(Constituent);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UConstituent, OwningSlotable, Constituent);
 	Constituent->ServerInitialize();
 }

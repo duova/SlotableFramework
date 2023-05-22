@@ -8,51 +8,6 @@
 #include "Card.h"
 #include "Inventory.generated.h"
 
-UENUM()
-enum class EInventoryObjectType : uint8
-{
-	Null,
-	Slotable,
-	Card
-};
-
-/**
- * We use metadata to accomplish multiple things. We use classes to "predict" slotable and card creation and deletion
- * without actually creating or destroying them to avoid side effects. We also use this to predict the number of constituent
- * states and their order after a slotable addition or deletion to prevent desyncs. Finally, we use this to verify that the
- * correct cards are on the client.
- */
-USTRUCT()
-struct FInventoryObjectMetadata
-{
-	GENERATED_BODY()
-
-	UPROPERTY()
-	EInventoryObjectType Type;
-
-	UPROPERTY()
-	TSubclassOf<UObject> Class;
-
-	UPROPERTY()
-	uint8 InputEnabledConstituentsCount;
-
-	FInventoryObjectMetadata();
-	
-	explicit FInventoryObjectMetadata(const TSubclassOf<USlotable> SlotableClass);
-
-	explicit FInventoryObjectMetadata(const TSubclassOf<UCard> CardClass);
-
-	bool operator==(const FInventoryObjectMetadata& Other) const;
-
-	friend FArchive& operator<<(FArchive& Ar, FInventoryObjectMetadata& Metadata)
-	{
-		Ar.SerializeBits(&Metadata.Type, 2);
-		Ar << Metadata.Class;
-		Ar << Metadata.InputEnabledConstituentsCount;
-		return Ar;
-	}
-};
-
 /**
  * Inventories of slotables.
  * These can be dynamic or static, in terms of how many slotables they can contain.
@@ -71,7 +26,7 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	/**
-	 * Read-only, non-predicted copy of slotables. Use HasSlotable instead for a predictive check.
+	 * Read-only copy of slotables.
 	 */
 	UFUNCTION(BlueprintGetter)
 	TArray<USlotable*> GetSlotables();
@@ -81,8 +36,6 @@ public:
 
 	UFUNCTION(BlueprintGetter)
 	TArray<USlotable*> GetSlotablesOfType(const TSubclassOf<USlotable>& SlotableClass);
-	
-	void InsertSlotableMetadataAtEnd(const TSubclassOf<USlotable>& SlotableClass);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	USlotable* Server_AddSlotable(const TSubclassOf<USlotable>& SlotableClass);
@@ -109,31 +62,28 @@ public:
 	void Server_TradeSlotablesBetweenInventories(USlotable* SlotableA, USlotable* SlotableB);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	bool Server_AddCard(const TSubclassOf<UCard>& CardClass);
+	bool Server_AddSharedCard(const TSubclassOf<UCardObject>& CardClass, float CustomLifetime = 0);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	bool Server_RemoveCard(const TSubclassOf<UCard>& CardClass);
+	bool Server_RemoveSharedCard(const TSubclassOf<UCardObject>& CardClass);
+
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
+	bool Server_AddOwnedCard(const TSubclassOf<UCardObject>& CardClass, const int32 InOwnerConstituentInstanceId, float CustomLifetime = 0);
+
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
+	bool Server_RemoveOwnedCard(const TSubclassOf<UCardObject>& CardClass, const int32 InOwnerConstituentInstanceId);
 
 	UFUNCTION(BlueprintCallable)
-	bool Predicted_AddSlotable(const TSubclassOf<USlotable>& SlotableClass);
+	bool Predicted_AddSharedCard(const TSubclassOf<UCardObject>& CardClass, float CustomLifetime = 0);
 
 	UFUNCTION(BlueprintCallable)
-	bool Predicted_RemoveSlotable(USlotable* Slotable, const bool bRemoveSlot);
+	bool Predicted_RemoveSharedCard(const TSubclassOf<UCardObject>& CardClass);
 
-	UFUNCTION(BlueprintCallable)
-	void Predicted_RemoveSlotableByIndex(const int32 Index, const bool bRemoveSlot);
-	
-	UFUNCTION(BlueprintCallable)
-	bool Predicted_SetSlotable(const TSubclassOf<USlotable>& SlotableClass, const int32 Index, const bool bSlotMustBeNullOrEmpty);
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
+	bool Predicted_AddOwnedCard(const TSubclassOf<UCardObject>& CardClass, const int32 InOwnerConstituentInstanceId, float CustomLifetime = 0);
 
-	UFUNCTION(BlueprintCallable)
-	bool Predicted_InsertSlotable(const TSubclassOf<USlotable>& SlotableClass, const int32 Index);
-
-	UFUNCTION(BlueprintCallable)
-	bool Predicted_AddCard(const TSubclassOf<UCard>& CardClass);
-
-	UFUNCTION(BlueprintCallable)
-	bool Predicted_RemoveCard(const TSubclassOf<UCard>& CardClass);
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
+	bool Predicted_RemoveOwnedCard(const TSubclassOf<UCardObject>& CardClass, const int32 InOwnerConstituentInstanceId);
 
 	UFUNCTION(BlueprintPure)
 	bool HasSlotable(const TSubclassOf<USlotable>& SlotableClass);
@@ -142,11 +92,22 @@ public:
 	uint8 SlotableCount(const TSubclassOf<USlotable>& SlotableClass);
 
 	UFUNCTION(BlueprintPure)
-	bool HasCard(const TSubclassOf<USlotable>& CardClass);
+	bool HasSharedCard(const TSubclassOf<UCardObject>& CardClass);
+
+	UFUNCTION(BlueprintPure)
+	bool HasOwnedCard(const TSubclassOf<UCardObject>& CardClass, const int32 InOwnerConstituentInstanceId);
+
+	//Will return 0 if could not find or infinite lifetime.
+	UFUNCTION(BlueprintPure)
+	float GetSharedCardLifetime(const TSubclassOf<UCardObject>& CardClass);
+
+	//Will return 0 if could not find or infinite lifetime.
+	UFUNCTION(BlueprintPure)
+	float GetOwnedCardLifetime(const TSubclassOf<UCardObject>& CardClass, const int32 InOwnerConstituentInstanceId);
 
 	//Only on client.
 	UFUNCTION(BlueprintGetter)
-	UCard* GetCard(const TSubclassOf<USlotable>& CardClass);
+	TArray<UCardObject*> GetCardObjects(const TSubclassOf<UCardObject>& CardClass);
 
 	void ClientInitialize();
 
@@ -156,6 +117,12 @@ public:
 
 	void ServerDeinitialize();
 
+	void AssignConstituentInstanceId(UConstituent* Constituent);
+
+	void ReassignAllConstituentInstanceIds();
+
+	void RemoveCardsOfOwner(const int32 OwnerConstituentInstanceId);
+
 protected:
 
 	virtual void BeginDestroy() override;
@@ -164,7 +131,7 @@ protected:
 	TArray<TSubclassOf<USlotable>> InitialSlotableClasses;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	TArray<TSubclassOf<UCard>> InitialCardClasses;
+	TArray<TSubclassOf<UCardObject>> InitialSharedCardClassesInfiniteLifetime;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	TSubclassOf<USlotable> EmptySlotableClass;
@@ -195,19 +162,24 @@ private:
 	TArray<USlotable*> Slotables;
 
 	UPROPERTY(VisibleAnywhere)
-	TArray<UCard*> Cards;
+	TArray<UCardObject*> ClientCardObjects;
 
 	//Does not synchronize to owner as owner should have it be predicted.
-	//Ordered Slotable metadata is before unordered Card metadata.
 	UPROPERTY(Replicated)
-	TArray<FInventoryObjectMetadata> Metadata;
+	TArray<FCard> Cards;
 
 	//Compares with this to update cards on change.
-	TArray<FInventoryObjectMetadata> ClientOldMetadata;
+	TArray<FCard> ClientOldCards;
 
 	USlotable* CreateUninitializedSlotable(const TSubclassOf<USlotable>& SlotableClass) const;
 
-	UCard* CreateUninitializedCard(const TSubclassOf<UCard>& CardClass) const;
+	UCardObject* CreateUninitializedCardObject(const TSubclassOf<UCardObject>& CardClass) const;
 
-	void CheckAndUpdateCardsWithMetadata();
+	void ClientCheckAndUpdateCardObjects();
+
+	uint16 LastAssignedConstituentId;
+
+	uint8 bIsOnFormCharacter:1;
+
+	float GetCardLifetime(const TSubclassOf<UCardObject>& CardClass, int32 InOwnerConstituentInstanceId);
 };

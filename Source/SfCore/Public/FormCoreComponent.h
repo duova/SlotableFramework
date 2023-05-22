@@ -39,15 +39,25 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	bool Server_RemoveInventory(UInventory* Inventory);
-
-	UFUNCTION(BlueprintCallable)
-	void Client_SetToFirstPerson();
-
-	UFUNCTION(BlueprintCallable)
-	void Client_SetToThirdPerson();
+	
+	void ClientSetToFirstPerson();
+	
+	void ClientSetToThirdPerson();
 
 	UFUNCTION(BlueprintGetter)
 	bool IsFirstPerson();
+
+	//TODO
+	float ClientNonCompensatedServerWorldTime;
+
+	//Works for client and server.
+	float GetNonCompensatedServerWorldTime();
+
+	//Works for client and server.
+	float CalculateFutureServerTimestamp(float AdditionalTime);
+
+	//Works for client and server.
+	float CalculateTimeUntilServerTimestamp(float Timestamp);
 
 protected:
 	virtual void BeginPlay() override;

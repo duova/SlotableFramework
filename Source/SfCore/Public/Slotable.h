@@ -36,6 +36,9 @@ public:
 	 */
 	UFUNCTION(BlueprintGetter)
 	TArray<UConstituent*> GetConstituents();
+	
+	UFUNCTION(BlueprintGetter)
+	TArray<UConstituent*> GetConstituentsOfClass(const TSubclassOf<UConstituent> ConstituentClass);
 
 	void ClientInitialize();
 
@@ -44,6 +47,8 @@ public:
 	void ClientDeinitialize();
 
 	void ServerDeinitialize();
+
+	void AssignConstituentInstanceId(UConstituent* Constituent);
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	TArray<TSubclassOf<UConstituent>> InitialConstituentClasses;

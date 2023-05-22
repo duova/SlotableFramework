@@ -109,33 +109,33 @@ bool UFormCoreComponent::Server_RemoveInventory(UInventory* Inventory)
 	return true;
 }
 
-void UFormCoreComponent::Client_SetToFirstPerson()
+void UFormCoreComponent::ClientSetToFirstPerson()
 {
 	bIsFirstPerson = true;
-	//Refresh state reactor to use new one. (ie. use effects from the new perspective)
+	//Refresh actions to use new one. (ie. use effects from the new perspective)
 	for (UInventory* Inventory : Inventories)
 	{
 		for (USlotable* Slotable : Inventory->GetSlotables())
 		{
 			for (UConstituent* Constituent : Slotable->GetConstituents())
 			{
-				Constituent->OnRep_ConstituentState();
+				Constituent->OnRep_LastActionSet();
 			}
 		}
 	}
 }
 
-void UFormCoreComponent::Client_SetToThirdPerson()
+void UFormCoreComponent::ClientSetToThirdPerson()
 {
 	bIsFirstPerson = false;
-	//Refresh state reactor to use new one. (ie. use effects from the new perspective)
+	//Refresh actions to use new one. (ie. use effects from the new perspective)
 	for (UInventory* Inventory : Inventories)
 	{
 		for (USlotable* Slotable : Inventory->GetSlotables())
 		{
 			for (UConstituent* Constituent : Slotable->GetConstituents())
 			{
-				Constituent->OnRep_ConstituentState();
+				Constituent->OnRep_LastActionSet();
 			}
 		}
 	}

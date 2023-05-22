@@ -3,72 +3,39 @@
 
 #include "Inventory.h"
 
+#include "FormCharacterComponent.h"
+#include "FormCoreComponent.h"
 #include "Net/UnrealNetwork.h"
-
-
-FInventoryObjectMetadata::FInventoryObjectMetadata(): Type(), InputEnabledConstituentsCount(0)
-{
-}
-
-FInventoryObjectMetadata::FInventoryObjectMetadata(const TSubclassOf<USlotable> SlotableClass):
-	Type(), InputEnabledConstituentsCount(0)
-{
-	Class = SlotableClass;
-	const USlotable* SlotableCDO = SlotableClass.GetDefaultObject();
-	Type = EInventoryObjectType::Slotable;
-	for (TSubclassOf<UConstituent> ConstituentClass : SlotableCDO->InitialConstituentClasses)
-	{
-		const UConstituent* ConstituentCDO = ConstituentClass.GetDefaultObject();
-		if (ConstituentCDO->bEnableInputsAndPrediction)
-		{
-			InputEnabledConstituentsCount++;
-		}
-	}
-}
-
-FInventoryObjectMetadata::FInventoryObjectMetadata(const TSubclassOf<UCard> CardClass):
-	Type(), InputEnabledConstituentsCount(0)
-{
-	Type = EInventoryObjectType::Card;
-	Class = CardClass;
-}
-
-bool FInventoryObjectMetadata::operator==(const FInventoryObjectMetadata& Other) const
-{
-	if (Type == Other.Type && Class == Other.Class && InputEnabledConstituentsCount == Other.InputEnabledConstituentsCount)
-	{
-		return true;
-	}
-	return false;
-}
 
 UInventory::UInventory()
 {
 	if (HasAuthority())
 	{
 		checkf(Capacity <= 128, TEXT("The capacity of an inventory may not exceed 128."))
-		//Make sure we fill slotable metadata before card metadata.
+		Slotables.Reserve(InitialSlotableClasses.Num());
 		for (TSubclassOf<USlotable> SlotableClass : InitialSlotableClasses)
 		{
 			USlotable* SlotableInstance = CreateUninitializedSlotable(SlotableClass);
-			Slotables.Emplace(SlotableInstance);
-			Metadata.Emplace(FInventoryObjectMetadata(SlotableClass));
+			Slotables.Add(SlotableInstance);
 			InitializeSlotable(SlotableInstance);
 		}
-		for (uint8 i = 0; i < InitialCardClasses.Num(); i++)
+		for (uint8 i = 0; i < InitialSharedCardClassesInfiniteLifetime.Num(); i++)
 		{
-			for (uint8 j = 0; j < InitialCardClasses.Num(); j++)
+			for (uint8 j = 0; j < InitialSharedCardClassesInfiniteLifetime.Num(); j++)
 			{
-				checkf(i == j || InitialCardClasses[i] != InitialCardClasses[j],
-				       TEXT("Each card in an inventory must be unique."));
+				checkf(
+					i == j || InitialSharedCardClassesInfiniteLifetime[i] != InitialSharedCardClassesInfiniteLifetime[j
+					],
+					TEXT("Each initial shared card in an inventory must be unique."));
 			}
 		}
-		for (const TSubclassOf<UCard> CardClass : InitialCardClasses)
+		Cards.Reserve(InitialSharedCardClassesInfiniteLifetime.Num());
+		for (const TSubclassOf<UCardObject> CardClass : InitialSharedCardClassesInfiniteLifetime)
 		{
-			Metadata.Emplace(FInventoryObjectMetadata(CardClass));
+			Cards.Emplace(CardClass, FCard::ECardType::DoNotUseLifetime);
 		}
 		MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
-		MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Metadata, this);
+		MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
 	}
 	else
 	{
@@ -79,7 +46,7 @@ UInventory::UInventory()
 
 void UInventory::Tick(float DeltaTime)
 {
-	CheckAndUpdateCardsWithMetadata();
+	ClientCheckAndUpdateCardObjects();
 	for (USlotable* Slotable : Slotables)
 	{
 		Slotable->Tick(DeltaTime);
@@ -93,10 +60,18 @@ void UInventory::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifeti
 	DefaultParams.bIsPushBased = true;
 	DefaultParams.Condition = COND_None;
 	DOREPLIFETIME_WITH_PARAMS_FAST(UInventory, Slotables, DefaultParams);
-	FDoRepLifetimeParams MetaDataParams;
-	MetaDataParams.bIsPushBased = true;
-	MetaDataParams.Condition = COND_SkipOwner;
-	DOREPLIFETIME_WITH_PARAMS_FAST(UInventory, Metadata, MetaDataParams)
+	FDoRepLifetimeParams CardParams;
+	CardParams.bIsPushBased = true;
+	//We handle owner replication purely with the FormCharacterComponent if it is available.
+	if (!GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()))
+	{
+		CardParams.Condition = COND_SkipOwner;
+	}
+	else
+	{
+		CardParams.Condition = COND_None;
+	}
+	DOREPLIFETIME_WITH_PARAMS_FAST(UInventory, Cards, CardParams)
 }
 
 void UInventory::BeginDestroy()
@@ -116,22 +91,22 @@ void UInventory::BeginDestroy()
 			Slotables.RemoveAt(0);
 			MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
 		}
-		Metadata.Empty();
-		MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Metadata, this);
+		Cards.Empty();
+		MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
 	}
 	else
 	{
-		for (uint8 i = 0; i < Cards.Num(); i++)
+		for (uint8 i = 0; i < ClientCardObjects.Num(); i++)
 		{
 			//We clear index 0 because the list shifts down.
-			if (UCard* Card = Cards[0])
+			if (UCardObject* Card = ClientCardObjects[0])
 			{
 				Card->Deinitialize();
 			}
-			Cards.RemoveAt(0);
+			ClientCardObjects.RemoveAt(0);
 		}
-		//We empty the metadata so the cards do not get created again.
-		Metadata.Empty();
+		//We empty the list so the cards do not get created again.
+		Cards.Empty();
 		ClientDeinitialize();
 	}
 }
@@ -145,48 +120,63 @@ USlotable* UInventory::CreateUninitializedSlotable(const TSubclassOf<USlotable>&
 	return SlotableInstance;
 }
 
-UCard* UInventory::CreateUninitializedCard(const TSubclassOf<UCard>& CardClass) const
+UCardObject* UInventory::CreateUninitializedCardObject(const TSubclassOf<UCardObject>& CardClass) const
 {
 	if (!CardClass || CardClass->HasAnyClassFlags(CLASS_Abstract)) return nullptr;
-	UCard* CardInstance = NewObject<UCard>(GetOwner(), CardClass);
+	UCardObject* CardInstance = NewObject<UCardObject>(GetOwner(), CardClass);
 	checkf(CardInstance, TEXT("Failed to create card."));
 	return CardInstance;
 }
 
-void UInventory::CheckAndUpdateCardsWithMetadata()
+void UInventory::ClientCheckAndUpdateCardObjects()
 {
-	TArray<UCard*> ToRemove;
-	for (UCard* Card : Cards)
+	TArray<UCardObject*> ToRemove;
+	//Try to remove card objects that aren't on the cards list.
+	for (UCardObject* CardObject : ClientCardObjects)
 	{
-		bool bHasMetadata = false;
-		for (FInventoryObjectMetadata Element : Metadata)
+		bool bHasCard = false;
+		for (FCard Card : Cards)
 		{
-			if (Element.Type != EInventoryObjectType::Card) continue;
-			if (Element.Class == Card->GetClass()) bHasMetadata = true;
+			if (Card.bIsDisabledForDestroy) continue;
+			if (Card.Class == CardObject->GetClass() && Card.OwnerConstituentInstanceId == CardObject->
+				OwnerConstituentInstanceId)
+			{
+				bHasCard = true;
+				break;
+			}
 		}
-		if (!bHasMetadata)
+		if (!bHasCard)
 		{
-			ToRemove.Add(Card);
+			ToRemove.Add(CardObject);
 		}
 	}
-	for (UCard* InvalidCard : ToRemove)
+	for (UCardObject* InvalidCard : ToRemove)
 	{
 		InvalidCard->Deinitialize();
-		Cards.Remove(InvalidCard);
+		ClientCardObjects.Remove(InvalidCard);
 	}
-	for (FInventoryObjectMetadata Element : Metadata)
+	//Try to add card objects that are on the cards list but doesn't exist.
+	for (FCard Card : Cards)
 	{
-		if (Element.Type != EInventoryObjectType::Card) continue;
+		if (Card.bIsDisabledForDestroy) continue;
 		bool bHasCard = false;
-		for (UCard* Card : Cards)
+		for (const UCardObject* CardObject : ClientCardObjects)
 		{
-			if (Element.Class == Card->GetClass()) bHasCard = true;
+			if (Card.Class == CardObject->GetClass() && Card.OwnerConstituentInstanceId == CardObject->
+				OwnerConstituentInstanceId)
+			{
+				bHasCard = true;
+				break;
+			}
 		}
 		if (bHasCard) continue;
-		TSubclassOf<UCard> CardClass{Element.Class};
-		UCard* CardInstance = CreateUninitializedCard(CardClass);
-		Cards.Emplace(CardInstance);
+		//Continue if this card object is not supposed to be spawned.
+		if (!Card.Class.GetDefaultObject()->bSpawnCardObjectOnClient) continue;
+		TSubclassOf<UCardObject> CardClass{Card.Class};
+		UCardObject* CardInstance = CreateUninitializedCardObject(CardClass);
+		ClientCardObjects.Add(CardInstance);
 		CardInstance->OwningInventory = this;
+		CardInstance->OwnerConstituentInstanceId = Card.OwnerConstituentInstanceId;
 		CardInstance->Initialize();
 	}
 }
@@ -194,6 +184,7 @@ void UInventory::CheckAndUpdateCardsWithMetadata()
 TArray<USlotable*> UInventory::GetSlotables()
 {
 	TArray<USlotable*> SlotablesCopy;
+	SlotablesCopy.Reserve(Slotables.Num());
 	for (USlotable* Slotable : Slotables)
 	{
 		SlotablesCopy.Add(Slotable);
@@ -217,9 +208,13 @@ TArray<USlotable*> UInventory::GetSlotablesOfType(const TSubclassOf<USlotable>& 
 bool UInventory::HasSlotable(const TSubclassOf<USlotable>& SlotableClass)
 {
 	bool Value = false;
-	for (FInventoryObjectMetadata Element : Metadata)
+	for (USlotable* Slotable : Slotables)
 	{
-		if (Element.Type == EInventoryObjectType::Slotable && Element.Class == SlotableClass) Value = true;
+		if (Slotable->GetClass() == SlotableClass)
+		{
+			Value = true;
+			break;
+		}
 	}
 	return Value;
 }
@@ -227,51 +222,65 @@ bool UInventory::HasSlotable(const TSubclassOf<USlotable>& SlotableClass)
 uint8 UInventory::SlotableCount(const TSubclassOf<USlotable>& SlotableClass)
 {
 	uint8 Value = 0;
-	for (FInventoryObjectMetadata Element : Metadata)
+	for (USlotable* Slotable : Slotables)
 	{
-		if (Element.Type == EInventoryObjectType::Slotable && Element.Class == SlotableClass) Value++;
+		if (Slotable->GetClass() == SlotableClass) Value++;
 	}
 	return Value;
 }
 
-bool UInventory::HasCard(const TSubclassOf<USlotable>& CardClass)
+bool UInventory::HasSharedCard(const TSubclassOf<UCardObject>& CardClass)
 {
 	bool Value = false;
-	for (FInventoryObjectMetadata Element : Metadata)
+	for (FCard Card : Cards)
 	{
-		if (Element.Type == EInventoryObjectType::Card && Element.Class == CardClass) Value = true;
-	}
-	return Value;
-}
-
-UCard* UInventory::GetCard(const TSubclassOf<USlotable>& CardClass)
-{
-	UCard* Value = nullptr;
-	for (UCard* Card : Cards)
-	{
-		if (Card->GetClass() == CardClass) Value = Card;
-	}
-	return Value;
-}
-
-void UInventory::InsertSlotableMetadataAtEnd(const TSubclassOf<USlotable>& SlotableClass)
-{
-	uint8 Index = 255;
-	for (uint8 i = 0; i < Metadata.Num(); i++)
-	{
-		if (Metadata[i].Type != EInventoryObjectType::Slotable)
+		//If disabled we don't count it as existing.
+		if (Card.bIsDisabledForDestroy) continue;
+		if (Card.Class == CardClass && Card.OwnerConstituentInstanceId == 0)
 		{
-			Index = i;
+			Value = true;
+			break;
 		}
 	}
-	if (Index == 255)
+	return Value;
+}
+
+bool UInventory::HasOwnedCard(const TSubclassOf<UCardObject>& CardClass, const int32 InOwnerConstituentInstanceId)
+{
+	bool Value = false;
+	for (FCard Card : Cards)
 	{
-		Metadata.Insert(FInventoryObjectMetadata(SlotableClass), Metadata.Num() - 1);
+		//If disabled we don't count it as existing.
+		if (Card.bIsDisabledForDestroy) continue;
+		if (Card.Class == CardClass && Card.OwnerConstituentInstanceId == InOwnerConstituentInstanceId)
+		{
+			Value = true;
+			break;
+		}
 	}
-	else
+	return Value;
+}
+
+float UInventory::GetSharedCardLifetime(const TSubclassOf<UCardObject>& CardClass)
+{
+	return GetCardLifetime(CardClass, 0);
+}
+
+float UInventory::GetOwnedCardLifetime(const TSubclassOf<UCardObject>& CardClass,
+                                       const int32 InOwnerConstituentInstanceId)
+{
+	return GetCardLifetime(CardClass, InOwnerConstituentInstanceId);
+}
+
+TArray<UCardObject*> UInventory::GetCardObjects(const TSubclassOf<UCardObject>& CardClass)
+{
+	TArray<UCardObject*> Objects;
+	if (HasAuthority()) return Objects;
+	for (UCardObject* Card : ClientCardObjects)
 	{
-		Metadata.Insert(FInventoryObjectMetadata(SlotableClass), Index);
+		if (Card->GetClass() == CardClass) Objects.Add(Card);
 	}
+	return Objects;
 }
 
 USlotable* UInventory::Server_AddSlotable(const TSubclassOf<USlotable>& SlotableClass)
@@ -281,11 +290,9 @@ USlotable* UInventory::Server_AddSlotable(const TSubclassOf<USlotable>& Slotable
 	checkf(!bIsChangeLocked, TEXT("Attempted to add slotable to change locked inventory."));
 	checkf(Slotables.Num() < Capacity, TEXT("Attempted to add slotable to a full inventory."));
 	USlotable* SlotableInstance = CreateUninitializedSlotable(SlotableClass);
-	Slotables.Emplace(SlotableInstance);
-	InsertSlotableMetadataAtEnd(SlotableClass);
+	Slotables.Add(SlotableInstance);
 	InitializeSlotable(SlotableInstance);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
-	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Metadata, this);
 	return SlotableInstance;
 }
 
@@ -317,14 +324,12 @@ void UInventory::Server_RemoveSlotableByIndex(const int32 Index, const bool bRem
 			Slotable->Destroy();
 		}
 		Slotables.RemoveAt(Index);
-		Metadata.RemoveAt(Index);
 	}
 	else
 	{
 		Server_SetSlotable(EmptySlotableClass, Index, false);
 	}
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
-	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Metadata, this);
 }
 
 USlotable* UInventory::Server_SetSlotable(const TSubclassOf<USlotable>& SlotableClass, const int32 Index,
@@ -347,10 +352,8 @@ USlotable* UInventory::Server_SetSlotable(const TSubclassOf<USlotable>& Slotable
 	}
 	USlotable* SlotableInstance = CreateUninitializedSlotable(SlotableClass);
 	Slotables[Index] = SlotableInstance;
-	Metadata[Index] = FInventoryObjectMetadata(SlotableClass);
 	InitializeSlotable(SlotableInstance);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
-	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Metadata, this);
 	return SlotableInstance;
 }
 
@@ -362,9 +365,7 @@ USlotable* UInventory::Server_InsertSlotable(const TSubclassOf<USlotable>& Slota
 	checkf(Index < 0 || Index >= Slotables.Num(), TEXT("Attempted to insert slotable with an index out of range."));
 	USlotable* SlotableInstance = CreateUninitializedSlotable(SlotableClass);
 	Slotables.Insert(SlotableInstance, Index);
-	Metadata.Insert(FInventoryObjectMetadata(SlotableClass), Index);
 	InitializeSlotable(SlotableInstance);
-	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Metadata, this);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
 	return SlotableInstance;
 }
@@ -395,8 +396,6 @@ void UInventory::Server_SwapSlotablesByIndex(const int32 IndexA, const int32 Ind
 	Slotables[IndexB] = TempSlotablePtr;
 	InitializeSlotable(Slotables[IndexA]);
 	InitializeSlotable(Slotables[IndexB]);
-	Metadata.Swap(IndexA, IndexB);
-	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Metadata, this);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
 }
 
@@ -421,197 +420,168 @@ void UInventory::Server_TradeSlotablesBetweenInventories(USlotable* SlotableA, U
 	SlotableB->Destroy();
 	InitializeSlotable(InventoryA->Slotables[IndexA]);
 	InitializeSlotable(InventoryB->Slotables[IndexB]);
-	FInventoryObjectMetadata DataA = InventoryA->Metadata[IndexA];
-	InventoryA->Metadata[IndexA] = InventoryB->Metadata[IndexB];
-	InventoryB->Metadata[IndexB] = DataA;
-	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Metadata, InventoryA);
-	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Metadata, InventoryB);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, InventoryA);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, InventoryB);
 }
 
-bool UInventory::Server_AddCard(const TSubclassOf<UCard>& CardClass)
+bool UInventory::Server_AddSharedCard(const TSubclassOf<UCardObject>& CardClass, const float CustomLifetime)
 {
-	//We only need to add the metadata as the client will take care of the rest.
-	const FInventoryObjectMetadata Data = FInventoryObjectMetadata(CardClass);
-	if (Metadata.Contains(Data)) return false;
-	Metadata.Add(Data);
-	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Metadata, this);
-	return true;
+	//Id 0 is shared.
+	return Server_AddOwnedCard(CardClass, 0, CustomLifetime);
 }
 
-bool UInventory::Server_RemoveCard(const TSubclassOf<UCard>& CardClass)
+bool UInventory::Server_RemoveSharedCard(const TSubclassOf<UCardObject>& CardClass)
 {
-	//We only need to add the metadata as the client will take care of the rest.
-	const FInventoryObjectMetadata Data = FInventoryObjectMetadata(CardClass);
-	if (!Metadata.Contains(Data)) return false;
-	Metadata.Remove(Data);
-	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Metadata, this);
-	return true;
+	//Id 0 is shared.
+	return Server_RemoveOwnedCard(CardClass, 0);
 }
 
-//Predicted functions essentially have the same implementations but on client, they only make changes to Metadata.
-
-bool UInventory::Predicted_AddSlotable(const TSubclassOf<USlotable>& SlotableClass)
+bool UInventory::Server_AddOwnedCard(const TSubclassOf<UCardObject>& CardClass,
+                                     const int32 InOwnerConstituentInstanceId, const float CustomLifetime)
 {
-	checkf(GetOwner()->GetLocalRole() != ROLE_SimulatedProxy, TEXT("Called Predicted_ function on simulated proxy."))
-	if (!SlotableClass) return false;
-	if (HasAuthority())
+	ErrorIfNoAuthority();
+	for (FCard Card : Cards)
 	{
-		Server_AddSlotable(SlotableClass);
-	}
-	else
-	{
-		checkf(bIsDynamic, TEXT("Attempted to add slotable to static inventory."));
-		checkf(!bIsChangeLocked, TEXT("Attempted to add slotable to change locked inventory."));
-		checkf(Slotables.Num() < Capacity, TEXT("Attempted to add slotable to a full inventory."));
-		InsertSlotableMetadataAtEnd(SlotableClass);
-	}
-	return true;
-}
-
-bool UInventory::Predicted_RemoveSlotable(USlotable* Slotable, const bool bRemoveSlot)
-{
-	checkf(GetOwner()->GetLocalRole() != ROLE_SimulatedProxy, TEXT("Called Predicted_ function on simulated proxy."))
-	if (!Slotable) return false;
-	if (HasAuthority())
-	{
-		Server_RemoveSlotable(Slotable, bRemoveSlot);
-	}
-	else
-	{
-		const int32 Index = Slotables.Find(Slotable);
-		if (Index == INDEX_NONE) return false;
-		if (bRemoveSlot)
+		//Check for duplicates.
+		if (Card.Class == CardClass && Card.OwnerConstituentInstanceId == InOwnerConstituentInstanceId)
 		{
-			checkf(bIsDynamic, TEXT("Attempted to remove slotable from a static inventory."));
+			return false;
 		}
-		checkf(!bIsChangeLocked, TEXT("Attempted to remove slotable from a change locked inventory."));
-		checkf(Index < 0 || Index >= Slotables.Num(), TEXT("Attempted to remove slotable with an index out of range."));
-		if (bRemoveSlot)
+	}
+	if (CustomLifetime != 0)
+	{
+		//References to FormCharacter and FormCore are needed because they provide timestamps for lifetime.
+		if (IsFormCharacter())
 		{
-			Metadata.RemoveAt(Index);
+			Cards.Emplace(CardClass, FCard::ECardType::UseCustomLifetimePredictedTimestamp,
+			              InOwnerConstituentInstanceId, GetFormCharacter(), nullptr, CustomLifetime);
 		}
 		else
 		{
-			checkf(!bIsChangeLocked, TEXT("Attempted to set a slotable in a change locked inventory."));
-			checkf(Index < 0 || Index >= Slotables.Num(),
-			       TEXT("Attempted to set a slotable with an index out of range."));
-			Metadata[Index] = FInventoryObjectMetadata(EmptySlotableClass);
+			Cards.Emplace(CardClass, FCard::ECardType::UseCustomLifetimeServerTimestamp, InOwnerConstituentInstanceId,
+			              nullptr, OwningFormCore, CustomLifetime);
 		}
-	}
-	return true;
-}
-
-void UInventory::Predicted_RemoveSlotableByIndex(const int32 Index, const bool bRemoveSlot)
-{
-	checkf(GetOwner()->GetLocalRole() != ROLE_SimulatedProxy, TEXT("Called Predicted_ function on simulated proxy."))
-	if (HasAuthority())
-	{
-		Server_RemoveSlotableByIndex(Index, bRemoveSlot);
 	}
 	else
 	{
-		if (bRemoveSlot)
+		if (IsFormCharacter())
 		{
-			checkf(bIsDynamic, TEXT("Attempted to remove slotable from a static inventory."));
-		}
-		checkf(!bIsChangeLocked, TEXT("Attempted to remove slotable from a change locked inventory."));
-		checkf(Index < 0 || Index >= Slotables.Num(), TEXT("Attempted to remove slotable with an index out of range."));
-		if (bRemoveSlot)
-		{
-			Metadata.RemoveAt(Index);
+			Cards.Emplace(CardClass, FCard::ECardType::UseDefaultLifetimePredictedTimestamp,
+			              InOwnerConstituentInstanceId, GetFormCharacter());
 		}
 		else
 		{
-			checkf(!bIsChangeLocked, TEXT("Attempted to set a slotable in a change locked inventory."));
-			checkf(Index < 0 || Index >= Slotables.Num(),
-			       TEXT("Attempted to set a slotable with an index out of range."));
-			Metadata[Index] = FInventoryObjectMetadata(EmptySlotableClass);
+			Cards.Emplace(CardClass, FCard::ECardType::UseCustomLifetimeServerTimestamp, InOwnerConstituentInstanceId,
+			              nullptr, OwningFormCore);
 		}
 	}
+	if (IsFormCharacter())
+	{
+		FCard& CardAdded = Cards.Last();
+		//We set it to be not corrected and set a timeout so the client has a chance to synchronize before we start issuing corrections.
+		CardAdded.bIsNotCorrected = true;
+		CardAdded.ClientSyncTimeRemaining = CardAdded.ClientSyncTimeout;
+	}
+	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
+	return true;
 }
 
-bool UInventory::Predicted_SetSlotable(const TSubclassOf<USlotable>& SlotableClass, const int32 Index,
-                                       const bool bSlotMustBeNullOrEmpty)
+bool UInventory::Server_RemoveOwnedCard(const TSubclassOf<UCardObject>& CardClass,
+                                        const int32 InOwnerConstituentInstanceId)
+{
+	ErrorIfNoAuthority();
+	int16 IndexToDestroy = INDEX_NONE;
+	for (FCard Card : Cards)
+	{
+		if (Card.Class == CardClass && Card.OwnerConstituentInstanceId == InOwnerConstituentInstanceId)
+		{
+			if (IsFormCharacter())
+			{
+				//Same concept as above.
+				Card.bIsDisabledForDestroy = true;
+				Card.ClientSyncTimeRemaining = Card.ClientSyncTimeout;
+				return true;
+			}
+			IndexToDestroy = Cards.Find(Card);
+			break;
+		}
+	}
+	if (IndexToDestroy != INDEX_NONE)
+	{
+		Cards.RemoveAt(IndexToDestroy);
+		MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
+		return true;
+	}
+	return false;
+}
+
+bool UInventory::Predicted_AddSharedCard(const TSubclassOf<UCardObject>& CardClass, float CustomLifetime)
+{
+	return Predicted_AddOwnedCard(CardClass, 0, CustomLifetime);
+}
+
+bool UInventory::Predicted_RemoveSharedCard(const TSubclassOf<UCardObject>& CardClass)
+{
+	return Predicted_RemoveOwnedCard(CardClass, 0);
+}
+
+bool UInventory::Predicted_AddOwnedCard(const TSubclassOf<UCardObject>& CardClass,
+                                        const int32 InOwnerConstituentInstanceId, float CustomLifetime)
 {
 	checkf(GetOwner()->GetLocalRole() != ROLE_SimulatedProxy, TEXT("Called Predicted_ function on simulated proxy."))
-	if (!SlotableClass) return false;
-	if (HasAuthority())
+	checkf(IsFormCharacter(), TEXT("Predicted_ function called by non-form character."));
+	for (FCard Card : Cards)
 	{
-		Server_SetSlotable(SlotableClass, Index, bSlotMustBeNullOrEmpty);
+		//Check for duplicates.
+		if (Card.Class == CardClass && Card.OwnerConstituentInstanceId == InOwnerConstituentInstanceId)
+		{
+			return false;
+		}
+	}
+	if (CustomLifetime != 0)
+	{
+		//References to FormCharacter and FormCore are needed because they provide timestamps for lifetime.
+		Cards.Emplace(CardClass, FCard::ECardType::UseCustomLifetimePredictedTimestamp, InOwnerConstituentInstanceId,
+		              GetFormCharacter(), nullptr, CustomLifetime);
 	}
 	else
 	{
-		checkf(!bIsChangeLocked, TEXT("Attempted to set a slotable in a change locked inventory."));
-		checkf(Index < 0 || Index >= Slotables.Num(), TEXT("Attempted to set a slotable with an index out of range."));
-		USlotable* CurrentSlotable = Slotables[Index];
-		if (bSlotMustBeNullOrEmpty)
+		Cards.Emplace(CardClass, FCard::ECardType::UseDefaultLifetimePredictedTimestamp, InOwnerConstituentInstanceId,
+		              GetFormCharacter());
+	}
+	//We don't need to set correction pausing variables since we can start correcting instantly as this is predicted.
+	if (HasAuthority())
+	{
+		MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
+	}
+	return true;
+}
+
+bool UInventory::Predicted_RemoveOwnedCard(const TSubclassOf<UCardObject>& CardClass,
+                                           const int32 InOwnerConstituentInstanceId)
+{
+	checkf(GetOwner()->GetLocalRole() != ROLE_SimulatedProxy, TEXT("Called Predicted_ function on simulated proxy."))
+	checkf(IsFormCharacter(), TEXT("Predicted_ function called by non-form character."));
+	int16 IndexToDestroy = INDEX_NONE;
+	for (FCard Card : Cards)
+	{
+		if (Card.Class == CardClass && Card.OwnerConstituentInstanceId == InOwnerConstituentInstanceId)
 		{
-			checkf(CurrentSlotable->GetClass() == EmptySlotableClass,
-			       TEXT("Attempted to set a slotable to a slot that is occupied."));
-		}
-		Metadata[Index] = FInventoryObjectMetadata(SlotableClass);
-	}
-	return true;
-}
-
-bool UInventory::Predicted_InsertSlotable(const TSubclassOf<USlotable>& SlotableClass, const int32 Index)
-{
-	checkf(GetOwner()->GetLocalRole() != ROLE_SimulatedProxy, TEXT("Called Predicted_ function on simulated proxy."))
-	if (!SlotableClass) return false;
-	if (HasAuthority())
-	{
-		Server_InsertSlotable(SlotableClass, Index);
-	}
-	else
-	{
-		checkf(bIsDynamic, TEXT("Attempted to insert slotable into a static inventory."));
-		checkf(!bIsChangeLocked, TEXT("Attempted to insert slotable into a change locked inventory."));
-		checkf(Index < 0 || Index >= Slotables.Num(), TEXT("Attempted to insert slotable with an index out of range."));
-		Metadata.Insert(FInventoryObjectMetadata(SlotableClass), Index);
-	}
-	return true;
-}
-
-bool UInventory::Predicted_AddCard(const TSubclassOf<UCard>& CardClass)
-{
-	checkf(GetOwner()->GetLocalRole() != ROLE_SimulatedProxy, TEXT("Called Predicted_ function on simulated proxy."))
-	if (!CardClass) return false;
-	if (HasAuthority())
-	{
-		return Server_AddCard(CardClass);
-	}
-	const FInventoryObjectMetadata Data = FInventoryObjectMetadata(CardClass);
-	if (Metadata.Contains(Data)) return false;
-	Metadata.Add(Data);
-	UCard* CardInstance = CreateUninitializedCard(CardClass);
-	CardInstance->Initialize();
-	return true;
-}
-
-bool UInventory::Predicted_RemoveCard(const TSubclassOf<UCard>& CardClass)
-{
-	checkf(GetOwner()->GetLocalRole() != ROLE_SimulatedProxy, TEXT("Called Predicted_ function on simulated proxy."))
-	if (!CardClass) return false;
-	if (HasAuthority())
-	{
-		return Server_RemoveCard(CardClass);
-	}
-	const FInventoryObjectMetadata Data = FInventoryObjectMetadata(CardClass);
-	if (!Metadata.Contains(Data)) return false;
-	Metadata.Remove(Data);
-	UCard* ToRemove;
-	for (UCard* Card : Cards)
-	{
-		if (Card->GetClass() == CardClass)
-		{
-			Card->Deinitialize();
-			ToRemove = Card;
+			//We always instantly destroy as we should be able to sync instantly.
+			IndexToDestroy = Cards.Find(Card);
+			break;
 		}
 	}
-	Cards.Remove(ToRemove);
-	return true;
+	if (IndexToDestroy != INDEX_NONE)
+	{
+		Cards.RemoveAt(IndexToDestroy);
+		if (HasAuthority())
+		{
+			MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
+		}
+		return true;
+	}
+	return false;
 }
 
 void UInventory::ClientInitialize()
@@ -621,6 +591,7 @@ void UInventory::ClientInitialize()
 
 void UInventory::ServerInitialize()
 {
+	bIsOnFormCharacter = IsFormCharacter();
 	//Call events.
 }
 
@@ -632,6 +603,54 @@ void UInventory::ClientDeinitialize()
 void UInventory::ServerDeinitialize()
 {
 	//Call events.
+}
+
+void UInventory::AssignConstituentInstanceId(UConstituent* Constituent)
+{
+	//If less than max value - 1 we can keep adding.
+	//0 is intentionally left unused.
+	if (LastAssignedConstituentId < 65535 - 1)
+	{
+		Constituent->InstanceId = LastAssignedConstituentId + 1;
+		LastAssignedConstituentId++;
+	}
+	else
+	{
+		//If max value reached we reassign all to recycle values.
+		//This shouldn't happen under most circumstances.
+		ReassignAllConstituentInstanceIds();
+	}
+}
+
+void UInventory::ReassignAllConstituentInstanceIds()
+{
+	LastAssignedConstituentId = 0;
+	for (USlotable* Slotable : Slotables)
+	{
+		for (UConstituent* Constituent : Slotable->GetConstituents())
+		{
+			AssignConstituentInstanceId(Constituent);
+			//Sanity check so we don't recursively call in case somehow we just have a lot of constituents.
+			//The limit should be 128 * 32 = 4096.
+			checkf(LastAssignedConstituentId < 65535 - 1, TEXT("Exceeding ConstituentInstanceId limit."));
+		}
+	}
+}
+
+void UInventory::RemoveCardsOfOwner(const int32 OwnerConstituentInstanceId)
+{
+	TArray<TSubclassOf<UCardObject>> ToRemove;
+	for (FCard Card : Cards)
+	{
+		if (Card.OwnerConstituentInstanceId == OwnerConstituentInstanceId)
+		{
+			ToRemove.Add(Card.Class);
+		}
+	}
+	for (const TSubclassOf<UCardObject> CardClass : ToRemove)
+	{
+		Server_RemoveOwnedCard(CardClass, OwnerConstituentInstanceId);
+	}
 }
 
 //Must be called after the slotable has been placed in an inventory.
@@ -650,4 +669,26 @@ void UInventory::DeinitializeSlotable(USlotable* Slotable)
 	Slotable->OwningInventory = nullptr;
 	MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, OwningInventory, Slotable);
 	GetOwner()->RemoveReplicatedSubObject(Slotable);
+}
+
+float UInventory::GetCardLifetime(const TSubclassOf<UCardObject>& CardClass, const int32 InOwnerConstituentInstanceId)
+{
+	float Value = 0;
+	for (FCard Card : Cards)
+	{
+		if (Card.bIsDisabledForDestroy) continue;
+		if (Card.Class != CardClass || Card.OwnerConstituentInstanceId != InOwnerConstituentInstanceId) continue;
+		if (Card.LifetimeEndTimestamp <= 0) return 0;
+		if (Card.bUsingPredictedTimestamp)
+		{
+			Value = GetFormCharacter()->CalculateTimeUntilPredictedTimestamp(Card.LifetimeEndTimestamp);
+		}
+		else
+		{
+			//Same function can be used for both.
+			Value = OwningFormCore->CalculateTimeUntilServerTimestamp(Card.LifetimeEndTimestamp);
+		}
+		break;
+	}
+	return Value;
 }

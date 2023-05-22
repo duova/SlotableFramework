@@ -302,7 +302,7 @@ bool FSfMoveResponseDataContainer::Serialize(UCharacterMovementComponent& Charac
 				//We update OldMetadataClasses on the client and server because we do not want it to immediately send the
 				//correction back to the server / send another correction.
 				TArray<TSubclassOf<UObject>> Classes;
-				for (FInventoryObjectMetadata Element : Metadata)
+				for (FCard Element : Metadata)
 				{
 					Classes.Add(Element.Class);
 				}
@@ -428,6 +428,16 @@ void UFormCharacterComponent::ClientAdjustPosition_Implementation(float TimeStam
 	Metadata = SfMoveResponseDataContainer.Metadata;
 }
 
+void UFormCharacterComponent::MarkStatesDirty()
+{
+	CorrectionConditionFlags |= Dirty_States;
+}
+
+void UFormCharacterComponent::MarkMetadataDirty()
+{
+	CorrectionConditionFlags |= Dirty_Metadata;
+}
+
 void UFormCharacterComponent::BeginPlay()
 {
 	Super::BeginPlay();
@@ -447,9 +457,15 @@ bool UFormCharacterComponent::ServerCheckClientError(float ClientTimeStamp, floa
                                                      UPrimitiveComponent* ClientMovementBase,
                                                      FName ClientBaseBoneName, uint8 ClientMovementMode)
 {
-	return Super::ServerCheckClientError(ClientTimeStamp, DeltaTime, Accel, ClientWorldLocation, RelativeClientLocation,
-	                                     ClientMovementBase,
-	                                     ClientBaseBoneName, ClientMovementMode) || SfServerCheckClientError();
+	const bool bMovementErrored = Super::ServerCheckClientError(ClientTimeStamp, DeltaTime, Accel, ClientWorldLocation, RelativeClientLocation,
+	                                                            ClientMovementBase,
+	                                                            ClientBaseBoneName, ClientMovementMode);
+	if (bMovementErrored)
+	{
+		CorrectionConditionFlags |= Changed_Movement;
+	}
+	SfServerCheckClientError();
+	return CorrectionConditionFlags != 0;
 }
 
 void UFormCharacterComponent::MoveAutonomous(float ClientTimeStamp, float DeltaTime, uint8 CompressedFlags,
@@ -459,7 +475,7 @@ void UFormCharacterComponent::MoveAutonomous(float ClientTimeStamp, float DeltaT
 	Super::MoveAutonomous(ClientTimeStamp, DeltaTime, CompressedFlags, NewAccel);
 }
 
-bool UFormCharacterComponent::SfServerCheckClientError()
+void UFormCharacterComponent::SfServerCheckClientError()
 {
 	const FSfNetworkMoveData* MoveData = static_cast<FSfNetworkMoveData*>(GetCurrentNetworkMoveData());
 
@@ -468,21 +484,28 @@ bool UFormCharacterComponent::SfServerCheckClientError()
 		if (MoveData->PredictedNetClock > PredictedNetClock + NetClockAcceptableTolerance
 			|| MoveData->PredictedNetClock < PredictedNetClock - NetClockAcceptableTolerance)
 		{
-			return true;
+			CorrectionConditionFlags |= Changed_NetClock;
 		}
 	}
 
-	if (MoveData->ConstituentStates != ConstituentStates) return true;
+	if (MoveData->ConstituentStates != ConstituentStates)
+	{
+		CorrectionConditionFlags |= Changed_States;
+	}
 
-	if (Metadata.Num() != MoveData->MetadataClasses.Num()) return true;
+	if (Metadata.Num() != MoveData->MetadataClasses.Num())
+	{
+		CorrectionConditionFlags |= Changed_Metadata;
+	}
 	bool MetadataEqual = true;
 	for (uint8 i = 0; i < Metadata.Num(); i++)
 	{
 		if (Metadata[i].Class != MoveData->MetadataClasses[i]) MetadataEqual = false;
 	}
-	if (!MetadataEqual) return true;
-	
-	return false;
+	if (!MetadataEqual)
+	{
+		CorrectionConditionFlags |= Changed_Metadata;
+	}
 }
 
 void UFormCharacterComponent::UpdateFromAdditionInputs()
