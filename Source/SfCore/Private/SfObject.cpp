@@ -100,3 +100,33 @@ bool USfObject::HasAuthority() const
 {
 	return GetOwner() && GetOwner()->HasAuthority();
 }
+
+FUint16_Quantize100::FUint16_Quantize100(): InternalValue(0)
+{
+}
+
+float FUint16_Quantize100::GetFloat()
+{
+	return static_cast<float>(InternalValue) / 100.0;
+}
+
+void FUint16_Quantize100::SetFloat(const float Value)
+{
+	if (Value > 655.35)
+	{
+		InternalValue = 65535;
+		return;
+	}
+	if (Value < 0)
+	{
+		InternalValue = 0;
+		return;
+	}
+	InternalValue = static_cast<uint8>(Value * 100.0);
+}
+
+bool FUint16_Quantize100::operator==(const FUint16_Quantize100& Other) const
+{
+	if (InternalValue == Other.InternalValue) return true;
+	return false;
+}

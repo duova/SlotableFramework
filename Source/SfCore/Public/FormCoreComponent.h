@@ -3,9 +3,11 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Inventory.h"
 #include "Components/ActorComponent.h"
 #include "FormCoreComponent.generated.h"
+
+class UConstituent;
+class UInventory;
 
 /**
  * The FormCoreComponent is responsible for the core logic of a form.
@@ -59,6 +61,17 @@ public:
 	//Works for client and server.
 	float CalculateTimeUntilServerTimestamp(float Timestamp);
 
+	//Works for client and server.
+	float CalculateTimeSinceServerTimestamp(float Timestamp);
+
+	//Works for client and server.
+	bool HasServerTimestampPassed(float Timestamp);
+
+	static const TArray<UClass*>& GetAllCardObjectClassesSortedByName();
+
+	UPROPERTY()
+	TArray<UConstituent*> ConstituentRegistry;
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -73,4 +86,8 @@ private:
 
 	UPROPERTY(VisibleAnywhere)
 	uint8 bIsFirstPerson:1;
+
+	inline static TArray<UClass*> AllCardObjectClassesSortedByName = TArray<UClass*>();
+
+	inline static bool CardObjectClassesFetched = false;
 };

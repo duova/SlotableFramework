@@ -27,14 +27,6 @@ USlotable::USlotable()
 	}
 }
 
-void USlotable::Tick(float DeltaTime)
-{
-	for (UConstituent* Constituent : Constituents)
-	{
-		Constituent->Tick(DeltaTime);
-	}
-}
-
 void USlotable::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -139,6 +131,7 @@ void USlotable::ServerDeinitializeConstituent(UConstituent* Constituent)
 {
 	Constituent->ServerDeinitialize();
 	Constituent->OwningSlotable = nullptr;
+	//Constituent instance ids are recycled automatically.
 	MARK_PROPERTY_DIRTY_FROM_NAME(UConstituent, OwningSlotable, Constituent);
 	GetOwner()->RemoveReplicatedSubObject(Constituent);
 }

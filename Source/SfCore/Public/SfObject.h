@@ -52,3 +52,35 @@ private:
 
 	uint8 bDoesNotHaveFormCharacter:1;
 };
+
+USTRUCT()
+struct FUint16_Quantize100
+{
+	GENERATED_BODY()
+	
+	UPROPERTY()
+	uint16 InternalValue;
+	
+	FUint16_Quantize100();
+
+	float GetFloat();
+
+	void SetFloat(float Value);
+
+	bool operator==(const FUint16_Quantize100& Other) const;
+
+	friend FArchive& operator<<(FArchive& Ar, FUint16_Quantize100& Integer)
+	{
+		bool bDoSerialize = Integer.InternalValue != 0;
+		Ar.SerializeBits(&bDoSerialize, 1);
+		if (bDoSerialize)
+		{
+			Ar << Integer.InternalValue;
+		}
+		else if (Ar.IsLoading())
+		{
+			Integer.InternalValue = 0;
+		}
+		return Ar;
+	}
+};

@@ -4,9 +4,12 @@
 
 #include "CoreMinimal.h"
 #include "SfObject.h"
-#include "Slotable.h"
-#include "Card.h"
 #include "Inventory.generated.h"
+
+struct FCard;
+class USlotable;
+class UConstituent;
+class UCardObject;
 
 /**
  * Inventories of slotables.
@@ -18,10 +21,10 @@ class SFCORE_API UInventory : public USfObject
 {
 	GENERATED_BODY()
 
+	friend class UFormCharacterComponent;
+
 public:
 	UInventory();
-
-	void Tick(float DeltaTime);
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -68,10 +71,10 @@ public:
 	bool Server_RemoveSharedCard(const TSubclassOf<UCardObject>& CardClass);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	bool Server_AddOwnedCard(const TSubclassOf<UCardObject>& CardClass, const int32 InOwnerConstituentInstanceId, float CustomLifetime = 0);
+	bool Server_AddOwnedCard(const TSubclassOf<UCardObject>& CardClass, const uint8 InOwnerConstituentInstanceId, float CustomLifetime = 0);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	bool Server_RemoveOwnedCard(const TSubclassOf<UCardObject>& CardClass, const int32 InOwnerConstituentInstanceId);
+	bool Server_RemoveOwnedCard(const TSubclassOf<UCardObject>& CardClass, const uint8 InOwnerConstituentInstanceId);
 
 	UFUNCTION(BlueprintCallable)
 	bool Predicted_AddSharedCard(const TSubclassOf<UCardObject>& CardClass, float CustomLifetime = 0);
@@ -80,10 +83,10 @@ public:
 	bool Predicted_RemoveSharedCard(const TSubclassOf<UCardObject>& CardClass);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	bool Predicted_AddOwnedCard(const TSubclassOf<UCardObject>& CardClass, const int32 InOwnerConstituentInstanceId, float CustomLifetime = 0);
+	bool Predicted_AddOwnedCard(const TSubclassOf<UCardObject>& CardClass, const uint8 InOwnerConstituentInstanceId, float CustomLifetime = 0);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	bool Predicted_RemoveOwnedCard(const TSubclassOf<UCardObject>& CardClass, const int32 InOwnerConstituentInstanceId);
+	bool Predicted_RemoveOwnedCard(const TSubclassOf<UCardObject>& CardClass, const uint8 InOwnerConstituentInstanceId);
 
 	UFUNCTION(BlueprintPure)
 	bool HasSlotable(const TSubclassOf<USlotable>& SlotableClass);
@@ -95,7 +98,7 @@ public:
 	bool HasSharedCard(const TSubclassOf<UCardObject>& CardClass);
 
 	UFUNCTION(BlueprintPure)
-	bool HasOwnedCard(const TSubclassOf<UCardObject>& CardClass, const int32 InOwnerConstituentInstanceId);
+	bool HasOwnedCard(const TSubclassOf<UCardObject>& CardClass, const uint8 InOwnerConstituentInstanceId);
 
 	//Will return 0 if could not find or infinite lifetime.
 	UFUNCTION(BlueprintPure)
@@ -103,7 +106,7 @@ public:
 
 	//Will return 0 if could not find or infinite lifetime.
 	UFUNCTION(BlueprintPure)
-	float GetOwnedCardLifetime(const TSubclassOf<UCardObject>& CardClass, const int32 InOwnerConstituentInstanceId);
+	float GetOwnedCardLifetime(const TSubclassOf<UCardObject>& CardClass, const uint8 InOwnerConstituentInstanceId);
 
 	//Only on client.
 	UFUNCTION(BlueprintGetter)
@@ -121,11 +124,14 @@ public:
 
 	void ReassignAllConstituentInstanceIds();
 
-	void RemoveCardsOfOwner(const int32 OwnerConstituentInstanceId);
+	void RemoveCardsOfOwner(const uint8 OwnerConstituentInstanceId);
 
 protected:
 
 	virtual void BeginDestroy() override;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	TArray<FName> InputBindings;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	TArray<TSubclassOf<USlotable>> InitialSlotableClasses;
@@ -161,15 +167,12 @@ private:
 	UPROPERTY(Replicated, VisibleAnywhere)
 	TArray<USlotable*> Slotables;
 
-	UPROPERTY(VisibleAnywhere)
-	TArray<UCardObject*> ClientCardObjects;
-
 	//Does not synchronize to owner as owner should have it be predicted.
 	UPROPERTY(Replicated)
 	TArray<FCard> Cards;
 
-	//Compares with this to update cards on change.
-	TArray<FCard> ClientOldCards;
+	UPROPERTY(VisibleAnywhere)
+	TArray<UCardObject*> ClientCardObjects;
 
 	USlotable* CreateUninitializedSlotable(const TSubclassOf<USlotable>& SlotableClass) const;
 
@@ -177,9 +180,13 @@ private:
 
 	void ClientCheckAndUpdateCardObjects();
 
-	uint16 LastAssignedConstituentId;
+	uint8 LastAssignedConstituentId;
+
+	uint8 ConstituentCount;
 
 	uint8 bIsOnFormCharacter:1;
+
+	uint8 bInitialized:1;
 
 	float GetCardLifetime(const TSubclassOf<UCardObject>& CardClass, int32 InOwnerConstituentInstanceId);
 };

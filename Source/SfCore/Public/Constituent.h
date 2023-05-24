@@ -6,20 +6,8 @@
 #include "SfObject.h"
 #include "Constituent.generated.h"
 
-USTRUCT(BlueprintType)
-struct FSfPredictionFlags
-{
-	GENERATED_BODY()
-
-	uint8 bClientPredictedLastActionSetWasCorrected:1;
-	uint8 bClientMetadataWasCorrected:1;
-	uint8 bClientOnPlayback:1;
-	uint8 bIsServer:1;
-
-	FSfPredictionFlags();
-	
-	FSfPredictionFlags(const bool bClientPredictedLastActionSetWasCorrected, const bool bClientMetadataWasCorrected, const bool bClientOnPlayback, const bool bIsServer);
-};
+class UFormCoreComponent;
+class UFormCharacterComponent;
 
 //Set of maximum four action identifiers that are compressed on serialization if possible.
 USTRUCT()
@@ -39,6 +27,10 @@ struct FActionSet
 
 	//Used for checking whether actions were performed in the same frame.
 	float WorldTime;
+
+	//Since replication needs a variable to change in order to replicate and OnRep, we flip this bool when we want to
+	//force send changes.
+	uint8 bFlipToForceReplicate:1;
 
 	//Do not use default constructor.
 	FActionSet();
@@ -137,8 +129,6 @@ class SFCORE_API UConstituent : public USfObject
 public:
 
 	UConstituent();
-
-	void Tick(float DeltaTime);
 	
 	virtual void BeginDestroy() override;
 	
@@ -167,7 +157,7 @@ public:
 
 	//Only use functions marked Predicted_.
 	UFUNCTION(BlueprintImplementableEvent)
-	void Predicted_OnExecute(const uint8 ActionId, const FSfPredictionFlags PredictionFlags);
+	void Predicted_OnExecute(const uint8 ActionId, const bool bIsReplaying);
 
 	//TimeSinceLastActionSet does not increment past 655 seconds.
 	
@@ -183,21 +173,17 @@ public:
 	static void ErrorIfIdNotWithinRange(const uint8 Id);
 
 	UFUNCTION(BlueprintGetter)
-	int32 GetInstanceId();
+	uint8 GetInstanceId() const;
 	
 	UFUNCTION()
 	void OnRep_LastActionSet();
 
+	void IncrementTimeSincePredictedLastActionSet(float Time);
+
 	//Unique identifier within each inventory.
 	UPROPERTY(Replicated)
-	uint16 InstanceId;
-	
-private:
-	UFUNCTION()
-	void OnRep_OwningSlotable();
+	uint8 InstanceId;
 
-	uint8 bAwaitingClientInit:1;
-	
 	//We use ActionSet instead of just uint8 for multiple reasons. Most importantly we need to do so as more than one action
 	//can be executed within a frame. ActionSet allows us to work with up to four actions that execute in the same frame,
 	//which should guarantee actions should not be skipped assuming the guidelines for creating them are followed. ActionSet
@@ -207,12 +193,33 @@ private:
 	//to LastActionSet of that frame, and corrected to the client if necessary.
 	FActionSet PredictedLastActionSet;
 
+	//Set to true when we predict an action. Set to false when FormCharacter collects pending actions.
+	uint8 bPredictedLastActionSetUpdated:1;
+
+	//Used to know how long ago the last action took place so we can fast forward the effects after replay.
+	FUint16_Quantize100 TimeSincePredictedLastActionSet;
+	
+private:
+	UFUNCTION()
+	void OnRep_OwningSlotable();
+
+	uint8 bAwaitingClientInit:1;
+
 	//Actions performed on the last frame any actions were performed.
 	UPROPERTY(Replicated, ReplicatedUsing = OnRep_LastActionSet)
 	FActionSet LastActionSet;
 
-	//Quantize100. Only mark dirty when LastActionSet is changed. This is for replicating effects
-	//that started right before relevancy.
+	//Only mark dirty when LastActionSet is changed. This is for replicating effects that started right before relevancy.
+	//Uses replicated non-compensated timestamp found in form core.
 	UPROPERTY(Replicated)
-	uint16 TimeSinceLastActionSet;
+	float LastActionSetTimestamp;
+
+	UPROPERTY()
+	UFormCoreComponent* FormCore;
+	
+	//In case the naming is confusing:
+	//On the server, neither "time since" is relevant because actions are always executed instantly. On the simulated proxy,
+	//we always use LastActionSet paired with TimeSinceLastActionSet because prediction isn't running. On the autonomous proxy,
+	//TimeSinceLastActionSet will almost always be 0 since we're always relevant, so we only recreate the effects from
+	//PredictedLastActionSet using the respective "time since" and let OnRep handle LastActionSet changes.
 };

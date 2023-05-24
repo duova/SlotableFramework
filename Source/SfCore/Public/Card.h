@@ -4,8 +4,10 @@
 
 #include "CoreMinimal.h"
 #include "FormCoreComponent.h"
-#include "Slotable.h"
 #include "Card.generated.h"
+
+class UFormCharacterComponent;
+class UCardObject;
 
 /**
  * A card is a marker stored in an inventory. Their addition and removal is fully predicted and they have predicted
@@ -20,7 +22,7 @@ USTRUCT()
 struct FCard
 {
 	GENERATED_BODY()
-
+	
 	enum class ECardType
 	{
 		DoNotUseLifetime,
@@ -31,13 +33,17 @@ struct FCard
 	};
 
 	UPROPERTY()
-	TSubclassOf<class UCardObject> Class;
+	TSubclassOf<UCardObject> Class;
+
+	//For serialization only.
+	UPROPERTY()
+	uint16 ClassIndex;
 
 	UPROPERTY()
-	uint16 OwnerConstituentInstanceId;
+	uint8 OwnerConstituentInstanceId;
 
 	UPROPERTY()
-	uint8 bUsingPredictedTimestamp:1;
+	bool bUsingPredictedTimestamp;
 
 	//If negative we don't check.
 	UPROPERTY()
@@ -51,24 +57,43 @@ struct FCard
 	//For predicted forms, this is set to true after card should be destroyed on the server until either the client syncs
 	//up or timeout. We don't check this card while this is true to prevent unnecessary rollbacks.
 	UPROPERTY()
-	uint8 bIsDisabledForDestroy:1;
+	bool bIsDisabledForDestroy;
 	
 	UPROPERTY()
-	float ClientSyncTimeRemaining;
+	double ServerAwaitClientSyncTimeoutTimestamp;
 
-	const float ClientSyncTimeout = 0.4;
+	inline static constexpr float ServerAwaitClientSyncTimeoutDuration = 0.4;
 
 	FCard();
 	
-	FCard(const TSubclassOf<class UCardObject>& CardClass, ECardType CardType, uint16 InOwnerConstituentInstanceId = 0,
+	FCard(const TSubclassOf<UCardObject>& CardClass, ECardType CardType, uint8 InOwnerConstituentInstanceId = 0,
 	      UFormCharacterComponent* IfPredictedFormCharacter = nullptr,
 	      UFormCoreComponent* IfServerFormCore = nullptr, const float CustomLifetime = 0);
+
+	struct FNetCardIdentifier GetNetCardIdentifier() const;
 
 	bool operator==(const FCard& Other) const;
 
 	friend FArchive& operator<<(FArchive& Ar, FCard& Card)
 	{
-		Ar << Card.Class;
+		//We have a list of all CardObject classes that is sorted by name deterministically so we only have to send the index.
+		//We try to not send the full index if we don't have to.
+		bool bClassIndexIsLarge = Card.ClassIndex > 255;
+		Ar.SerializeBits(&bClassIndexIsLarge, 1);
+		if (bClassIndexIsLarge)
+		{
+			Ar << Card.ClassIndex;
+		}
+		else
+		{
+			uint8 Value = Card.ClassIndex;
+			Ar << Value;
+			Card.ClassIndex = Value;
+		}
+		if (Ar.IsLoading())
+		{
+			Card.Class = UFormCoreComponent::GetAllCardObjectClassesSortedByName()[Card.ClassIndex];
+		}
 		Ar << Card.OwnerConstituentInstanceId;
 		Ar.SerializeBits(&Card.bIsDisabledForDestroy, 1);
 		//Don't serialize anything else if card is disabled, we don't need it.
@@ -77,47 +102,4 @@ struct FCard
 		Ar << Card.LifetimeEndTimestamp;
 		return Ar;
 	}
-};
-
-/**
- * Card objects are definitions for cards, but may be optionally spawned on the client for the lifetime of the card. They
- * are blueprintable, but should be expected to be initialized or deinitialized at any time.
- */
-UCLASS(Blueprintable)
-class SFCORE_API UCardObject : public UObject
-{
-	GENERATED_BODY()
-
-public:
-	UCardObject();
-	
-	virtual void BeginDestroy() override;
-
-	UPROPERTY(BlueprintReadOnly)
-	class UInventory* OwningInventory;
-
-	void Initialize();
-
-	void Deinitialize();
-
-	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	uint8 bSpawnCardObjectOnClient:1;
-
-	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	uint8 bUseLifetime:1;
-
-	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	float DefaultLifetime;
-	
-	uint16 OwnerConstituentInstanceId;
-
-	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	float DeltaMovementSpeed;
-	
-	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	float DeltaMultiplicativeMovementSpeed;
-
-	//Multiplies the product instead of adding to the multiplier.
-	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	float SecondDegreeDeltaMultiplicativeMovementSpeed;
 };

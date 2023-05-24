@@ -4,8 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "SfObject.h"
-#include "Constituent.h"
 #include "Slotable.generated.h"
+
+class UConstituent;
 
 /**
  * An object in an inventory.
@@ -23,8 +24,6 @@ class SFCORE_API USlotable : public USfObject
 public:
 
 	USlotable();
-
-	void Tick(float DeltaTime);
 	
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 

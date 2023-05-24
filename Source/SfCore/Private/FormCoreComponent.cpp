@@ -3,6 +3,10 @@
 
 #include "SfCore/Public/FormCoreComponent.h"
 
+#include "CardObject.h"
+#include "Constituent.h"
+#include "Inventory.h"
+#include "Slotable.h"
 #include "Net/UnrealNetwork.h"
 
 UFormCoreComponent::UFormCoreComponent()
@@ -12,9 +16,30 @@ UFormCoreComponent::UFormCoreComponent()
 	SetIsReplicatedByDefault(true);
 }
 
+const TArray<UClass*>& UFormCoreComponent::GetAllCardObjectClassesSortedByName()
+{
+	return AllCardObjectClassesSortedByName;
+}
+
 void UFormCoreComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	
+	//This is used to narrow down the classes that need to be iterated through when serializing card classes with names.
+	if (!CardObjectClassesFetched)
+	{
+		for(TObjectIterator<UClass> It; It; ++It)
+		{
+			if(It->IsChildOf(UCardObject::StaticClass()) && !It->HasAnyClassFlags(CLASS_Abstract))
+			{
+				AllCardObjectClassesSortedByName.Add(*It);
+			}
+		}
+		//We sort this in a deterministic order (given elements are the same) to index items.
+		AllCardObjectClassesSortedByName.Sort([](const UClass& A, const UClass& B) { return A.GetName() > B.GetName(); });
+		CardObjectClassesFetched = true;
+	}
+	
 	if (!GetOwner()->HasAuthority()) return;
 	for (TSubclassOf<UInventory> InventoryClass : DefaultInventoryClasses)
 	{
@@ -37,10 +62,6 @@ void UFormCoreComponent::TickComponent(float DeltaTime, ELevelTick TickType,
                                        FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-	for (UInventory* Element : Inventories)
-	{
-		Element->Tick(DeltaTime);
-	}
 }
 
 void UFormCoreComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -144,4 +165,29 @@ void UFormCoreComponent::ClientSetToThirdPerson()
 bool UFormCoreComponent::IsFirstPerson()
 {
 	return bIsFirstPerson;
+}
+
+float UFormCoreComponent::GetNonCompensatedServerWorldTime()
+{
+	return 0;
+}
+
+float UFormCoreComponent::CalculateFutureServerTimestamp(float AdditionalTime)
+{
+	return 0;
+}
+
+float UFormCoreComponent::CalculateTimeUntilServerTimestamp(float Timestamp)
+{
+	return 0;
+}
+
+float UFormCoreComponent::CalculateTimeSinceServerTimestamp(float Timestamp)
+{
+	return 0;
+}
+
+bool UFormCoreComponent::HasServerTimestampPassed(float Timestamp)
+{
+	return false;
 }

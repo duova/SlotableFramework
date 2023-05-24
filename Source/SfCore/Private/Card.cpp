@@ -3,25 +3,41 @@
 
 #include "Card.h"
 
+#include "CardObject.h"
 #include "FormCharacterComponent.h"
 
-FCard::FCard(): OwnerConstituentInstanceId(0), bUsingPredictedTimestamp(0), LifetimeEndTimestamp(0), bIsNotCorrected(0),
+FCard::FCard(): ClassIndex(0), OwnerConstituentInstanceId(0), bUsingPredictedTimestamp(0), LifetimeEndTimestamp(0),
+                bIsNotCorrected(0),
                 bIsDisabledForDestroy(0),
-                ClientSyncTimeRemaining(0)
+                ServerAwaitClientSyncTimeoutTimestamp(0)
 {
 }
 
-FCard::FCard(const TSubclassOf<UCardObject>& CardClass, const ECardType CardType, const uint16 InOwnerConstituentInstanceId,
-	UFormCharacterComponent* IfPredictedFormCharacter, UFormCoreComponent* IfServerFormCore, const float CustomLifetime):
-	Class(CardClass),
+FCard::FCard(const TSubclassOf<UCardObject>& CardClass, const ECardType CardType, const uint8 InOwnerConstituentInstanceId,
+             UFormCharacterComponent* IfPredictedFormCharacter, UFormCoreComponent* IfServerFormCore, const float CustomLifetime):
+	Class(CardClass), ClassIndex(0),
 	OwnerConstituentInstanceId(InOwnerConstituentInstanceId),
 	bUsingPredictedTimestamp(0),
 	LifetimeEndTimestamp(0),
 	bIsNotCorrected(0),
 	bIsDisabledForDestroy(0),
-	ClientSyncTimeRemaining(0)
+	ServerAwaitClientSyncTimeoutTimestamp(0)
 {
 	const UCardObject* CardCDO = CardClass.GetDefaultObject();
+
+	//Get the deterministic index of the class.
+	if (Class)
+	{
+		for (uint16 i = 0; i < UFormCoreComponent::GetAllCardObjectClassesSortedByName().Num(); i++)
+		{
+			if (UFormCoreComponent::GetAllCardObjectClassesSortedByName()[i] == Class->GetClass())
+			{
+				ClassIndex = i;
+				break;
+			}
+		}
+	}
+	
 	switch (CardType)
 	{
 	case ECardType::DoNotUseLifetime:
@@ -33,7 +49,8 @@ FCard::FCard(const TSubclassOf<UCardObject>& CardClass, const ECardType CardType
 		{
 			bUsingPredictedTimestamp = true;
 			checkf(IfPredictedFormCharacter, TEXT("FCard constructor requires form character reference."));
-			LifetimeEndTimestamp = IfPredictedFormCharacter->CalculateFuturePredictedTimestamp(CardCDO->DefaultLifetime);
+			LifetimeEndTimestamp = IfPredictedFormCharacter->
+				CalculateFuturePredictedTimestamp(CardCDO->DefaultLifetime);
 		}
 		else
 		{
@@ -68,29 +85,13 @@ FCard::FCard(const TSubclassOf<UCardObject>& CardClass, const ECardType CardType
 	}
 }
 
+FNetCardIdentifier FCard::GetNetCardIdentifier() const
+{
+	return FNetCardIdentifier(ClassIndex, OwnerConstituentInstanceId);
+}
+
 bool FCard::operator==(const FCard& Other) const
 {
-	if (Class == Other.Class && OwnerConstituentInstanceId == Other.OwnerConstituentInstanceId && bUsingPredictedTimestamp == Other.bUsingPredictedTimestamp &&
-		LifetimeEndTimestamp == Other.LifetimeEndTimestamp)
-	{
-		return true;
-	}
-	return false;
-}
-
-UCardObject::UCardObject()
-{
-}
-
-void UCardObject::BeginDestroy()
-{
-	UObject::BeginDestroy();
-}
-
-void UCardObject::Initialize()
-{
-}
-
-void UCardObject::Deinitialize()
-{
+	return Class == Other.Class && OwnerConstituentInstanceId == Other.OwnerConstituentInstanceId && bUsingPredictedTimestamp == Other.bUsingPredictedTimestamp &&
+		LifetimeEndTimestamp == Other.LifetimeEndTimestamp;
 }

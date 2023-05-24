@@ -3,8 +3,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Inventory.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Constituent.h"
+#include "Card.h"
 #include "FormCharacterComponent.generated.h"
 
 	/* ***************************************************************
@@ -171,6 +172,113 @@
 	 * safe timer node, altering the starting time.
 	 */
 
+class UInventory;
+struct FCard;
+
+USTRUCT()
+struct FInventoryCards
+{
+	GENERATED_BODY()
+	
+	UPROPERTY()
+	TArray<FCard> Cards;
+	
+	FInventoryCards();
+
+	explicit FInventoryCards(const TArray<FCard>& InCards);
+
+	bool operator==(const FInventoryCards& Other) const;
+
+	friend FArchive& operator<<(FArchive& Ar, FInventoryCards& InventoryCards)
+	{
+		Ar << InventoryCards.Cards;
+		return Ar;
+	}
+};
+
+USTRUCT()
+struct FNetCardIdentifier
+{
+	GENERATED_BODY()
+	
+	UPROPERTY()
+	uint16 ClassIndex;
+
+	UPROPERTY()
+	uint8 OwnerConstituentInstanceId;
+
+	FNetCardIdentifier();
+
+	FNetCardIdentifier(uint16 InClassIndex, uint8 InOwnerConstituentInstanceId);
+
+	bool operator==(const FNetCardIdentifier& Other) const;
+
+	friend FArchive& operator<<(FArchive& Ar, FNetCardIdentifier& CardIdentifier)
+	{
+		//We try to not send the full index if we don't have to.
+		bool bClassIndexIsLarge = CardIdentifier.ClassIndex > 255;
+		Ar.SerializeBits(&bClassIndexIsLarge, 1);
+		if (bClassIndexIsLarge)
+		{
+			Ar << CardIdentifier.ClassIndex;
+		}
+		else
+		{
+			uint8 Value = CardIdentifier.ClassIndex;
+			Ar << Value;
+			CardIdentifier.ClassIndex = Value;
+		}
+		Ar << CardIdentifier.OwnerConstituentInstanceId;
+		return Ar;
+	}
+};
+
+USTRUCT()
+struct FInventoryCardIdentifiers
+{
+	GENERATED_BODY()
+	
+	UPROPERTY()
+	TArray<FNetCardIdentifier> CardIdentifiers;
+	
+	FInventoryCardIdentifiers();
+
+	explicit FInventoryCardIdentifiers(const TArray<FNetCardIdentifier>& InCardIdentifiers);
+
+	bool operator==(const FInventoryCardIdentifiers& Other) const;
+
+	friend FArchive& operator<<(FArchive& Ar, FInventoryCardIdentifiers& InventoryCardIdentifiers)
+	{
+		Ar << InventoryCardIdentifiers.CardIdentifiers;
+		return Ar;
+	}
+};
+
+USTRUCT()
+struct FIdentifiedActionSet
+{
+	GENERATED_BODY()
+	
+	UPROPERTY()
+	uint16 ConstituentInstanceId;
+
+	UPROPERTY()
+	FActionSet ActionSet;
+	
+	FIdentifiedActionSet();
+
+	FIdentifiedActionSet(uint16 InConstituentInstanceId, FActionSet InActionSet);
+
+	bool operator==(const FIdentifiedActionSet& Other) const;
+
+	friend FArchive& operator<<(FArchive& Ar, FIdentifiedActionSet& ConstituentActionSet)
+	{
+		Ar << ConstituentActionSet.ConstituentInstanceId;
+		Ar << ConstituentActionSet.ActionSet;
+		return Ar;
+	}
+};
+
 class FSavedMove_Sf : public FSavedMove_Character
 {
 public:
@@ -191,9 +299,9 @@ public:
 
 	float PredictedNetClock;
 	
-	TArray<uint8> ConstituentStates;
+	TArray<FIdentifiedActionSet> PendingActionSets;
 
-	TArray<TSubclassOf<UObject>> MetadataClasses;
+	TArray<FInventoryCardIdentifiers> InventoryCardIdentifiers;
 
 	virtual void Clear() override;
 	virtual void SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& NewAccel,
@@ -224,9 +332,9 @@ struct FSfNetworkMoveData : FCharacterNetworkMoveData
 
 	float PredictedNetClock;
 	
-	TArray<uint8> ConstituentStates;
-	
-	TArray<TSubclassOf<UObject>> MetadataClasses;
+	TArray<FIdentifiedActionSet> PendingActionSets;
+
+	TArray<FInventoryCardIdentifiers> InventoryCardIdentifiers;
 	
 	FSfNetworkMoveData();
 
@@ -237,12 +345,11 @@ struct FSfNetworkMoveData : FCharacterNetworkMoveData
 
 enum ECorrectionConditionFlags : uint8
 {
-	Changed_Movement = 0x01,
-	Changed_NetClock = 0x02,
-	Changed_States = 0x04,
-	Changed_Metadata = 0x08,
-	Dirty_States = 0x10,
-	Dirty_Metadata = 0x20
+	Repredict_Movement = 0x01,
+	Repredict_NetClock = 0x02,
+	//We must repredict both to repredict one because they are reliant on each other.
+	Repredict_ActionSetsAndCards = 0x04, //This overrides the update flag as if we rollback we guarantee that we send server state anyway.
+	Update_Cards = 0x08 //If update we only want to respond with changes and not rollback cards specifically.
 };
 
 struct FSfNetworkMoveDataContainer : FCharacterNetworkMoveDataContainer
@@ -256,21 +363,25 @@ struct FSfNetworkMoveDataContainer : FCharacterNetworkMoveDataContainer
 
 struct FSfMoveResponseDataContainer : FCharacterMoveResponseDataContainer
 {
-	TArray<uint8> ConstituentStates;
+	TArray<FActionSet> ActionSetResponse;
 
 	float PredictedNetClock;
+	
+	TArray<FUint16_Quantize100> TimeSinceLastAction;
 
-	//Quantize100
-	TArray<uint16> TimeSinceStateChange;
-
-	TArray<FCard> Metadata;
+	TArray<FInventoryCards> CardResponse;
 
 	FSfMoveResponseDataContainer();
 
 	virtual void ServerFillResponseData(const UCharacterMovementComponent& CharacterMovement, const FClientAdjustment& PendingAdjustment) override;
+	
+	void SerializeCardResponse(FArchive& Ar, UFormCharacterComponent* CharacterComponent, bool bIsSaving);
 
 	virtual bool Serialize(UCharacterMovementComponent& CharacterMovement, FArchive& Ar, UPackageMap* PackageMap) override;
 };
+
+	
+DECLARE_MULTICAST_DELEGATE(FOnPostRollback);
 
 /**
 * The FormCharacterComponent is responsible for the movement and client prediction of a form.
@@ -287,6 +398,7 @@ class SFCORE_API UFormCharacterComponent : public UCharacterMovementComponent
 	GENERATED_BODY()
 
 public:
+	
 	UFormCharacterComponent();
 
 	virtual bool ShouldUsePackedMovementRPCs() const override;
@@ -295,9 +407,10 @@ public:
 
 	virtual void ClientAdjustPosition_Implementation(float TimeStamp, FVector NewLoc, FVector NewVel, UPrimitiveComponent* NewBase, FName NewBaseBoneName, bool bHasBase, bool bBaseRelativePosition, uint8 ServerMovementMode, TOptional<FRotator> OptionalRotation) override;
 
-	virtual void MarkStatesDirty();
+	//Marking cards dirty allows them to be synchronized to a predicting client without rollback.
+	virtual void MarkCardsDirty();
 
-	virtual void MarkMetadataDirty();
+	bool IsReplaying() const;
 	
 	//Movement inputs.
 	uint8 bWantsToSprint:1;
@@ -312,60 +425,56 @@ public:
 
 	//This is used to determine how the pipeline is supposed to handle the separate sections of correction data to rollback
 	//as little as possible and send as little as possible.
-	uint8 CorrectionConditionFlags:6;
+	uint8 CorrectionConditionFlags; //Only first 4 bits is used.
 	
 	//This is obviously not optimal as we are already sending the client TimeStamp. However, this is the most direct way
 	//of ensuring that time discrepancies will not cause more rollbacks - by having the clock incremented in tandem with
 	//the logic that uses it in PerformMovement. To save bandwidth we only serialize this to the server once every second,
 	//and the server will only issue a correction when necessary.
 	float PredictedNetClock;
-	//TODO: RESET BOTH VALUES WHEN CLOCK HITS MAX VALUE OF ACCEPTABLE PRECISION.
 	uint32 NetClockNextInteger;
 
-	//Functions that account for the net clock resetting upon hitting max value.
-	
+	//TODO: Functions that account for the net clock resetting upon hitting max value.
 	float CalculateFuturePredictedTimestamp(float AdditionalTime);
 	
 	float CalculateTimeUntilPredictedTimestamp(float Timestamp);
 
+	float CalculateTimeSincePredictedTimestamp(float Timestamp);
+
+	bool HasPredictedTimestampPassed(float Timestamp);
+
 	//+/- acceptable range.
-	const float NetClockAcceptableTolerance = 0.05f;
+	const float NetClockAcceptableTolerance = 0.02f;
 
-	//We will only serialize to server on change.
-	//An expected issue is that a rollback will occur every time we add/remove a constituent as there will be a state desync.
-	//To solve this, we predict slotable changes by adding/removing metadata instead. The metadata will contain the number
-	//constituent states on each slotable, and are in the same order. Therefore, we can send state data that is most likely
-	//equivilent to the server state data by back filling the missing slotable states with 0. It will still rollback if
-	//the server initializes a constituent with a non-zero state, but in that case we will have to rollback anyway to
-	//resimulate the new state accordingly.
+	//Actions executed in a given frame that we send to the server for checking.
 	//Note that this is representative of PredictedLastActionSet in Constituent and not LastActionSet.
-	TArray<uint8> ConstituentStates;
-	TArray<uint8> OldConstituentStates;
-	//Quantize100. The state reactor of the current state is called and then "fast forwarded" by this time to ensure that
-	//even if another state change does not happen during replay, we still have the correct time on the previous state
-	//change.
-	TArray<uint16> TimeSinceStateChange;
+	//This tracks the delta, only action sets that have been changed in the frame will be added.
+	//Only checking the changes is feasible here because actions are relatively stateless. Also cards will force a correction
+	//and rollback for actions if actions spawn cards that desync.
+	TArray<FIdentifiedActionSet> PendingActionSets;
 
-	//If true on client, normal tick should call a delegate before reverting to false.
-	//If this is false, we shouldn't resimulate any state changes.
-	uint8 bClientStatesWereCorrected:1;
-
-	//Ordered. MetadataClasses should be updated when changed.
-	TArray<TSubclassOf<UObject>> MetadataClasses;
-	TArray<TSubclassOf<UObject>> OldMetadataClasses;
-
-	//Ordered. Updated by server when a correction is needed, but otherwise not updated.
-	//Should only be used when bClientMetadataWasCorrected is true.
-	//Updated on server by form core.
-	TArray<FCard> Metadata;
-
-	//If true on client, normal tick should call a delegate before reverting to false.
-	//If this is false, we shouldn't resimulate any metadata changes.
-	uint8 bClientMetadataWasCorrected:1;
+	//Server corrects with last action set for all constituents in order.
+	TArray<FActionSet> ActionSetResponse;
 	
-	//Client is currently on playback.
-	//If true on client, normal tick should call a delegate before reverting to false.
-	uint8 bClientOnPlayback:1;
+	//The execution graph of the last action is called and then "fast forwarded" by this time to ensure that even if
+	//another execution does not happen during replay, we still have the correct time on the previous execution.
+	TArray<FUint16_Quantize100> TimeSinceLastAction;
+	
+	//If this is false, we shouldn't use ActionSetResponse.
+	//We copy ActionSetResponse to the constituents and set false in PerformMovement if is true.
+	uint8 bClientActionsWereUpdated:1;
+
+	//Simplified versions of cards used to verify that client cards are correct.
+	TArray<FInventoryCardIdentifiers> InventoryCardIdentifiers;
+	TArray<FInventoryCardIdentifiers> OldInventoryCardIdentifiers;
+	
+	TArray<FInventoryCards> CardResponse;
+	
+	//If this is false, we shouldn't use CardResponse.
+	//We copy CardResponse to the inventory and set false in PerformMovement if is true.
+	uint8 bClientCardsWereUpdated:1;
+
+	FOnPostRollback OnPostRollback;
 	
 protected:
 	virtual void BeginPlay() override;
@@ -376,12 +485,38 @@ protected:
 
 	virtual void MoveAutonomous(float ClientTimeStamp, float DeltaTime, uint8 CompressedFlags, const FVector& NewAccel) override;
 	
+	bool CardHasEquivalentCardIdentifier(const FInventoryCardIdentifiers& CardIdentifierInventory, const FCard& Card);
+	
+	bool CardCanBeFoundInInventory(UInventory* Inventory, FNetCardIdentifier CardIdentifier);
+
+	void HandleInventoryDifferencesAndSetCorrectionFlags(UInventory* Inventory, const FInventoryCardIdentifiers& CardIdentifierInventory);
+	
 	virtual void SfServerCheckClientError();
 
 	virtual void UpdateFromAdditionInputs();
+	
+	virtual bool ClientUpdatePositionAfterServerUpdate() override;
+	
+	void CorrectActionSets();
+
+	void CorrectCards();
+
+	void PackActionSets();
+
+	void PackCards();
+	
+	void PackInventoryCardIdentifiers();
+
+	void HandleCardClientSyncTimeout() const;
+
+	//This is where all the logic actually takes place.
+	virtual void UpdateCharacterStateBeforeMovement(float DeltaSeconds) override;
 
 private:
 	FSfNetworkMoveDataContainer SfNetworkMoveDataContainer;
 
 	FSfMoveResponseDataContainer SfMoveResponseDataContainer;
+	
+	UPROPERTY()
+	UFormCoreComponent* FormCore;
 };

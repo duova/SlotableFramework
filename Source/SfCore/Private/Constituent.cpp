@@ -5,25 +5,12 @@
 
 #include "FormCharacterComponent.h"
 #include "FormCoreComponent.h"
+#include "Inventory.h"
+#include "Slotable.h"
 #include "Net/UnrealNetwork.h"
 
-FSfPredictionFlags::FSfPredictionFlags(): bClientPredictedLastActionSetWasCorrected(0), bClientMetadataWasCorrected(0),
-                                          bClientOnPlayback(0), bIsServer(0)
-{
-}
-
-FSfPredictionFlags::FSfPredictionFlags(const bool bClientPredictedLastActionSetWasCorrected,
-                                       const bool bClientMetadataWasCorrected,
-                                       const bool bClientOnPlayback, const bool bIsServer):
-	bClientPredictedLastActionSetWasCorrected(bClientPredictedLastActionSetWasCorrected),
-	bClientMetadataWasCorrected(bClientMetadataWasCorrected),
-	bClientOnPlayback(bClientOnPlayback),
-	bIsServer(bIsServer)
-{
-}
-
 FActionSet::FActionSet(): NumActionsIncludingZero(0), ActionZero(0), ActionOne(0), ActionTwo(0), ActionThree(0),
-                          WorldTime(0)
+                          WorldTime(0), bFlipToForceReplicate(0)
 {
 }
 
@@ -32,7 +19,8 @@ FActionSet::FActionSet(const float CurrentWorldTime, const uint8 ActionZero, con
                                                                         ActionZero(ActionZero), ActionOne(ActionOne),
                                                                         ActionTwo(ActionTwo),
                                                                         ActionThree(ActionThree),
-                                                                        WorldTime(CurrentWorldTime)
+                                                                        WorldTime(CurrentWorldTime),
+                                                                        bFlipToForceReplicate(0)
 {
 	checkf(ActionZero != 0, TEXT("Created ActionSet with no action zero."));
 	UConstituent::ErrorIfIdNotWithinRange(ActionZero);
@@ -82,7 +70,7 @@ bool FActionSet::operator==(const FActionSet& Other) const
 {
 	if (WorldTime == Other.WorldTime && NumActionsIncludingZero == Other.NumActionsIncludingZero &&
 		ActionZero == Other.ActionZero && ActionOne == Other.ActionOne && ActionTwo == Other.ActionTwo && ActionThree ==
-		Other.ActionThree)
+		Other.ActionThree && bFlipToForceReplicate == Other.bFlipToForceReplicate)
 		return true;
 	return false;
 }
@@ -114,16 +102,6 @@ UConstituent::UConstituent()
 	}
 }
 
-void UConstituent::Tick(float DeltaTime)
-{
-	//Stop incrementing if about to hit max value. Note that this will do so 655 seconds after state change.
-	//-1 for rounding differences.
-	if (TimeSinceLastActionSet < 65534 - DeltaTime * 100.0)
-	{
-		TimeSinceLastActionSet += DeltaTime * 100.0;
-	}
-}
-
 void UConstituent::BeginDestroy()
 {
 	Super::BeginDestroy();
@@ -141,7 +119,7 @@ void UConstituent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DefaultParams.Condition = COND_None;
 	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, OwningSlotable, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, LastActionSet, DefaultParams);
-	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, TimeSinceLastActionSet, DefaultParams);
+	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, LastActionSetTimestamp, DefaultParams);
 }
 
 void UConstituent::OnRep_OwningSlotable()
@@ -155,19 +133,25 @@ void UConstituent::OnRep_OwningSlotable()
 
 void UConstituent::ClientInitialize()
 {
+	FormCore = OwningSlotable->OwningInventory->OwningFormCore;
+	FormCore->ConstituentRegistry.Add(this);
 }
 
 void UConstituent::ServerInitialize()
 {
+	FormCore = OwningSlotable->OwningInventory->OwningFormCore;
+	FormCore->ConstituentRegistry.Add(this);
 	//Call events.
 }
 
 void UConstituent::ClientDeinitialize()
 {
+	FormCore->ConstituentRegistry.Remove(this);
 }
 
 void UConstituent::ServerDeinitialize()
 {
+	FormCore->ConstituentRegistry.Remove(this);
 	OwningSlotable->OwningInventory->RemoveCardsOfOwner(InstanceId);
 	//Call events.
 }
@@ -190,23 +174,28 @@ void UConstituent::ExecuteAction(const uint8 ActionId, const bool bIsPredictable
 			{
 				PredictedLastActionSet = FActionSet(ServerWorldTime, ActionId);
 			}
+			bPredictedLastActionSetUpdated = true;
+			TimeSincePredictedLastActionSet.SetFloat(0);
 			if (bEnableInputsAndPrediction && IsFormCharacter())
 			{
-				Predicted_OnExecute(ActionId, FSfPredictionFlags(false, false, false, true));
+				Predicted_OnExecute(ActionId, GetFormCharacter()->IsReplaying());
 			}
 		}
 		//LastActionSet always needs to be updated if we execute an action, no matter the context.
 		if (!LastActionSet.TryAddActionCheckIfSameFrame(ServerWorldTime, ActionId))
 		{
+			bool bFlipToReplicate = LastActionSet.bFlipToForceReplicate;
 			LastActionSet = FActionSet(ServerWorldTime, ActionId);
+			//Make a guaranteed change to make sure OnRep is fired.
+			LastActionSet.bFlipToForceReplicate = !bFlipToReplicate;
 		}
 		Server_OnExecute(ActionId);
 		//We replicate this so that simulated proxies can know how long their previous action has ran for after they
 		//become relevant.
-		TimeSinceLastActionSet = 0;
+		LastActionSetTimestamp = OwningSlotable->OwningInventory->OwningFormCore->GetNonCompensatedServerWorldTime();
 		MARK_PROPERTY_DIRTY_FROM_NAME(UConstituent, LastActionSet, this);
 		//We only mark this dirty when we execute.
-		MARK_PROPERTY_DIRTY_FROM_NAME(UConstituent, TimeSinceLastActionSet, this);
+		MARK_PROPERTY_DIRTY_FROM_NAME(UConstituent, LastActionSetTimestamp, this);
 	}
 	else if (bEnableInputsAndPrediction && IsFormCharacter() && bIsPredictableContext && GetOwner()->GetLocalRole() ==
 		ROLE_AutonomousProxy)
@@ -218,10 +207,9 @@ void UConstituent::ExecuteAction(const uint8 ActionId, const bool bIsPredictable
 		{
 			PredictedLastActionSet = FActionSet(ClientWorldTime, ActionId);
 		}
-		const UFormCharacterComponent* FormCharacter = GetFormCharacter();
-		Predicted_OnExecute(ActionId, FSfPredictionFlags(FormCharacter->bClientStatesWereCorrected,
-		                                           FormCharacter->bClientMetadataWasCorrected,
-		                                           FormCharacter->bClientOnPlayback, false));
+		bPredictedLastActionSetUpdated = true;
+		TimeSincePredictedLastActionSet.SetFloat(0);
+		Predicted_OnExecute(ActionId, GetFormCharacter()->IsReplaying());
 	}
 	//Other roles change their states OnRep.
 }
@@ -231,18 +219,19 @@ void UConstituent::ErrorIfIdNotWithinRange(const uint8 Id)
 	checkf(Id < 64, TEXT("Action id not within range."));
 }
 
-int32 UConstituent::GetInstanceId()
+uint8 UConstituent::GetInstanceId() const
 {
 	return InstanceId;
 }
 
 void UConstituent::OnRep_LastActionSet()
 {
+	const float TimeSinceExecution = FormCore->CalculateTimeSinceServerTimestamp(LastActionSetTimestamp);
 	if (GetOwner()->GetLocalRole() == ROLE_AutonomousProxy)
 	{
 		for (const uint8 Id : LastActionSet.ToArray())
 		{
-			Autonomous_OnExecute(Id, static_cast<float>(TimeSinceLastActionSet) / 100.0);
+			Autonomous_OnExecute(Id, TimeSinceExecution);
 		}
 	}
 	if (GetOwner()->GetLocalRole() == ROLE_SimulatedProxy)
@@ -251,12 +240,17 @@ void UConstituent::OnRep_LastActionSet()
 		{
 			if (OwningSlotable->OwningInventory->OwningFormCore->IsFirstPerson())
 			{
-				SimulatedFP_OnExecute(Id, static_cast<float>(TimeSinceLastActionSet) / 100.0);
+				SimulatedFP_OnExecute(Id, TimeSinceExecution);
 			}
 			else
 			{
-				SimulatedTP_OnExecute(Id, static_cast<float>(TimeSinceLastActionSet) / 100.0);
+				SimulatedTP_OnExecute(Id, TimeSinceExecution);
 			}
 		}
 	}
+}
+
+void UConstituent::IncrementTimeSincePredictedLastActionSet(const float Time)
+{
+	TimeSincePredictedLastActionSet.SetFloat(TimeSincePredictedLastActionSet.GetFloat() + Time);
 }
