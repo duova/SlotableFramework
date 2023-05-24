@@ -3,6 +3,8 @@
 
 #include "SfObject.h"
 
+#include "FormCharacterComponent.h"
+
 void USfObject::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -53,6 +55,40 @@ void USfObject::Destroy()
 	}
 }
 
+bool USfObject::IsFormCharacter()
+{
+	if (FormCharacterComponent) return true;
+	if (bDoesNotHaveFormCharacter) return false;
+	if (UFormCharacterComponent* Component = Cast<UFormCharacterComponent>(GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass())))
+	{
+		Component = FormCharacterComponent;
+		bDoesNotHaveFormCharacter = false;
+		return true;
+	}
+	else
+	{
+		bDoesNotHaveFormCharacter = true;
+	}
+	return false;
+}
+
+UFormCharacterComponent* USfObject::GetFormCharacter()
+{
+	if (FormCharacterComponent) return FormCharacterComponent;
+	if (bDoesNotHaveFormCharacter) return nullptr;
+	UFormCharacterComponent* Component = Cast<UFormCharacterComponent>(GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()));
+	if (Component)
+	{
+		FormCharacterComponent = Component;
+		bDoesNotHaveFormCharacter = false;
+	}
+	else
+	{
+		bDoesNotHaveFormCharacter = true;
+	}
+	return Cast<UFormCharacterComponent>(GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()));
+}
+
 void USfObject::ErrorIfNoAuthority() const
 {
 	const AActor* Owner = GetOwner();
@@ -63,4 +99,34 @@ void USfObject::ErrorIfNoAuthority() const
 bool USfObject::HasAuthority() const
 {
 	return GetOwner() && GetOwner()->HasAuthority();
+}
+
+FUint16_Quantize100::FUint16_Quantize100(): InternalValue(0)
+{
+}
+
+float FUint16_Quantize100::GetFloat()
+{
+	return static_cast<float>(InternalValue) / 100.0;
+}
+
+void FUint16_Quantize100::SetFloat(const float Value)
+{
+	if (Value > 655.35)
+	{
+		InternalValue = 65535;
+		return;
+	}
+	if (Value < 0)
+	{
+		InternalValue = 0;
+		return;
+	}
+	InternalValue = static_cast<uint8>(Value * 100.0);
+}
+
+bool FUint16_Quantize100::operator==(const FUint16_Quantize100& Other) const
+{
+	if (InternalValue == Other.InternalValue) return true;
+	return false;
 }

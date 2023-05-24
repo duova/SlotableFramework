@@ -6,13 +6,15 @@
 #include "SfObject.h"
 #include "Slotable.generated.h"
 
+class UConstituent;
+
 /**
  * An object in an inventory.
  * The framework allows these to take "passive" or "active" actions.
  * Passive actions hook into events, while active actions are triggered by inputs.
  * In theory this can represent anything from an in-game item to a status effect to an ability.
  * A slotable is itself only supposed to be a container for constituents,
- * which composes a slotables functionality.
+ * which composes a slotable's functionality.
  */
 UCLASS()
 class SFCORE_API USlotable : public USfObject
@@ -22,39 +24,56 @@ class SFCORE_API USlotable : public USfObject
 public:
 
 	USlotable();
-
+	
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)
-	UInventory* OwningInventory;
-	
+	UPROPERTY(ReplicatedUsing = OnRep_OwningInventory, Replicated, BlueprintReadOnly, VisibleAnywhere)
+	class UInventory* OwningInventory;
+
+	/**
+	 * Read-only copy of constituents.
+	 */
 	UFUNCTION(BlueprintGetter)
 	TArray<UConstituent*> GetConstituents();
+	
+	UFUNCTION(BlueprintGetter)
+	TArray<UConstituent*> GetConstituentsOfClass(const TSubclassOf<UConstituent> ConstituentClass);
 
-	void Initialize();
+	void ClientInitialize();
 
-	void Deinitialize();
+	void ServerInitialize();
+	
+	void ClientDeinitialize();
+
+	void ServerDeinitialize();
+
+	void AssignConstituentInstanceId(UConstituent* Constituent);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	TArray<TSubclassOf<UConstituent>> InitialConstituentClasses;
 
 protected:
 
 	virtual void BeginDestroy() override;
-	
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	TArray<TSubclassOf<UConstituent>> InitialConstituentClasses;
 
 	/*
 	 * Called during slotable init.
 	 */
-	void InitializeConstituent(UConstituent* Constituent);
+	void ServerInitializeConstituent(UConstituent* Constituent);
 
 	/*
 	 * Called during slotable deinit.
 	 */
-	void DeinitializeConstituent(UConstituent* Constituent);
+	void ServerDeinitializeConstituent(UConstituent* Constituent);
 
 private:
 	UPROPERTY(Replicated, VisibleAnywhere)
 	TArray<UConstituent*> Constituents;
 
 	UConstituent* CreateUninitializedConstituent(const TSubclassOf<UConstituent>& ConstituentClass) const;
+
+	uint8 bAwaitingClientInit:1;
+
+	UFUNCTION()
+	void OnRep_OwningInventory();
 };

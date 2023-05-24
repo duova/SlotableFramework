@@ -4,16 +4,26 @@
 #include "Slotable.h"
 
 #include "Constituent.h"
+#include "Inventory.h"
 #include "Net/UnrealNetwork.h"
 
 USlotable::USlotable()
 {
-	if (!HasAuthority()) return;
-	for (auto ConstituentClass : InitialConstituentClasses)
+	if (HasAuthority())
 	{
-		UConstituent* ConstituentInstance = CreateUninitializedConstituent(ConstituentClass);
-		Constituents.Emplace(ConstituentInstance);
-		MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, Constituents, this);
+		checkf(InitialConstituentClasses.Num() < 33, TEXT("Only 32 constituents can be in a slotable."));
+		//We don't instantly init as on the server we need to make sure the slotable is in an inventory first.
+		Constituents.Reserve(InitialConstituentClasses.Num());
+		for (auto ConstituentClass : InitialConstituentClasses)
+		{
+			UConstituent* ConstituentInstance = CreateUninitializedConstituent(ConstituentClass);
+			Constituents.Add(ConstituentInstance);
+			MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, Constituents, this);
+		}
+	}
+	else
+	{
+		bAwaitingClientInit = true;
 	}
 }
 
@@ -37,54 +47,91 @@ TArray<UConstituent*> USlotable::GetConstituents()
 	return ConstituentsCopy;
 }
 
-void USlotable::Initialize()
+TArray<UConstituent*> USlotable::GetConstituentsOfClass(const TSubclassOf<UConstituent> ConstituentClass)
+{
+	TArray<UConstituent*> ConstituentsOfClass;
+	for (UConstituent* Constituent : Constituents)
+	{
+		if (Constituent->GetClass() == ConstituentClass)
+		{
+			ConstituentsOfClass.Add(Constituent);
+		}
+	}
+	return ConstituentsOfClass;
+}
+
+void USlotable::ClientInitialize()
+{
+	//Call events.
+}
+
+void USlotable::ServerInitialize()
 {
 	for (UConstituent* Constituent : Constituents)
 	{
-		InitializeConstituent(Constituent);
+		ServerInitializeConstituent(Constituent);
 	}
 	//Call events.
 }
 
-void USlotable::Deinitialize()
+void USlotable::ClientDeinitialize()
+{
+	//Call events.
+}
+
+void USlotable::ServerDeinitialize()
 {
 	//Call events.
 	for (UConstituent* Constituent : Constituents)
 	{
-		DeinitializeConstituent(Constituent);
+		ServerDeinitializeConstituent(Constituent);
 	}
+}
+
+void USlotable::AssignConstituentInstanceId(UConstituent* Constituent)
+{
+	OwningInventory->AssignConstituentInstanceId(Constituent);
 }
 
 void USlotable::BeginDestroy()
 {
 	Super::BeginDestroy();
-	if (!HasAuthority()) return;
-	for (int32 i = 0; i < Constituents.Num(); i++)
+	if (HasAuthority())
 	{
-		//We clear index 0 because the list shifts down. 
-		if (UConstituent* Constituent = Constituents[0])
+		for (int32 i = 0; i < Constituents.Num(); i++)
 		{
-			DeinitializeConstituent(Constituent);
-			//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
-			Constituent->Destroy();
+			//We clear index 0 because the list shifts down. 
+			if (UConstituent* Constituent = Constituents[0])
+			{
+				ServerDeinitializeConstituent(Constituent);
+				//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
+				Constituent->Destroy();
+			}
+			Constituents.RemoveAt(0);
+			MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, Constituents, this);
+			
 		}
-		Constituents.RemoveAt(0);
-		MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, Constituents, this);
+	}
+	else
+	{
+		ClientDeinitialize();
 	}
 }
 
-void USlotable::InitializeConstituent(UConstituent* Constituent)
+void USlotable::ServerInitializeConstituent(UConstituent* Constituent)
 {
 	GetOwner()->AddReplicatedSubObject(Constituent);
 	Constituent->OwningSlotable = this;
+	AssignConstituentInstanceId(Constituent);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UConstituent, OwningSlotable, Constituent);
-	Constituent->Initialize();
+	Constituent->ServerInitialize();
 }
 
-void USlotable::DeinitializeConstituent(UConstituent* Constituent)
+void USlotable::ServerDeinitializeConstituent(UConstituent* Constituent)
 {
-	Constituent->Deinitialize();
+	Constituent->ServerDeinitialize();
 	Constituent->OwningSlotable = nullptr;
+	//Constituent instance ids are recycled automatically.
 	MARK_PROPERTY_DIRTY_FROM_NAME(UConstituent, OwningSlotable, Constituent);
 	GetOwner()->RemoveReplicatedSubObject(Constituent);
 }
@@ -96,4 +143,13 @@ UConstituent* USlotable::CreateUninitializedConstituent(const TSubclassOf<UConst
 	UConstituent* ConstituentInstance = NewObject<UConstituent>(GetOwner(), ConstituentClass);
 	checkf(ConstituentInstance, TEXT("Failed to create slotable."));
 	return ConstituentInstance;
+}
+
+void USlotable::OnRep_OwningInventory()
+{
+	if (bAwaitingClientInit)
+	{
+		bAwaitingClientInit = false;
+		ClientInitialize();
+	}
 }

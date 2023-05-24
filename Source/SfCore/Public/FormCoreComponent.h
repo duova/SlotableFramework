@@ -3,10 +3,11 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Inventory.h"
 #include "Components/ActorComponent.h"
-#include "Net/UnrealNetwork.h"
 #include "FormCoreComponent.generated.h"
+
+class UConstituent;
+class UInventory;
 
 /**
  * The FormCoreComponent is responsible for the core logic of a form.
@@ -25,18 +26,51 @@ public:
 	                           FActorComponentTickFunction* ThisTickFunction) override;
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
-	
+
+	/**
+	 * Read-only copy of inventories.
+	 */
 	UFUNCTION(BlueprintGetter)
 	TArray<UInventory*> GetInventories();
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	UInventory* AddInventory(const TSubclassOf<UInventory>& InventoryClass);
+	UInventory* Server_AddInventory(const TSubclassOf<UInventory>& InventoryClass);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	void RemoveInventoryByIndex(const int32 Index);
+	void Server_RemoveInventoryByIndex(const int32 Index);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	bool RemoveInventory(UInventory* Inventory);
+	bool Server_RemoveInventory(UInventory* Inventory);
+	
+	void ClientSetToFirstPerson();
+	
+	void ClientSetToThirdPerson();
+
+	UFUNCTION(BlueprintGetter)
+	bool IsFirstPerson();
+
+	//TODO
+	float ClientNonCompensatedServerWorldTime;
+
+	//Works for client and server.
+	float GetNonCompensatedServerWorldTime();
+
+	//Works for client and server.
+	float CalculateFutureServerTimestamp(float AdditionalTime);
+
+	//Works for client and server.
+	float CalculateTimeUntilServerTimestamp(float Timestamp);
+
+	//Works for client and server.
+	float CalculateTimeSinceServerTimestamp(float Timestamp);
+
+	//Works for client and server.
+	bool HasServerTimestampPassed(float Timestamp);
+
+	static const TArray<UClass*>& GetAllCardObjectClassesSortedByName();
+
+	UPROPERTY()
+	TArray<UConstituent*> ConstituentRegistry;
 
 protected:
 	virtual void BeginPlay() override;
@@ -49,4 +83,11 @@ protected:
 private:
 	UPROPERTY(Replicated, VisibleAnywhere)
 	TArray<UInventory*> Inventories;
+
+	UPROPERTY(VisibleAnywhere)
+	uint8 bIsFirstPerson:1;
+
+	inline static TArray<UClass*> AllCardObjectClassesSortedByName = TArray<UClass*>();
+
+	inline static bool CardObjectClassesFetched = false;
 };
