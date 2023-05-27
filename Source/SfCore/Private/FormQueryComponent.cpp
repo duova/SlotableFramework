@@ -12,7 +12,7 @@ void UFormQueryComponent::RegisterQueryImpl(const TSubclassOf<USfQuery> QueryCla
 {
 	//We check if existing query exists.
 	bool bHasQuery = false;
-	for (TPair<USfQuery*, uint8>& Pair : ActiveQueryDependentCountPair)
+	for (TPair<USfQuery*, uint16>& Pair : ActiveQueryDependentCountPair)
 	{
 		if (Pair.Key->GetClass() == QueryClass->GetClass())
 		{
@@ -44,7 +44,7 @@ void UFormQueryComponent::RegisterQueryDependencies(const TArray<TSubclassOf<USf
 void UFormQueryComponent::UnregisterQueryImpl(const TSubclassOf<USfQuery> QueryClass)
 {
 	USfQuery* ToRemove = nullptr;
-	for (TPair<USfQuery*, uint8>& Pair : ActiveQueryDependentCountPair)
+	for (TPair<USfQuery*, uint16>& Pair : ActiveQueryDependentCountPair)
 	{
 		if (Pair.Key->GetClass() == QueryClass->GetClass())
 		{
@@ -90,7 +90,7 @@ void UFormQueryComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 
 	if (!GetOwner()) return;
 	if (!GetOwner()->HasAuthority()) return;
-	for (const TPair<USfQuery*, uint8>& Pair : ActiveQueryDependentCountPair)
+	for (const TPair<USfQuery*, uint16>& Pair : ActiveQueryDependentCountPair)
 	{
 		Pair.Key->PerformCheck(DeltaTime);
 	}

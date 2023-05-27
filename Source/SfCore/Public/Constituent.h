@@ -187,6 +187,9 @@ public:
 
 	void IncrementTimeSincePredictedLastActionSet(float Time);
 
+	UFUNCTION(BlueprintGetter)
+	USfQuery* GetQuery(const TSubclassOf<USfQuery>& QueryClass) const;
+
 	//Unique identifier within each inventory.
 	UPROPERTY(Replicated)
 	uint8 InstanceId;
@@ -208,7 +211,7 @@ public:
 
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	TArray<TSubclassOf<USfQuery>> QueryDependencies;
+	TArray<TSubclassOf<USfQuery>> QueryDependencyClasses;
 	
 private:
 	UFUNCTION()

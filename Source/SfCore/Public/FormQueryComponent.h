@@ -50,7 +50,7 @@ protected:
 
 	//Active queries and the number of constituents that depend on it.
 	UPROPERTY()
-	TMap<USfQuery*, uint8> ActiveQueryDependentCountPair;
+	TMap<USfQuery*, uint16> ActiveQueryDependentCountPair;
 
 public:
 	// Called every frame

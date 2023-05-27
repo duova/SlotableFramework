@@ -147,7 +147,7 @@ void UConstituent::ServerInitialize()
 	if (FormCore)
 	{
 		FormCore->ConstituentRegistry.Add(this);
-		FormCore->GetFormQuery()->RegisterQueryDependencies(QueryDependencies);
+		FormCore->GetFormQuery()->RegisterQueryDependencies(QueryDependencyClasses);
 	}
 	//Call events.
 }
@@ -164,7 +164,7 @@ void UConstituent::ServerDeinitialize()
 {
 	if (FormCore)
 	{
-		FormCore->GetFormQuery()->UnregisterQueryDependencies(QueryDependencies);
+		FormCore->GetFormQuery()->UnregisterQueryDependencies(QueryDependencyClasses);
 		FormCore->ConstituentRegistry.Remove(this);
 	}
 	if (OwningSlotable && OwningSlotable->OwningInventory)
@@ -279,4 +279,16 @@ void UConstituent::OnRep_LastActionSet()
 void UConstituent::IncrementTimeSincePredictedLastActionSet(const float Time)
 {
 	TimeSincePredictedLastActionSet.SetFloat(TimeSincePredictedLastActionSet.GetFloat() + Time);
+}
+
+USfQuery* UConstituent::GetQuery(const TSubclassOf<USfQuery>& QueryClass) const
+{
+	for (const TPair<USfQuery*, uint16> Pair : FormCore->GetFormQuery())
+	{
+		if (Pair.Key->GetClass() == QueryClass->GetClass())
+		{
+			return Pair.Key;
+		}
+	}
+	return nullptr;
 }
