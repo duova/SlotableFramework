@@ -524,8 +524,8 @@ void UFormCharacterComponent::SetupFormCharacter(UFormCoreComponent* FormCoreCom
 		//We bind all the inputs to the same function as we figure out which input triggered it with FInputActionInstance.
 		for (const UInputAction* InputAction : InputActionRegistry)
 		{
-			EnhancedInputComponent->BindAction(InputAction, ETriggerEvent::Started, this, OnInputDown);
-			EnhancedInputComponent->BindAction(InputAction, ETriggerEvent::Canceled, this, OnInputUp);
+			EnhancedInputComponent->BindAction(InputAction, ETriggerEvent::Started, this, &UFormCharacterComponent::OnInputDown);
+			EnhancedInputComponent->BindAction(InputAction, ETriggerEvent::Canceled, this, &UFormCharacterComponent::OnInputUp);
 		}
 	}
 }
@@ -842,7 +842,8 @@ void UFormCharacterComponent::PackInventoryCardIdentifiers()
 
 void UFormCharacterComponent::HandleCardClientSyncTimeout() const
 {
-	if (GetOwner() && !GetOwner()->HasAuthority()) return;
+	if (!GetOwner()) return;
+	if (!GetOwner()->HasAuthority()) return;
 	for (UInventory* Inventory : FormCore->GetInventories())
 	{
 		TArray<FCard> ToRemove;
@@ -878,7 +879,7 @@ void UFormCharacterComponent::ApplyInputBitsToInventory(const uint32 InputBits, 
 		//We don't want to do anything if the value isn't actually updated.
 		if (Inventory->OrderedLastInputState[i] == bInputValue) continue;
 		if (Inventory->Slotables.Num() < i || Inventory->Slotables[i] == nullptr) continue;
-		for (UConstituent* Constituent : Inventory->Slotables[i])
+		for (UConstituent* Constituent : Inventory->Slotables[i]->GetConstituents())
 		{
 			if (!Constituent->bEnableInputsAndPrediction) continue;
 			if (bInputValue)

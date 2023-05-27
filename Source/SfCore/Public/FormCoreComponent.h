@@ -6,6 +6,7 @@
 #include "Components/ActorComponent.h"
 #include "FormCoreComponent.generated.h"
 
+class UFormQueryComponent;
 class UFormCharacterComponent;
 class UConstituent;
 class UInventory;
@@ -70,6 +71,8 @@ public:
 
 	static const TArray<UClass*>& GetAllCardObjectClassesSortedByName();
 
+	UFormQueryComponent* GetFormQuery() const;
+
 	UPROPERTY()
 	TArray<UConstituent*> ConstituentRegistry;
 
@@ -94,4 +97,7 @@ private:
 
 	UPROPERTY()
 	UFormCharacterComponent* FormCharacter;
+
+	UPROPERTY()
+	UFormQueryComponent* FormQuery;
 };

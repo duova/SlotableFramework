@@ -6,6 +6,7 @@
 #include "SfObject.h"
 #include "Constituent.generated.h"
 
+class USfQuery;
 class UFormCoreComponent;
 class UFormCharacterComponent;
 
@@ -204,6 +205,10 @@ public:
 
 	//Used to know how long ago the last action took place so we can fast forward the effects after replay.
 	FUint16_Quantize100 TimeSincePredictedLastActionSet;
+
+protected:
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	TArray<TSubclassOf<USfQuery>> QueryDependencies;
 	
 private:
 	UFUNCTION()

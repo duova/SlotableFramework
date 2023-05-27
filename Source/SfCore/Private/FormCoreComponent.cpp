@@ -8,11 +8,12 @@
 #include "Inventory.h"
 #include "Slotable.h"
 #include "FormCharacterComponent.h"
+#include "FormQueryComponent.h"
 #include "Net/UnrealNetwork.h"
 
 UFormCoreComponent::UFormCoreComponent()
 {
-	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bCanEverTick = false;
 	bReplicateUsingRegisteredSubObjectList = true;
 	SetIsReplicatedByDefault(true);
 }
@@ -22,6 +23,11 @@ const TArray<UClass*>& UFormCoreComponent::GetAllCardObjectClassesSortedByName()
 	return AllCardObjectClassesSortedByName;
 }
 
+UFormQueryComponent* UFormCoreComponent::GetFormQuery() const
+{
+	return FormQuery;
+}
+
 void UFormCoreComponent::BeginPlay()
 {
 	Super::BeginPlay();
@@ -29,7 +35,9 @@ void UFormCoreComponent::BeginPlay()
 	if (GetOwner())
 	{
 		FormCharacter = Cast<UFormCharacterComponent>(GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()));
+		FormQuery = Cast<UFormQueryComponent>(GetOwner()->FindComponentByClass(UFormQueryComponent::StaticClass()));
 	}
+	
 	if (FormCharacter)
 	{
 		FormCharacter->SetupFormCharacter(this);
@@ -49,18 +57,22 @@ void UFormCoreComponent::BeginPlay()
 		AllCardObjectClassesSortedByName.Sort([](const UClass& A, const UClass& B) { return A.GetName() > B.GetName(); });
 		CardObjectClassesFetched = true;
 	}
-	
-	if (GetOwner() && !GetOwner()->HasAuthority()) return;
-	for (TSubclassOf<UInventory> InventoryClass : DefaultInventoryClasses)
+
+	if (!GetOwner()) return;
+	if (GetOwner()->HasAuthority())
 	{
-		Server_AddInventory(InventoryClass);
+		for (TSubclassOf<UInventory> InventoryClass : DefaultInventoryClasses)
+		{
+			Server_AddInventory(InventoryClass);
+		}
 	}
 }
 
 void UFormCoreComponent::BeginDestroy()
 {
 	Super::BeginDestroy();
-	if (GetOwner() && !GetOwner()->HasAuthority()) return;
+	if (!GetOwner()) return;
+	if (!GetOwner()->HasAuthority()) return;
 	for (int32 i = 0; i < Inventories.Num(); i++)
 	{
 		//We clear index 0 because the list shifts down.

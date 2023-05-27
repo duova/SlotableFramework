@@ -7,6 +7,7 @@
 #include "FormCoreComponent.h"
 #include "Inventory.h"
 #include "Slotable.h"
+#include "FormQueryComponent.h"
 #include "Net/UnrealNetwork.h"
 
 FActionSet::FActionSet(): NumActionsIncludingZero(0), ActionZero(0), ActionOne(0), ActionTwo(0), ActionThree(0),
@@ -134,13 +135,20 @@ void UConstituent::OnRep_OwningSlotable()
 void UConstituent::ClientInitialize()
 {
 	FormCore = OwningSlotable->OwningInventory->OwningFormCore;
-	FormCore->ConstituentRegistry.Add(this);
+	if (FormCore)
+	{
+		FormCore->ConstituentRegistry.Add(this);
+	}
 }
 
 void UConstituent::ServerInitialize()
 {
 	FormCore = OwningSlotable->OwningInventory->OwningFormCore;
-	FormCore->ConstituentRegistry.Add(this);
+	if (FormCore)
+	{
+		FormCore->ConstituentRegistry.Add(this);
+		FormCore->GetFormQuery()->RegisterQueryDependencies(QueryDependencies);
+	}
 	//Call events.
 }
 
@@ -156,6 +164,7 @@ void UConstituent::ServerDeinitialize()
 {
 	if (FormCore)
 	{
+		FormCore->GetFormQuery()->UnregisterQueryDependencies(QueryDependencies);
 		FormCore->ConstituentRegistry.Remove(this);
 	}
 	if (OwningSlotable && OwningSlotable->OwningInventory)
