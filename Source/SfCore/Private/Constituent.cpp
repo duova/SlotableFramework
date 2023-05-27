@@ -97,6 +97,7 @@ TArray<uint8> FActionSet::ToArray() const
 
 UConstituent::UConstituent()
 {
+	if (!GetOwner()) return;
 	if (!HasAuthority())
 	{
 		bAwaitingClientInit = true;
@@ -106,6 +107,7 @@ UConstituent::UConstituent()
 void UConstituent::BeginDestroy()
 {
 	Super::BeginDestroy();
+	if (!GetOwner()) return;
 	if (!HasAuthority())
 	{
 		ClientDeinitialize();
@@ -134,6 +136,7 @@ void UConstituent::OnRep_OwningSlotable()
 
 void UConstituent::ClientInitialize()
 {
+	if (!OwningSlotable) return;
 	FormCore = OwningSlotable->OwningInventory->OwningFormCore;
 	if (FormCore)
 	{
@@ -143,6 +146,7 @@ void UConstituent::ClientInitialize()
 
 void UConstituent::ServerInitialize()
 {
+	if (!OwningSlotable) return;
 	FormCore = OwningSlotable->OwningInventory->OwningFormCore;
 	if (FormCore)
 	{
@@ -176,11 +180,9 @@ void UConstituent::ServerDeinitialize()
 
 void UConstituent::ExecuteAction(const uint8 ActionId, const bool bIsPredictableContext)
 {
-	if (GetOwner())
-	{
-		if (GetOwner()->GetLocalRole() == ROLE_SimulatedProxy) UE_LOG(LogTemp, Error,
-																	  TEXT("Tried to ExecuteAction as simulated proxy."));
-	}
+	if (!GetOwner()) return;
+	if (GetOwner()->GetLocalRole() == ROLE_SimulatedProxy) UE_LOG(LogTemp, Error,
+	                                                              TEXT("Tried to ExecuteAction as simulated proxy."));
 	ErrorIfIdNotWithinRange(ActionId);
 	if (HasAuthority())
 	{
@@ -251,6 +253,7 @@ uint8 UConstituent::GetInstanceId() const
 
 void UConstituent::OnRep_LastActionSet()
 {
+	if (!FormCore) return;
 	const float TimeSinceExecution = FormCore->CalculateTimeSinceServerTimestamp(LastActionSetTimestamp);
 	if (!GetOwner()) return;
 	if (GetOwner()->GetLocalRole() == ROLE_AutonomousProxy)
@@ -283,6 +286,7 @@ void UConstituent::IncrementTimeSincePredictedLastActionSet(const float Time)
 
 USfQuery* UConstituent::GetQuery(const TSubclassOf<USfQuery>& QueryClass) const
 {
+	if (!FormCore || !FormCore->GetFormQuery()) return nullptr;
 	for (const TPair<USfQuery*, uint16> Pair : FormCore->GetFormQuery())
 	{
 		if (Pair.Key->GetClass() == QueryClass->GetClass())
