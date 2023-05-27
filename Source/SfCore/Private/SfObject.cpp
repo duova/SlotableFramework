@@ -36,6 +36,7 @@ int32 USfObject::GetFunctionCallspace(UFunction* Function, FFrame* Stack)
 bool USfObject::CallRemoteFunction(UFunction* Function, void* Parms, FOutParmRec* OutParms, FFrame* Stack)
 {
 	checkf(!HasAnyFlags(RF_ClassDefaultObject), TEXT("Attempted to call remote function on CDO."));
+	if (!GetOwner()) return false;
 	AActor* Owner = GetOwner();
 	if (UNetDriver* NetDriver = Owner->GetNetDriver())
 	{
@@ -50,6 +51,7 @@ void USfObject::Destroy()
 {
 	if (IsValid(this))
 	{
+		if (!GetOwner()) return;
 		checkf(GetOwner()->HasAuthority() == true, TEXT("SfObject does not have authority to destroy itself."));
 		MarkAsGarbage();
 	}
@@ -59,6 +61,7 @@ bool USfObject::IsFormCharacter()
 {
 	if (FormCharacterComponent) return true;
 	if (bDoesNotHaveFormCharacter) return false;
+	if (!GetOwner()) return false;
 	if (UFormCharacterComponent* Component = Cast<UFormCharacterComponent>(GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass())))
 	{
 		Component = FormCharacterComponent;
@@ -76,6 +79,7 @@ UFormCharacterComponent* USfObject::GetFormCharacter()
 {
 	if (FormCharacterComponent) return FormCharacterComponent;
 	if (bDoesNotHaveFormCharacter) return nullptr;
+	if (!GetOwner()) return false;
 	UFormCharacterComponent* Component = Cast<UFormCharacterComponent>(GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()));
 	if (Component)
 	{
@@ -91,6 +95,7 @@ UFormCharacterComponent* USfObject::GetFormCharacter()
 
 void USfObject::ErrorIfNoAuthority() const
 {
+	if (!GetOwner()) return;
 	const AActor* Owner = GetOwner();
 	checkf(Owner != nullptr, TEXT("Invalid owner."));
 	checkf(Owner->HasAuthority(), TEXT("Called without authority."));

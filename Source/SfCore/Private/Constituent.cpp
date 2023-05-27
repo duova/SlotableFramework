@@ -146,24 +146,40 @@ void UConstituent::ServerInitialize()
 
 void UConstituent::ClientDeinitialize()
 {
-	FormCore->ConstituentRegistry.Remove(this);
+	if (FormCore)
+	{
+		FormCore->ConstituentRegistry.Remove(this);
+	}
 }
 
 void UConstituent::ServerDeinitialize()
 {
-	FormCore->ConstituentRegistry.Remove(this);
-	OwningSlotable->OwningInventory->RemoveCardsOfOwner(InstanceId);
+	if (FormCore)
+	{
+		FormCore->ConstituentRegistry.Remove(this);
+	}
+	if (OwningSlotable && OwningSlotable->OwningInventory)
+	{
+		OwningSlotable->OwningInventory->RemoveCardsOfOwner(InstanceId);
+	}
 	//Call events.
 }
 
 void UConstituent::ExecuteAction(const uint8 ActionId, const bool bIsPredictableContext)
 {
-	if (GetOwner()->GetLocalRole() == ROLE_SimulatedProxy) UE_LOG(LogTemp, Error,
-	                                                              TEXT("Tried to ExecuteAction as simulated proxy."));
+	if (GetOwner())
+	{
+		if (GetOwner()->GetLocalRole() == ROLE_SimulatedProxy) UE_LOG(LogTemp, Error,
+																	  TEXT("Tried to ExecuteAction as simulated proxy."));
+	}
 	ErrorIfIdNotWithinRange(ActionId);
 	if (HasAuthority())
 	{
-		const float ServerWorldTime = GetOwner()->GetWorld()->GetTimeSeconds();
+		float ServerWorldTime = 0;
+		if (GetOwner())
+		{
+			ServerWorldTime = GetOwner()->GetWorld()->GetTimeSeconds();
+		}
 		if (bIsPredictableContext)
 		{
 			//If the action is executed in a predictable context, we want to update PredictedLastActionSet so the predicted
@@ -197,7 +213,7 @@ void UConstituent::ExecuteAction(const uint8 ActionId, const bool bIsPredictable
 		//We only mark this dirty when we execute.
 		MARK_PROPERTY_DIRTY_FROM_NAME(UConstituent, LastActionSetTimestamp, this);
 	}
-	else if (bEnableInputsAndPrediction && IsFormCharacter() && bIsPredictableContext && GetOwner()->GetLocalRole() ==
+	else if (bEnableInputsAndPrediction && IsFormCharacter() && bIsPredictableContext && GetOwner() && GetOwner()->GetLocalRole() ==
 		ROLE_AutonomousProxy)
 	{
 		//On client we only want to execute if we are predicting.
@@ -227,6 +243,7 @@ uint8 UConstituent::GetInstanceId() const
 void UConstituent::OnRep_LastActionSet()
 {
 	const float TimeSinceExecution = FormCore->CalculateTimeSinceServerTimestamp(LastActionSetTimestamp);
+	if (!GetOwner()) return;
 	if (GetOwner()->GetLocalRole() == ROLE_AutonomousProxy)
 	{
 		for (const uint8 Id : LastActionSet.ToArray())

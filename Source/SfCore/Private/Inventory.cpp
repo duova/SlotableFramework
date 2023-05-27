@@ -12,6 +12,8 @@
 
 UInventory::UInventory()
 {
+	//We can directly init here because when the constructor is called, the object should have a reference to its outer.
+	ClientInitialize();
 }
 
 void UInventory::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -27,7 +29,7 @@ void UInventory::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifeti
 	//We handle owner replication purely with the FormCharacterComponent if it is available.
 	if (bInitialized)
 	{
-		if (GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()))
+		if (GetOwner() && GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()))
 		{
 			CardParams.Condition = COND_SkipOwner;
 		}
@@ -75,6 +77,7 @@ void UInventory::BeginDestroy()
 USlotable* UInventory::CreateUninitializedSlotable(const TSubclassOf<USlotable>& SlotableClass) const
 {
 	ErrorIfNoAuthority();
+	if (!GetOwner()) return nullptr;
 	if (!SlotableClass || SlotableClass->HasAnyClassFlags(CLASS_Abstract)) return nullptr;
 	USlotable* SlotableInstance = NewObject<USlotable>(GetOwner(), SlotableClass);
 	checkf(SlotableInstance, TEXT("Failed to create slotable."));
@@ -83,6 +86,7 @@ USlotable* UInventory::CreateUninitializedSlotable(const TSubclassOf<USlotable>&
 
 UCardObject* UInventory::CreateUninitializedCardObject(const TSubclassOf<UCardObject>& CardClass) const
 {
+	if (!GetOwner()) return nullptr;
 	if (!CardClass || CardClass->HasAnyClassFlags(CLASS_Abstract)) return nullptr;
 	UCardObject* CardInstance = NewObject<UCardObject>(GetOwner(), CardClass);
 	checkf(CardInstance, TEXT("Failed to create card."));
@@ -499,6 +503,7 @@ bool UInventory::Predicted_RemoveSharedCard(const TSubclassOf<UCardObject>& Card
 bool UInventory::Predicted_AddOwnedCard(const TSubclassOf<UCardObject>& CardClass,
                                         const uint8 InOwnerConstituentInstanceId, float CustomLifetime)
 {
+	if (!GetOwner()) return false;
 	checkf(GetOwner()->GetLocalRole() != ROLE_SimulatedProxy, TEXT("Called Predicted_ function on simulated proxy."))
 	checkf(IsFormCharacter(), TEXT("Predicted_ function called by non-form character."));
 	for (FCard Card : Cards)
@@ -535,6 +540,7 @@ bool UInventory::Predicted_AddOwnedCard(const TSubclassOf<UCardObject>& CardClas
 bool UInventory::Predicted_RemoveOwnedCard(const TSubclassOf<UCardObject>& CardClass,
                                            const uint8 InOwnerConstituentInstanceId)
 {
+	if (!GetOwner()) return false;
 	checkf(GetOwner()->GetLocalRole() != ROLE_SimulatedProxy, TEXT("Called Predicted_ function on simulated proxy."))
 	checkf(IsFormCharacter(), TEXT("Predicted_ function called by non-form character."));
 	int16 IndexToDestroy = INDEX_NONE;
@@ -565,6 +571,28 @@ bool UInventory::Predicted_RemoveOwnedCard(const TSubclassOf<UCardObject>& CardC
 
 void UInventory::ClientInitialize()
 {
+	bIsOnFormCharacter = IsFormCharacter();
+	if (bIsOnFormCharacter)
+	{
+		//Translate InputActions to indices so we don't have to search when applying inputs.
+		OrderedInputBindingIndices.Reserve(OrderedInputBindings.Num());
+		OrderedLastInputState.Reserve(OrderedInputBindings.Num());
+		for (UInputAction* Input : OrderedInputBindings)
+		{
+			if (Input == nullptr)
+			{
+				//We use INDEX_NONE to represent no input.
+				OrderedInputBindingIndices.Add(INDEX_NONE);
+			}
+			else
+			{
+				const uint8 Index = GetFormCharacter()->InputActionRegistry.Find(Input);
+				checkf(Index != INDEX_NONE, TEXT("Inventory input is unregistered with the form character component."));
+				OrderedInputBindingIndices.Add(Index);
+			}
+			OrderedLastInputState.Add(false);
+		}
+	}
 	//Call events.
 	bInitialized = true;
 }
@@ -574,9 +602,19 @@ void UInventory::ServerInitialize()
 	bIsOnFormCharacter = IsFormCharacter();
 	if (HasAuthority())
 	{
+		if (bIsOnFormCharacter)
+		{
+			//Translate InputActions to indices so we don't have to search when applying inputs.
+			OrderedInputBindingIndices.Reserve(OrderedInputBindings.Num());
+			for (UInputAction* Input : OrderedInputBindings)
+			{
+				OrderedInputBindingIndices.Add(GetFormCharacter()->InputActionRegistry.Find(Input));
+				OrderedLastInputState.Add(false);
+			}
+		}
 		checkf(Capacity <= 128, TEXT("The capacity of an inventory may not exceed 128."))
-		Slotables.Reserve(InitialSlotableClasses.Num());
-		for (TSubclassOf<USlotable> SlotableClass : InitialSlotableClasses)
+		Slotables.Reserve(InitialOrderedSlotableClasses.Num());
+		for (TSubclassOf<USlotable> SlotableClass : InitialOrderedSlotableClasses)
 		{
 			USlotable* SlotableInstance = CreateUninitializedSlotable(SlotableClass);
 			Slotables.Add(SlotableInstance);
@@ -599,11 +637,6 @@ void UInventory::ServerInitialize()
 		}
 		MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
 		MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
-	}
-	else
-	{
-		//We can directly init here because when the constructor is called, the object should have a reference to its outer.
-		ClientInitialize();
 	}
 	//Call events.
 	bInitialized = true;
@@ -670,6 +703,7 @@ void UInventory::RemoveCardsOfOwner(const uint8 OwnerConstituentInstanceId)
 //Must be called after the slotable has been placed in an inventory.
 void UInventory::InitializeSlotable(USlotable* Slotable)
 {
+	if (!GetOwner()) return;
 	GetOwner()->AddReplicatedSubObject(Slotable);
 	Slotable->OwningInventory = this;
 	MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, OwningInventory, Slotable);
@@ -679,6 +713,7 @@ void UInventory::InitializeSlotable(USlotable* Slotable)
 //Must be called before the slotable is removed from an inventory.
 void UInventory::DeinitializeSlotable(USlotable* Slotable)
 {
+	if (!GetOwner()) return;
 	Slotable->ServerDeinitialize();
 	Slotable->OwningInventory = nullptr;
 	MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, OwningInventory, Slotable);

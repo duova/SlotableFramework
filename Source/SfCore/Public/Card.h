@@ -19,7 +19,7 @@ class UCardObject;
  * owner may exist per inventory. Shared cards have no owner and only one of each class can exist in each inventory.
  */
 USTRUCT()
-struct FCard
+struct SFCORE_API FCard
 {
 	GENERATED_BODY()
 	
@@ -36,30 +36,23 @@ struct FCard
 	TSubclassOf<UCardObject> Class;
 
 	//For serialization only.
-	UPROPERTY()
 	uint16 ClassIndex;
-
-	UPROPERTY()
+	
 	uint8 OwnerConstituentInstanceId;
-
-	UPROPERTY()
+	
 	bool bUsingPredictedTimestamp;
 
 	//If negative we don't check.
-	UPROPERTY()
 	float LifetimeEndTimestamp;
 
 	//For predicted forms, this is set to true after card creation on server until either the client syncs up or timeout.
 	//We don't check this card while this is true to prevent unnecessary rollbacks.
-	UPROPERTY()
 	uint8 bIsNotCorrected:1;
 
 	//For predicted forms, this is set to true after card should be destroyed on the server until either the client syncs
 	//up or timeout. We don't check this card while this is true to prevent unnecessary rollbacks.
-	UPROPERTY()
 	bool bIsDisabledForDestroy;
 	
-	UPROPERTY()
 	double ServerAwaitClientSyncTimeoutTimestamp;
 
 	inline static constexpr float ServerAwaitClientSyncTimeoutDuration = 0.4;

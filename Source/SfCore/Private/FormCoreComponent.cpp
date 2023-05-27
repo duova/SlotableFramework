@@ -7,6 +7,7 @@
 #include "Constituent.h"
 #include "Inventory.h"
 #include "Slotable.h"
+#include "FormCharacterComponent.h"
 #include "Net/UnrealNetwork.h"
 
 UFormCoreComponent::UFormCoreComponent()
@@ -24,6 +25,15 @@ const TArray<UClass*>& UFormCoreComponent::GetAllCardObjectClassesSortedByName()
 void UFormCoreComponent::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (GetOwner())
+	{
+		FormCharacter = Cast<UFormCharacterComponent>(GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()));
+	}
+	if (FormCharacter)
+	{
+		FormCharacter->SetupFormCharacter(this);
+	}
 	
 	//This is used to narrow down the classes that need to be iterated through when serializing card classes with names.
 	if (!CardObjectClassesFetched)
@@ -40,7 +50,7 @@ void UFormCoreComponent::BeginPlay()
 		CardObjectClassesFetched = true;
 	}
 	
-	if (!GetOwner()->HasAuthority()) return;
+	if (GetOwner() && !GetOwner()->HasAuthority()) return;
 	for (TSubclassOf<UInventory> InventoryClass : DefaultInventoryClasses)
 	{
 		Server_AddInventory(InventoryClass);
@@ -50,7 +60,7 @@ void UFormCoreComponent::BeginPlay()
 void UFormCoreComponent::BeginDestroy()
 {
 	Super::BeginDestroy();
-	if (!GetOwner()->HasAuthority()) return;
+	if (GetOwner() && !GetOwner()->HasAuthority()) return;
 	for (int32 i = 0; i < Inventories.Num(); i++)
 	{
 		//We clear index 0 because the list shifts down.
@@ -86,6 +96,7 @@ TArray<UInventory*> UFormCoreComponent::GetInventories()
 UInventory* UFormCoreComponent::Server_AddInventory(const TSubclassOf<UInventory>& InventoryClass)
 {
 	if (!InventoryClass || InventoryClass->HasAnyClassFlags(CLASS_Abstract)) return nullptr;
+	if (!GetOwner()) return nullptr;
 	const AActor* Owner = GetOwner();
 	checkf(Owner != nullptr, TEXT("Invalid owner."));
 	checkf(Owner->HasAuthority(), TEXT("Called without authority."));
@@ -102,6 +113,7 @@ UInventory* UFormCoreComponent::Server_AddInventory(const TSubclassOf<UInventory
 
 void UFormCoreComponent::Server_RemoveInventoryByIndex(const int32 Index)
 {
+	if (!GetOwner()) return;
 	const AActor* Owner = GetOwner();
 	checkf(Owner, TEXT("Invalid Owner."));
 	checkf(Owner->HasAuthority(), TEXT("Called without Authority."));

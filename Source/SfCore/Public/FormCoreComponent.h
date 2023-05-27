@@ -6,6 +6,7 @@
 #include "Components/ActorComponent.h"
 #include "FormCoreComponent.generated.h"
 
+class UFormCharacterComponent;
 class UConstituent;
 class UInventory;
 
@@ -90,4 +91,7 @@ private:
 	inline static TArray<UClass*> AllCardObjectClassesSortedByName = TArray<UClass*>();
 
 	inline static bool CardObjectClassesFetched = false;
+
+	UPROPERTY()
+	UFormCharacterComponent* FormCharacter;
 };

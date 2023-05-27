@@ -11,7 +11,7 @@ class UFormCharacterComponent;
 
 //Set of maximum four action identifiers that are compressed on serialization if possible.
 USTRUCT()
-struct FActionSet
+struct SFCORE_API FActionSet
 {
 	GENERATED_BODY()
 
@@ -169,6 +169,12 @@ public:
 
 	UFUNCTION(BlueprintImplementableEvent)
 	void SimulatedTP_OnExecute(const uint8 ActionId, const float TimeSinceExecution);
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void OnInputDown(const bool bIsPredictableContext);
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void OnInputUp(const bool bIsPredictableContext);
 
 	static void ErrorIfIdNotWithinRange(const uint8 Id);
 

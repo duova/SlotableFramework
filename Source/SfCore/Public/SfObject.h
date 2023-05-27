@@ -54,7 +54,7 @@ private:
 };
 
 USTRUCT()
-struct FUint16_Quantize100
+struct SFCORE_API FUint16_Quantize100
 {
 	GENERATED_BODY()
 	
