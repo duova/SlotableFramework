@@ -4,6 +4,7 @@
 #include "FormCharacterComponent.h"
 #include "Inventory.h"
 #include "Slotable.h"
+#include "EnhancedInputComponent.h"
 #include "GameFramework/Character.h"
 
 FInventoryCards::FInventoryCards()
@@ -495,6 +496,40 @@ bool UFormCharacterComponent::IsReplaying() const
 	return (CorrectionConditionFlags & ~Update_Cards) != 0;
 }
 
+void UFormCharacterComponent::SetupFormCharacter(UFormCoreComponent* FormCoreComponent)
+{
+	FormCore = FormCoreComponent;
+	
+	//Sanity check to ensure only 24 slotable inputs are available.
+	checkf(InputActionRegistry.Num() > 24, TEXT("Only 24 input actions can be registered."));
+
+	//Enable input sets depending on how many are necessary.
+	if (InputActionRegistry.Num() < 8)
+	{
+		EnabledInputSets = 1;
+	}
+	else if (InputActionRegistry.Num() < 16)
+	{
+		EnabledInputSets = 2;
+	}
+	else
+	{
+		EnabledInputSets = 3;
+	}
+
+	//Bind actions on owning client.
+	if (GetOwner() && GetOwner()->GetLocalRole() == ROLE_AutonomousProxy)
+	{
+		EnhancedInputComponent = Cast<UEnhancedInputComponent>(CharacterOwner->InputComponent);
+		//We bind all the inputs to the same function as we figure out which input triggered it with FInputActionInstance.
+		for (const UInputAction* InputAction : InputActionRegistry)
+		{
+			EnhancedInputComponent->BindAction(InputAction, ETriggerEvent::Started, this, &UFormCharacterComponent::OnInputDown);
+			EnhancedInputComponent->BindAction(InputAction, ETriggerEvent::Canceled, this, &UFormCharacterComponent::OnInputUp);
+		}
+	}
+}
+
 float UFormCharacterComponent::CalculateFuturePredictedTimestamp(float AdditionalTime)
 {
 	return 0;
@@ -515,11 +550,47 @@ bool UFormCharacterComponent::HasPredictedTimestampPassed(float Timestamp)
 	return false;
 }
 
+void UFormCharacterComponent::OnInputDown(const FInputActionInstance& Instance)
+{
+	//Use the registry index to write to input sets.
+	const uint8 InputIndex = FindInputIndexInRegistry(Instance);
+	if (InputIndex == INDEX_NONE) return;
+	if (InputIndex < 8)
+	{
+		SetInputSet(&PrimaryInputSet, InputIndex, true);
+	}
+	else if (InputIndex < 16)
+	{
+		SetInputSet(&SecondaryInputSet, InputIndex - 8, true);
+	}
+	else
+	{
+		SetInputSet(&TertiaryInputSet, InputIndex - 16, true);
+	}
+}
+
+void UFormCharacterComponent::OnInputUp(const FInputActionInstance& Instance)
+{
+	//Use the registry index to write to input sets.
+	const uint8 InputIndex = FindInputIndexInRegistry(Instance);
+	if (InputIndex == INDEX_NONE) return;
+	if (InputIndex < 8)
+	{
+		SetInputSet(&PrimaryInputSet, InputIndex, false);
+	}
+	else if (InputIndex < 16)
+	{
+		SetInputSet(&SecondaryInputSet, InputIndex - 8, false);
+	}
+	else
+	{
+		SetInputSet(&TertiaryInputSet, InputIndex - 16, false);
+	}
+}
+
 void UFormCharacterComponent::BeginPlay()
 {
 	Super::BeginPlay();
-	FormCore = Cast<UFormCoreComponent>(GetOwner()->FindComponentByClass(UFormCoreComponent::StaticClass()));
-	//CharacterOwner->InputComponent->BindAction()
 }
 
 void UFormCharacterComponent::UpdateFromCompressedFlags(uint8 Flags)
@@ -546,7 +617,7 @@ bool UFormCharacterComponent::ServerCheckClientError(float ClientTimeStamp, floa
 		CorrectionConditionFlags |= Repredict_Movement;
 	}
 	SfServerCheckClientError();
-	//We don't rollback if we only want to update cards, we only send changes with the good ack.
+	//We don't rollback if we only want to update cards, we only send changes with a good ack.
 	return CorrectionConditionFlags != Update_Cards && CorrectionConditionFlags != 0;
 }
 
@@ -680,7 +751,7 @@ void UFormCharacterComponent::UpdateFromAdditionInputs()
 bool UFormCharacterComponent::ClientUpdatePositionAfterServerUpdate()
 {
 	const bool ReturnValue = Super::ClientUpdatePositionAfterServerUpdate();
-	if (GetOwner()->GetLocalRole() == ROLE_AutonomousProxy)
+	if (GetOwner() && GetOwner()->GetLocalRole() == ROLE_AutonomousProxy)
 	{
 		//Reset correction condition flags after replay so we know when we're replaying and when we're not.
 		CorrectionConditionFlags = 0;
@@ -771,6 +842,7 @@ void UFormCharacterComponent::PackInventoryCardIdentifiers()
 
 void UFormCharacterComponent::HandleCardClientSyncTimeout() const
 {
+	if (!GetOwner()) return;
 	if (!GetOwner()->HasAuthority()) return;
 	for (UInventory* Inventory : FormCore->GetInventories())
 	{
@@ -796,12 +868,38 @@ void UFormCharacterComponent::HandleCardClientSyncTimeout() const
 	}
 }
 
+void UFormCharacterComponent::ApplyInputBitsToInventory(const uint32 InputBits, const UInventory* Inventory)
+{
+	TArray<int8> BoundInputIndices = Inventory->OrderedInputBindingIndices;
+	for (uint8 i = 0; i < BoundInputIndices.Num(); i++)
+	{
+		//Check if input is actually bound.
+		if (BoundInputIndices[i] == INDEX_NONE) continue;
+		const bool bInputValue = GetValueFromInputSets(BoundInputIndices[i], InputBits);
+		//We don't want to do anything if the value isn't actually updated.
+		if (Inventory->OrderedLastInputState[i] == bInputValue) continue;
+		if (Inventory->Slotables.Num() < i || Inventory->Slotables[i] == nullptr) continue;
+		for (UConstituent* Constituent : Inventory->Slotables[i]->GetConstituents())
+		{
+			if (!Constituent->bEnableInputsAndPrediction) continue;
+			if (bInputValue)
+			{
+				Constituent->OnInputDown(true);
+			}
+			else
+			{
+				Constituent->OnInputUp(true);
+			}
+		}
+	}
+}
+
 void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeconds)
 {
 	Super::UpdateCharacterStateBeforeMovement(DeltaSeconds);
 
 	//On client we extract the corrected states from the FormCharacter if necessary.
-	if (GetOwner()->GetLocalRole() == ROLE_AutonomousProxy)
+	if (GetOwner() && GetOwner()->GetLocalRole() == ROLE_AutonomousProxy)
 	{
 		if (bClientActionsWereUpdated)
 		{
@@ -830,9 +928,13 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 		{
 			PredictedNetClock = 0;
 		}
-
-		//TODO: Run input.
+		
 		//Run input if we're not replaying, or if we want to predict anything that is not movement.
+		const uint32 InputBits = GetInputSetsJoinedBits();
+		for (const UInventory* Inventory : FormCore->GetInventories())
+		{
+			ApplyInputBitsToInventory(InputBits, Inventory);
+		}
 
 		//Pack the states back into the FormCharacter only after we've changed them.
 		for (UConstituent* Constituent : FormCore->ConstituentRegistry)
@@ -845,7 +947,7 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 			}
 		}
 		
-		if (!GetOwner()->HasAuthority())
+		if (GetOwner() && !GetOwner()->HasAuthority())
 		{
 			//We only create the list of card identifiers on the client, as on the server we directly compare them
 			//to the actual cards in order to account for prediction skipping flags and to finalize server only card
@@ -863,4 +965,42 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 			PackCards();
 		}
 	}
+}
+
+uint8 UFormCharacterComponent::FindInputIndexInRegistry(const FInputActionInstance& Instance)
+{
+	for (uint8 i = 0; i < InputActionRegistry.Num(); i++)
+	{
+		if (Instance.GetSourceAction() == InputActionRegistry[i])
+		{
+			return i;
+		}
+	}
+	return INDEX_NONE;
+}
+
+void UFormCharacterComponent::SetInputSet(uint8* InputSet, const uint8 Index, const bool bIsTrue)
+{
+	checkf(Index < 8, TEXT("Index for input set may not be larger than 7."));
+	const uint8 BitModifier = 1 << Index;
+	if (bIsTrue)
+	{
+		*InputSet |= BitModifier;
+	}
+	else
+	{
+		*InputSet &= ~BitModifier;
+	}
+}
+
+bool UFormCharacterComponent::GetValueFromInputSets(const uint8 Index, const uint32 InputSetsJoinedBits)
+{
+	checkf(Index < 24, TEXT("Index for input search may not be larger than 23."));
+	const uint32 BitMask = 1 << Index;
+	return (InputSetsJoinedBits & BitMask) != 0;
+}
+
+uint32 UFormCharacterComponent::GetInputSetsJoinedBits() const
+{
+	return static_cast<uint32>(TertiaryInputSet) << 16 | static_cast<uint16>(SecondaryInputSet) << 8 | PrimaryInputSet;
 }

@@ -7,11 +7,13 @@
 #include "Constituent.h"
 #include "Inventory.h"
 #include "Slotable.h"
+#include "FormCharacterComponent.h"
+#include "FormQueryComponent.h"
 #include "Net/UnrealNetwork.h"
 
 UFormCoreComponent::UFormCoreComponent()
 {
-	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bCanEverTick = false;
 	bReplicateUsingRegisteredSubObjectList = true;
 	SetIsReplicatedByDefault(true);
 }
@@ -21,9 +23,25 @@ const TArray<UClass*>& UFormCoreComponent::GetAllCardObjectClassesSortedByName()
 	return AllCardObjectClassesSortedByName;
 }
 
+UFormQueryComponent* UFormCoreComponent::GetFormQuery() const
+{
+	return FormQuery;
+}
+
 void UFormCoreComponent::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (GetOwner())
+	{
+		FormCharacter = Cast<UFormCharacterComponent>(GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()));
+		FormQuery = Cast<UFormQueryComponent>(GetOwner()->FindComponentByClass(UFormQueryComponent::StaticClass()));
+	}
+	
+	if (FormCharacter)
+	{
+		FormCharacter->SetupFormCharacter(this);
+	}
 	
 	//This is used to narrow down the classes that need to be iterated through when serializing card classes with names.
 	if (!CardObjectClassesFetched)
@@ -39,17 +57,21 @@ void UFormCoreComponent::BeginPlay()
 		AllCardObjectClassesSortedByName.Sort([](const UClass& A, const UClass& B) { return A.GetName() > B.GetName(); });
 		CardObjectClassesFetched = true;
 	}
-	
-	if (!GetOwner()->HasAuthority()) return;
-	for (TSubclassOf<UInventory> InventoryClass : DefaultInventoryClasses)
+
+	if (!GetOwner()) return;
+	if (GetOwner()->HasAuthority())
 	{
-		Server_AddInventory(InventoryClass);
+		for (TSubclassOf<UInventory> InventoryClass : DefaultInventoryClasses)
+		{
+			Server_AddInventory(InventoryClass);
+		}
 	}
 }
 
 void UFormCoreComponent::BeginDestroy()
 {
 	Super::BeginDestroy();
+	if (!GetOwner()) return;
 	if (!GetOwner()->HasAuthority()) return;
 	for (int32 i = 0; i < Inventories.Num(); i++)
 	{
@@ -86,6 +108,7 @@ TArray<UInventory*> UFormCoreComponent::GetInventories()
 UInventory* UFormCoreComponent::Server_AddInventory(const TSubclassOf<UInventory>& InventoryClass)
 {
 	if (!InventoryClass || InventoryClass->HasAnyClassFlags(CLASS_Abstract)) return nullptr;
+	if (!GetOwner()) return nullptr;
 	const AActor* Owner = GetOwner();
 	checkf(Owner != nullptr, TEXT("Invalid owner."));
 	checkf(Owner->HasAuthority(), TEXT("Called without authority."));
@@ -102,6 +125,7 @@ UInventory* UFormCoreComponent::Server_AddInventory(const TSubclassOf<UInventory
 
 void UFormCoreComponent::Server_RemoveInventoryByIndex(const int32 Index)
 {
+	if (!GetOwner()) return;
 	const AActor* Owner = GetOwner();
 	checkf(Owner, TEXT("Invalid Owner."));
 	checkf(Owner->HasAuthority(), TEXT("Called without Authority."));

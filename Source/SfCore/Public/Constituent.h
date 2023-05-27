@@ -6,12 +6,13 @@
 #include "SfObject.h"
 #include "Constituent.generated.h"
 
+class USfQuery;
 class UFormCoreComponent;
 class UFormCharacterComponent;
 
 //Set of maximum four action identifiers that are compressed on serialization if possible.
 USTRUCT()
-struct FActionSet
+struct SFCORE_API FActionSet
 {
 	GENERATED_BODY()
 
@@ -170,6 +171,12 @@ public:
 	UFUNCTION(BlueprintImplementableEvent)
 	void SimulatedTP_OnExecute(const uint8 ActionId, const float TimeSinceExecution);
 
+	UFUNCTION(BlueprintImplementableEvent)
+	void OnInputDown(const bool bIsPredictableContext);
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void OnInputUp(const bool bIsPredictableContext);
+
 	static void ErrorIfIdNotWithinRange(const uint8 Id);
 
 	UFUNCTION(BlueprintGetter)
@@ -179,6 +186,9 @@ public:
 	void OnRep_LastActionSet();
 
 	void IncrementTimeSincePredictedLastActionSet(float Time);
+
+	UFUNCTION(BlueprintGetter)
+	USfQuery* GetQuery(const TSubclassOf<USfQuery>& QueryClass) const;
 
 	//Unique identifier within each inventory.
 	UPROPERTY(Replicated)
@@ -198,6 +208,10 @@ public:
 
 	//Used to know how long ago the last action took place so we can fast forward the effects after replay.
 	FUint16_Quantize100 TimeSincePredictedLastActionSet;
+
+protected:
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	TArray<TSubclassOf<USfQuery>> QueryDependencyClasses;
 	
 private:
 	UFUNCTION()

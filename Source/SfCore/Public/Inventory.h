@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "InputAction.h"
 #include "SfObject.h"
 #include "Inventory.generated.h"
 
@@ -130,11 +131,12 @@ protected:
 
 	virtual void BeginDestroy() override;
 
+	//These must be registered with the FormCharacterComponent first.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	TArray<FName> InputBindings;
+	TArray<UInputAction*> OrderedInputBindings;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	TArray<TSubclassOf<USlotable>> InitialSlotableClasses;
+	TArray<TSubclassOf<USlotable>> InitialOrderedSlotableClasses;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	TArray<TSubclassOf<UCardObject>> InitialSharedCardClassesInfiniteLifetime;
@@ -166,6 +168,10 @@ protected:
 private:
 	UPROPERTY(Replicated, VisibleAnywhere)
 	TArray<USlotable*> Slotables;
+
+	TArray<int8> OrderedInputBindingIndices;
+
+	TBitArray<> OrderedLastInputState;
 
 	//Does not synchronize to owner as owner should have it be predicted.
 	UPROPERTY(Replicated)
