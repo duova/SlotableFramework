@@ -19,12 +19,41 @@ class SFCORE_API USfQuery : public UObject
 	GENERATED_BODY()
 
 public:
+	USfQuery();
+	
 	virtual void PerformCheck(float DeltaTime);
 
 	virtual void Initialize();
 
 	virtual void Deinitialize();
 };
+
+//This is an example of how an SfQuery is implemented.
+/*
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDeath, bool, bDidInFactDie);
+
+UCLASS()
+class SFCORE_API UDeathQuery : public USfQuery
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintAssignable)
+	FOnDeath OnDeath;
+
+public:
+
+	UDeathQuery();
+	
+	virtual void PerformCheck(float DeltaTime) override;
+
+	virtual void Initialize() override;
+
+	virtual void Deinitialize() override;
+
+	UFUNCTION(BlueprintPure)
+	static UDeathQuery* CastToDeathQuery(USfQuery* Query);
+};
+*/
 
 /**
  * The form query component holds instances of subclasses of FSfQuery, and is responsible for their execution. Each
@@ -36,6 +65,8 @@ class SFCORE_API UFormQueryComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
+	friend class UConstituent;
+	
 public:
 	// Sets default values for this component's properties
 	UFormQueryComponent();

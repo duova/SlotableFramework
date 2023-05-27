@@ -142,6 +142,7 @@ void UConstituent::ClientInitialize()
 	{
 		FormCore->ConstituentRegistry.Add(this);
 	}
+	Client_Initialize();
 }
 
 void UConstituent::ServerInitialize()
@@ -153,11 +154,12 @@ void UConstituent::ServerInitialize()
 		FormCore->ConstituentRegistry.Add(this);
 		FormCore->GetFormQuery()->RegisterQueryDependencies(QueryDependencyClasses);
 	}
-	//Call events.
+	Server_Initialize();
 }
 
 void UConstituent::ClientDeinitialize()
 {
+	Client_Deinitialize();
 	if (FormCore)
 	{
 		FormCore->ConstituentRegistry.Remove(this);
@@ -166,6 +168,7 @@ void UConstituent::ClientDeinitialize()
 
 void UConstituent::ServerDeinitialize()
 {
+	Server_Deinitialize();
 	if (FormCore)
 	{
 		FormCore->GetFormQuery()->UnregisterQueryDependencies(QueryDependencyClasses);
@@ -175,7 +178,6 @@ void UConstituent::ServerDeinitialize()
 	{
 		OwningSlotable->OwningInventory->RemoveCardsOfOwner(InstanceId);
 	}
-	//Call events.
 }
 
 void UConstituent::ExecuteAction(const uint8 ActionId, const bool bIsPredictableContext)
@@ -284,10 +286,10 @@ void UConstituent::IncrementTimeSincePredictedLastActionSet(const float Time)
 	TimeSincePredictedLastActionSet.SetFloat(TimeSincePredictedLastActionSet.GetFloat() + Time);
 }
 
-USfQuery* UConstituent::GetQuery(const TSubclassOf<USfQuery>& QueryClass) const
+USfQuery* UConstituent::GetQuery(const TSubclassOf<USfQuery> QueryClass) const
 {
 	if (!FormCore || !FormCore->GetFormQuery()) return nullptr;
-	for (const TPair<USfQuery*, uint16> Pair : FormCore->GetFormQuery())
+	for (const TPair<USfQuery*, uint16>& Pair : FormCore->GetFormQuery()->ActiveQueryDependentCountPair)
 	{
 		if (Pair.Key->GetClass() == QueryClass->GetClass())
 		{

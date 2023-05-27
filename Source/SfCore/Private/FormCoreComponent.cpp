@@ -13,6 +13,7 @@
 
 UFormCoreComponent::UFormCoreComponent()
 {
+	if (!GetOwner()) return;
 	PrimaryComponentTick.bCanEverTick = false;
 	bReplicateUsingRegisteredSubObjectList = true;
 	SetIsReplicatedByDefault(true);
@@ -31,12 +32,9 @@ UFormQueryComponent* UFormCoreComponent::GetFormQuery() const
 void UFormCoreComponent::BeginPlay()
 {
 	Super::BeginPlay();
-
-	if (GetOwner())
-	{
-		FormCharacter = Cast<UFormCharacterComponent>(GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()));
-		FormQuery = Cast<UFormQueryComponent>(GetOwner()->FindComponentByClass(UFormQueryComponent::StaticClass()));
-	}
+	if (!GetOwner()) return;
+	FormCharacter = Cast<UFormCharacterComponent>(GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()));
+	FormQuery = Cast<UFormQueryComponent>(GetOwner()->FindComponentByClass(UFormQueryComponent::StaticClass()));
 	
 	if (FormCharacter)
 	{

@@ -33,10 +33,10 @@ public:
 	/**
 	 * Read-only copy of constituents.
 	 */
-	UFUNCTION(BlueprintGetter)
+	UFUNCTION(BlueprintPure)
 	TArray<UConstituent*> GetConstituents();
 	
-	UFUNCTION(BlueprintGetter)
+	UFUNCTION(BlueprintPure)
 	TArray<UConstituent*> GetConstituentsOfClass(const TSubclassOf<UConstituent> ConstituentClass);
 
 	void ClientInitialize();
@@ -46,6 +46,18 @@ public:
 	void ClientDeinitialize();
 
 	void ServerDeinitialize();
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void Client_Initialize();
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void Server_Initialize();
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void Client_Deinitialize();
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void Server_Deinitialize();
 
 	void AssignConstituentInstanceId(UConstituent* Constituent);
 

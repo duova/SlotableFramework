@@ -12,6 +12,7 @@
 
 UInventory::UInventory()
 {
+	if (!GetOwner()) return;
 	//We can directly init here because when the constructor is called, the object should have a reference to its outer.
 	ClientInitialize();
 }
@@ -40,6 +41,7 @@ void UInventory::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifeti
 void UInventory::BeginDestroy()
 {
 	UObject::BeginDestroy();
+	if (!GetOwner()) return;
 	if (HasAuthority())
 	{
 		for (uint8 i = 0; i < Slotables.Num(); i++)
@@ -593,7 +595,7 @@ void UInventory::ClientInitialize()
 			OrderedLastInputState.Add(false);
 		}
 	}
-	//Call events.
+	Client_Initialize();
 	bInitialized = true;
 }
 
@@ -638,20 +640,20 @@ void UInventory::ServerInitialize()
 		MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
 		MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
 	}
-	//Call events.
+	Server_Initialize();
 	bInitialized = true;
 }
 
 void UInventory::ClientDeinitialize()
 {
+	Client_Deinitialize();
 	bInitialized = false;
-	//Call events.
 }
 
 void UInventory::ServerDeinitialize()
 {
+	Server_Deinitialize();
 	bInitialized = false;
-	//Call events.
 }
 
 void UInventory::AssignConstituentInstanceId(UConstituent* Constituent)

@@ -444,6 +444,7 @@ bool FSfMoveResponseDataContainer::Serialize(UCharacterMovementComponent& Charac
 
 UFormCharacterComponent::UFormCharacterComponent()
 {
+	if (!GetOwner()) return;
 	SetNetworkMoveDataContainer(SfNetworkMoveDataContainer);
 	SetMoveResponseDataContainer(SfMoveResponseDataContainer);
 }
@@ -591,6 +592,7 @@ void UFormCharacterComponent::OnInputUp(const FInputActionInstance& Instance)
 void UFormCharacterComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	if (!GetOwner()) return;
 }
 
 void UFormCharacterComponent::UpdateFromCompressedFlags(uint8 Flags)

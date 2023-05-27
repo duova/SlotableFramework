@@ -3,6 +3,22 @@
 
 #include "FormQueryComponent.h"
 
+USfQuery::USfQuery()
+{
+}
+
+void USfQuery::PerformCheck(float DeltaTime)
+{
+}
+
+void USfQuery::Initialize()
+{
+}
+
+void USfQuery::Deinitialize()
+{
+}
+
 UFormQueryComponent::UFormQueryComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
@@ -10,6 +26,7 @@ UFormQueryComponent::UFormQueryComponent()
 
 void UFormQueryComponent::RegisterQueryImpl(const TSubclassOf<USfQuery> QueryClass)
 {
+	if (!GetOwner()) return;
 	//We check if existing query exists.
 	bool bHasQuery = false;
 	for (TPair<USfQuery*, uint16>& Pair : ActiveQueryDependentCountPair)
@@ -80,7 +97,7 @@ void UFormQueryComponent::UnregisterQueryDependencies(const TArray<TSubclassOf<U
 void UFormQueryComponent::BeginPlay()
 {
 	Super::BeginPlay();
-	
+	if (!GetOwner()) return;
 }
 
 void UFormQueryComponent::TickComponent(float DeltaTime, ELevelTick TickType,

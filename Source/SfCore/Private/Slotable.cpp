@@ -9,6 +9,7 @@
 
 USlotable::USlotable()
 {
+	if (!GetOwner()) return;
 	if (HasAuthority())
 	{
 		checkf(InitialConstituentClasses.Num() < 33, TEXT("Only 32 constituents can be in a slotable."));
@@ -62,7 +63,7 @@ TArray<UConstituent*> USlotable::GetConstituentsOfClass(const TSubclassOf<UConst
 
 void USlotable::ClientInitialize()
 {
-	//Call events.
+	Client_Initialize();
 }
 
 void USlotable::ServerInitialize()
@@ -71,17 +72,17 @@ void USlotable::ServerInitialize()
 	{
 		ServerInitializeConstituent(Constituent);
 	}
-	//Call events.
+	Server_Initialize();
 }
 
 void USlotable::ClientDeinitialize()
 {
-	//Call events.
+	Client_Deinitialize();
 }
 
 void USlotable::ServerDeinitialize()
 {
-	//Call events.
+	Server_Deinitialize();
 	for (UConstituent* Constituent : Constituents)
 	{
 		ServerDeinitializeConstituent(Constituent);
@@ -96,6 +97,7 @@ void USlotable::AssignConstituentInstanceId(UConstituent* Constituent)
 void USlotable::BeginDestroy()
 {
 	Super::BeginDestroy();
+	if (!GetOwner()) return;
 	if (HasAuthority())
 	{
 		for (int32 i = 0; i < Constituents.Num(); i++)

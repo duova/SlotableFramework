@@ -32,7 +32,7 @@ public:
 	/**
 	 * Read-only copy of inventories.
 	 */
-	UFUNCTION(BlueprintGetter)
+	UFUNCTION(BlueprintPure)
 	TArray<UInventory*> GetInventories();
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
@@ -48,7 +48,7 @@ public:
 	
 	void ClientSetToThirdPerson();
 
-	UFUNCTION(BlueprintGetter)
+	UFUNCTION(BlueprintPure)
 	bool IsFirstPerson();
 
 	//TODO

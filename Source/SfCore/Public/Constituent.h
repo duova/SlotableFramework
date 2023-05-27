@@ -142,6 +142,7 @@ public:
 	uint8 bEnableInputsAndPrediction:1;
 
 	//Note: Slotables should async load all assets on init and unload on deinit.
+	
 	void ClientInitialize();
 
 	void ServerInitialize();
@@ -149,6 +150,18 @@ public:
 	void ClientDeinitialize();
 
 	void ServerDeinitialize();
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void Client_Initialize();
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void Server_Initialize();
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void Client_Deinitialize();
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void Server_Deinitialize();
 	
 	UFUNCTION(BlueprintCallable)
 	void ExecuteAction(const uint8 ActionId, const bool bIsPredictableContext);
@@ -179,7 +192,7 @@ public:
 
 	static void ErrorIfIdNotWithinRange(const uint8 Id);
 
-	UFUNCTION(BlueprintGetter)
+	UFUNCTION(BlueprintPure)
 	uint8 GetInstanceId() const;
 	
 	UFUNCTION()
@@ -187,8 +200,10 @@ public:
 
 	void IncrementTimeSincePredictedLastActionSet(float Time);
 
-	UFUNCTION(BlueprintGetter)
-	USfQuery* GetQuery(const TSubclassOf<USfQuery>& QueryClass) const;
+	//Returns the query of QueryClass.
+	//This needs to be casted to the class to get the event from the query.
+	UFUNCTION(BlueprintPure)
+	USfQuery* GetQuery(const TSubclassOf<USfQuery> QueryClass) const;
 
 	//Unique identifier within each inventory.
 	UPROPERTY(Replicated)

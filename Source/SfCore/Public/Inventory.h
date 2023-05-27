@@ -32,13 +32,13 @@ public:
 	/**
 	 * Read-only copy of slotables.
 	 */
-	UFUNCTION(BlueprintGetter)
+	UFUNCTION(BlueprintPure)
 	TArray<USlotable*> GetSlotables();
 
 	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)
 	class UFormCoreComponent* OwningFormCore;
 
-	UFUNCTION(BlueprintGetter)
+	UFUNCTION(BlueprintPure)
 	TArray<USlotable*> GetSlotablesOfType(const TSubclassOf<USlotable>& SlotableClass);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
@@ -110,7 +110,7 @@ public:
 	float GetOwnedCardLifetime(const TSubclassOf<UCardObject>& CardClass, const uint8 InOwnerConstituentInstanceId);
 
 	//Only on client.
-	UFUNCTION(BlueprintGetter)
+	UFUNCTION(BlueprintPure)
 	TArray<UCardObject*> GetCardObjects(const TSubclassOf<UCardObject>& CardClass);
 
 	void ClientInitialize();
@@ -120,6 +120,18 @@ public:
 	void ClientDeinitialize();
 
 	void ServerDeinitialize();
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void Client_Initialize();
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void Server_Initialize();
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void Client_Deinitialize();
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void Server_Deinitialize();
 
 	void AssignConstituentInstanceId(UConstituent* Constituent);
 
