@@ -8,7 +8,9 @@
 #include "Inventory.h"
 #include "Slotable.h"
 #include "FormCharacterComponent.h"
+#include "SfHealthComponent.h"
 #include "FormQueryComponent.h"
+#include "FormStatComponent.h"
 #include "Net/UnrealNetwork.h"
 
 UFormCoreComponent::UFormCoreComponent()
@@ -29,16 +31,38 @@ UFormQueryComponent* UFormCoreComponent::GetFormQuery() const
 	return FormQuery;
 }
 
+USfHealthComponent* UFormCoreComponent::GetHealth() const
+{
+	return SfHealth;
+}
+
+UFormStatComponent* UFormCoreComponent::GetFormStat() const
+{
+	return FormStat;
+}
+
 void UFormCoreComponent::BeginPlay()
 {
 	Super::BeginPlay();
 	if (!GetOwner()) return;
 	FormCharacter = Cast<UFormCharacterComponent>(GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()));
 	FormQuery = Cast<UFormQueryComponent>(GetOwner()->FindComponentByClass(UFormQueryComponent::StaticClass()));
+	SfHealth = Cast<USfHealthComponent>(GetOwner()->FindComponentByClass(USfHealthComponent::StaticClass()));
+	FormStat = Cast<UFormStatComponent>(GetOwner()->FindComponentByClass(UFormStatComponent::StaticClass()));
 	
 	if (FormCharacter)
 	{
 		FormCharacter->SetupFormCharacter(this);
+	}
+
+	if (SfHealth)
+	{
+		SfHealth->SetupSfHealth(this);
+	}
+
+	if (FormQuery)
+	{
+		FormQuery->SetupFormQuery(this);
 	}
 	
 	//This is used to narrow down the classes that need to be iterated through when serializing card classes with names.
@@ -51,8 +75,8 @@ void UFormCoreComponent::BeginPlay()
 				AllCardObjectClassesSortedByName.Add(*It);
 			}
 		}
-		//We sort this in a deterministic order (given elements are the same) to index items.
-		AllCardObjectClassesSortedByName.Sort([](const UClass& A, const UClass& B) { return A.GetName() > B.GetName(); });
+		//We sort this in a deterministic order to index items.
+		AllCardObjectClassesSortedByName.Sort([](const UClass& A, const UClass& B) { return A.GetFullName() > B.GetFullName(); });
 		CardObjectClassesFetched = true;
 	}
 

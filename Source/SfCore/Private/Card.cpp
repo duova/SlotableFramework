@@ -30,7 +30,7 @@ FCard::FCard(const TSubclassOf<UCardObject>& CardClass, const ECardType CardType
 	{
 		for (uint16 i = 0; i < UFormCoreComponent::GetAllCardObjectClassesSortedByName().Num(); i++)
 		{
-			if (UFormCoreComponent::GetAllCardObjectClassesSortedByName()[i] == Class->GetClass())
+			if (UFormCoreComponent::GetAllCardObjectClassesSortedByName()[i] == Class.Get())
 			{
 				ClassIndex = i;
 				break;

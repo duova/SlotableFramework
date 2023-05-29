@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Constituent.h"
 #include "InputAction.h"
 #include "SfObject.h"
 #include "Inventory.generated.h"
@@ -42,7 +43,7 @@ public:
 	TArray<USlotable*> GetSlotablesOfType(const TSubclassOf<USlotable>& SlotableClass);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	USlotable* Server_AddSlotable(const TSubclassOf<USlotable>& SlotableClass);
+	USlotable* Server_AddSlotable(const TSubclassOf<USlotable>& SlotableClass, UConstituent* Origin);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	bool Server_RemoveSlotable(USlotable* Slotable, const bool bRemoveSlot);
@@ -51,10 +52,10 @@ public:
 	void Server_RemoveSlotableByIndex(const int32 Index, const bool bRemoveSlot);
 	
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	USlotable* Server_SetSlotable(const TSubclassOf<USlotable>& SlotableClass, const int32 Index, const bool bSlotMustBeNullOrEmpty);
+	USlotable* Server_SetSlotable(const TSubclassOf<USlotable>& SlotableClass, const int32 Index, const bool bSlotMustBeNullOrEmpty, UConstituent* Origin);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	USlotable* Server_InsertSlotable(const TSubclassOf<USlotable>& SlotableClass, const int32 Index);
+	USlotable* Server_InsertSlotable(const TSubclassOf<USlotable>& SlotableClass, const int32 Index, UConstituent* Origin);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	bool Server_SwapSlotables(USlotable* SlotableA, USlotable* SlotableB);
@@ -170,7 +171,7 @@ protected:
 	/**
 	 * Called after a slotable is added to an inventory.
 	 */
-	void InitializeSlotable(USlotable* Slotable);
+	void InitializeSlotable(USlotable* Slotable, UConstituent* Origin);
 
 	/**
 	 * Called before a slotable is removed from an inventory.

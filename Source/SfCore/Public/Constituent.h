@@ -127,8 +127,10 @@ class SFCORE_API UConstituent : public USfObject
 {
 	GENERATED_BODY()
 
+	friend class UInventory;
+	
 public:
-
+	
 	UConstituent();
 	
 	virtual void BeginDestroy() override;
@@ -194,6 +196,13 @@ public:
 
 	UFUNCTION(BlueprintPure)
 	uint8 GetInstanceId() const;
+
+	//Trace originating constituent until nullptr and then find the form core.
+	UFUNCTION(BlueprintPure)
+	UConstituent* GetTrueOriginatingConstituent() const;
+
+	UFUNCTION(BlueprintPure)
+	UConstituent* GetOriginatingConstituent() const;
 	
 	UFUNCTION()
 	void OnRep_LastActionSet();
@@ -245,6 +254,9 @@ private:
 
 	UPROPERTY()
 	UFormCoreComponent* FormCore;
+
+	UPROPERTY(Replicated)
+	UConstituent* OriginatingConstituent;
 	
 	//In case the naming is confusing:
 	//On the server, neither "time since" is relevant because actions are always executed instantly. On the simulated proxy,

@@ -189,7 +189,7 @@ bool UInventory::HasSlotable(const TSubclassOf<USlotable>& SlotableClass)
 uint8 UInventory::SlotableCount(const TSubclassOf<USlotable>& SlotableClass)
 {
 	uint8 Value = 0;
-	for (USlotable* Slotable : Slotables)
+	for (const USlotable* Slotable : Slotables)
 	{
 		if (Slotable->GetClass() == SlotableClass) Value++;
 	}
@@ -250,7 +250,7 @@ TArray<UCardObject*> UInventory::GetCardObjects(const TSubclassOf<UCardObject>& 
 	return Objects;
 }
 
-USlotable* UInventory::Server_AddSlotable(const TSubclassOf<USlotable>& SlotableClass)
+USlotable* UInventory::Server_AddSlotable(const TSubclassOf<USlotable>& SlotableClass, UConstituent* Origin)
 {
 	ErrorIfNoAuthority();
 	checkf(bIsDynamic, TEXT("Attempted to add slotable to static inventory."));
@@ -263,7 +263,7 @@ USlotable* UInventory::Server_AddSlotable(const TSubclassOf<USlotable>& Slotable
 	USlotable* SlotableInstance = CreateUninitializedSlotable(SlotableClass);
 	Slotables.Add(SlotableInstance);
 	SlotableInstance->OwningInventory = this;
-	InitializeSlotable(SlotableInstance);
+	InitializeSlotable(SlotableInstance, Origin);
 	ConstituentCount += SlotableInstance->GetConstituents().Num();
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
 	return SlotableInstance;
@@ -301,13 +301,13 @@ void UInventory::Server_RemoveSlotableByIndex(const int32 Index, const bool bRem
 	}
 	else
 	{
-		Server_SetSlotable(EmptySlotableClass, Index, false);
+		Server_SetSlotable(EmptySlotableClass, Index, false, nullptr);
 	}
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
 }
 
 USlotable* UInventory::Server_SetSlotable(const TSubclassOf<USlotable>& SlotableClass, const int32 Index,
-                                          const bool bSlotMustBeNullOrEmpty)
+                                          const bool bSlotMustBeNullOrEmpty, UConstituent* Origin)
 {
 	ErrorIfNoAuthority();
 	checkf(!bIsChangeLocked, TEXT("Attempted to set a slotable in a change locked inventory."));
@@ -326,12 +326,12 @@ USlotable* UInventory::Server_SetSlotable(const TSubclassOf<USlotable>& Slotable
 	}
 	USlotable* SlotableInstance = CreateUninitializedSlotable(SlotableClass);
 	Slotables[Index] = SlotableInstance;
-	InitializeSlotable(SlotableInstance);
+	InitializeSlotable(SlotableInstance, Origin);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
 	return SlotableInstance;
 }
 
-USlotable* UInventory::Server_InsertSlotable(const TSubclassOf<USlotable>& SlotableClass, const int32 Index)
+USlotable* UInventory::Server_InsertSlotable(const TSubclassOf<USlotable>& SlotableClass, const int32 Index, UConstituent* Origin)
 {
 	ErrorIfNoAuthority();
 	checkf(bIsDynamic, TEXT("Attempted to insert slotable into a static inventory."));
@@ -339,7 +339,7 @@ USlotable* UInventory::Server_InsertSlotable(const TSubclassOf<USlotable>& Slota
 	checkf(Index < 0 || Index >= Slotables.Num(), TEXT("Attempted to insert slotable with an index out of range."));
 	USlotable* SlotableInstance = CreateUninitializedSlotable(SlotableClass);
 	Slotables.Insert(SlotableInstance, Index);
-	InitializeSlotable(SlotableInstance);
+	InitializeSlotable(SlotableInstance, Origin);
 	ConstituentCount += SlotableInstance->GetConstituents().Num();
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
 	return SlotableInstance;
@@ -364,13 +364,16 @@ void UInventory::Server_SwapSlotablesByIndex(const int32 IndexA, const int32 Ind
 	checkf(IndexA != IndexB, TEXT("Attempted to swap slotable with itself."));
 	checkf(Slotables[IndexA] && Slotables[IndexB],
 	       TEXT("Attempted to swap slotables with index referring to a nullptr"));
+	//We can just use last because all originating constituents in all constituents should be the same.
+	UConstituent* OriginA = Slotables[IndexA]->GetConstituents().Last()->GetOriginatingConstituent();
+	UConstituent* OriginB = Slotables[IndexB]->GetConstituents().Last()->GetOriginatingConstituent();
 	DeinitializeSlotable(Slotables[IndexA]);
 	DeinitializeSlotable(Slotables[IndexB]);
 	USlotable* TempSlotablePtr = Slotables[IndexA];
 	Slotables[IndexA] = Slotables[IndexB];
 	Slotables[IndexB] = TempSlotablePtr;
-	InitializeSlotable(Slotables[IndexA]);
-	InitializeSlotable(Slotables[IndexB]);
+	InitializeSlotable(Slotables[IndexA], OriginB);
+	InitializeSlotable(Slotables[IndexB], OriginA);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
 }
 
@@ -382,6 +385,9 @@ void UInventory::Server_TradeSlotablesBetweenInventories(USlotable* SlotableA, U
 	checkf(SlotableA != SlotableB, TEXT("Attempted to trade slotable with itself."));
 	UInventory* InventoryA = SlotableA->OwningInventory;
 	UInventory* InventoryB = SlotableB->OwningInventory;
+	//We can just use last because all originating constituents in all constituents should be the same.
+	UConstituent* OriginA = SlotableA->GetConstituents().Last()->GetOriginatingConstituent();
+	UConstituent* OriginB = SlotableB->GetConstituents().Last()->GetOriginatingConstituent();
 	const int8 IndexA = InventoryA->GetSlotables().Find(SlotableA);
 	const int8 IndexB = InventoryB->GetSlotables().Find(SlotableB);
 	checkf(!InventoryA->bIsChangeLocked && !InventoryB->bIsChangeLocked,
@@ -393,8 +399,8 @@ void UInventory::Server_TradeSlotablesBetweenInventories(USlotable* SlotableA, U
 	//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
 	SlotableA->Destroy();
 	SlotableB->Destroy();
-	InitializeSlotable(InventoryA->Slotables[IndexA]);
-	InitializeSlotable(InventoryB->Slotables[IndexB]);
+	InitializeSlotable(InventoryA->Slotables[IndexA], OriginB);
+	InitializeSlotable(InventoryB->Slotables[IndexB], OriginA);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, InventoryA);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, InventoryB);
 }
@@ -620,7 +626,7 @@ void UInventory::ServerInitialize()
 		{
 			USlotable* SlotableInstance = CreateUninitializedSlotable(SlotableClass);
 			Slotables.Add(SlotableInstance);
-			InitializeSlotable(SlotableInstance);
+			InitializeSlotable(SlotableInstance, nullptr);
 		}
 		for (uint8 i = 0; i < InitialSharedCardClassesInfiniteLifetime.Num(); i++)
 		{
@@ -703,12 +709,17 @@ void UInventory::RemoveCardsOfOwner(const uint8 OwnerConstituentInstanceId)
 }
 
 //Must be called after the slotable has been placed in an inventory.
-void UInventory::InitializeSlotable(USlotable* Slotable)
+void UInventory::InitializeSlotable(USlotable* Slotable, UConstituent* Origin)
 {
 	if (!GetOwner()) return;
 	GetOwner()->AddReplicatedSubObject(Slotable);
 	Slotable->OwningInventory = this;
 	MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, OwningInventory, Slotable);
+	for (UConstituent* Constituent : Slotable->GetConstituents())
+	{
+		Constituent->OriginatingConstituent = Origin;
+		MARK_PROPERTY_DIRTY_FROM_NAME(UConstituent, OriginatingConstituent, Constituent);
+	}
 	Slotable->ServerInitialize();
 }
 

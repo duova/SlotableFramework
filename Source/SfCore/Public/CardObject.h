@@ -38,13 +38,19 @@ public:
 	
 	uint16 OwnerConstituentInstanceId;
 
+	//Initial +- to movement speed.
 	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	float DeltaMovementSpeed;
-	
-	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	float DeltaMultiplicativeMovementSpeed;
+	float AdditiveMovementSpeedModifier;
 
-	//Multiplies the product instead of adding to the multiplier.
+	//Movement speed is multiplied by (sums of these values + 1).
 	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	float SecondDegreeDeltaMultiplicativeMovementSpeed;
+	float AdditiveMultiplicativeMovementSpeedModifier;
+
+	//Directly multiplies movement speed by this value, after additive multiplicative. Multiple values multiply.
+	UPROPERTY(BlueprintReadOnly, EditAnywhere)
+	float TrueMultiplicativeMovementSpeedModifier;
+
+	//+- to movement speed after all other modifications.
+	UPROPERTY(BlueprintReadOnly, EditAnywhere)
+	float FlatAdditiveMovementSpeedModifier;
 };

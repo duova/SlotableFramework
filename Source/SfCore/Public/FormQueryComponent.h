@@ -6,6 +6,7 @@
 #include "Components/ActorComponent.h"
 #include "FormQueryComponent.generated.h"
 
+class UFormCoreComponent;
 /**
  * SfQueries are to be extended in native code and they exist to perform ticked checks for constituents, providing a modular
  * way for constituents to have ticked event calls. Each SfQuery must declare its own dynamic delegate and create a member that
@@ -21,7 +22,7 @@ class SFCORE_API USfQuery : public UObject
 public:
 	USfQuery();
 	
-	virtual void PerformCheck(float DeltaTime);
+	virtual void PerformCheck(float DeltaTime, UFormCoreComponent* FormCore);
 
 	virtual void Initialize();
 
@@ -68,25 +69,28 @@ class SFCORE_API UFormQueryComponent : public UActorComponent
 	friend class UConstituent;
 	
 public:
-	// Sets default values for this component's properties
 	UFormQueryComponent();
 
 	void RegisterQueryDependencies(const TArray<TSubclassOf<USfQuery>>& Queries);
 
 	void UnregisterQueryDependencies(const TArray<TSubclassOf<USfQuery>>& Queries);
+	
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
+							   FActorComponentTickFunction* ThisTickFunction) override;
+
+	void SetupFormQuery(UFormCoreComponent* InFormCore);
 
 protected:
-	// Called when the game starts
 	virtual void BeginPlay() override;
 
 	//Active queries and the number of constituents that depend on it.
 	UPROPERTY()
 	TMap<USfQuery*, uint16> ActiveQueryDependentCountPair;
+	
+	UPROPERTY()
+	UFormCoreComponent* FormCore;
 
-public:
-	// Called every frame
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
-	                           FActorComponentTickFunction* ThisTickFunction) override;
+private:
 
 	void RegisterQueryImpl(TSubclassOf<USfQuery> QueryClass);
 

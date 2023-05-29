@@ -6,6 +6,6 @@ public class SfCore : ModuleRules
 {
 	public SfCore(ReadOnlyTargetRules Target) : base(Target)
 	{
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "NetCore", "EnhancedInput" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "NetCore", "EnhancedInput", "GameplayTags" });
 	}
 }

@@ -418,7 +418,7 @@ public:
 	//Movement inputs.
 	uint8 bWantsToSprint:1;
 
-	//Number of input sets to enable.
+	//Number of input sets to enable, this is automatically set based on how many inputs are registered.
 	uint8 EnabledInputSets:2;
 
 	//Additional inputs.

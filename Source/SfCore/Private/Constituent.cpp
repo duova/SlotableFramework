@@ -123,6 +123,7 @@ void UConstituent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, OwningSlotable, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, LastActionSet, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, LastActionSetTimestamp, DefaultParams);
+	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, OriginatingConstituent, DefaultParams);
 }
 
 void UConstituent::OnRep_OwningSlotable()
@@ -253,6 +254,27 @@ uint8 UConstituent::GetInstanceId() const
 	return InstanceId;
 }
 
+UConstituent* UConstituent::GetTrueOriginatingConstituent() const
+{
+	//We search down the constituent origin chain and return the last constituent.
+	UConstituent* CurrentConstituent = const_cast<UConstituent*>(this);
+	UConstituent* CheckedOriginatingConstituent = OriginatingConstituent;
+	while (true)
+	{
+		if (CheckedOriginatingConstituent == nullptr)
+		{
+			return CurrentConstituent;
+		}
+		CurrentConstituent = CheckedOriginatingConstituent;
+		CheckedOriginatingConstituent = CheckedOriginatingConstituent->OriginatingConstituent;
+	}
+}
+
+UConstituent* UConstituent::GetOriginatingConstituent() const
+{
+	return OriginatingConstituent;
+}
+
 void UConstituent::OnRep_LastActionSet()
 {
 	if (!FormCore) return;
@@ -291,10 +313,11 @@ USfQuery* UConstituent::GetQuery(const TSubclassOf<USfQuery> QueryClass) const
 	if (!FormCore || !FormCore->GetFormQuery()) return nullptr;
 	for (const TPair<USfQuery*, uint16>& Pair : FormCore->GetFormQuery()->ActiveQueryDependentCountPair)
 	{
-		if (Pair.Key->GetClass() == QueryClass->GetClass())
+		if (Pair.Key->GetClass() == QueryClass.Get())
 		{
 			return Pair.Key;
 		}
 	}
+	UE_LOG(LogTemp, Error, TEXT("GetQuery could not find query. Is the query a dependency of the constituent?"))
 	return nullptr;
 }

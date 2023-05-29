@@ -6,6 +6,8 @@
 #include "Components/ActorComponent.h"
 #include "FormCoreComponent.generated.h"
 
+class UFormStatComponent;
+class USfHealthComponent;
 class UFormQueryComponent;
 class UFormCharacterComponent;
 class UConstituent;
@@ -73,6 +75,10 @@ public:
 
 	UFormQueryComponent* GetFormQuery() const;
 
+	USfHealthComponent* GetHealth() const;
+
+	UFormStatComponent* GetFormStat() const;
+
 	UPROPERTY()
 	TArray<UConstituent*> ConstituentRegistry;
 
@@ -100,4 +106,10 @@ private:
 
 	UPROPERTY()
 	UFormQueryComponent* FormQuery;
+
+	UPROPERTY()
+	USfHealthComponent* SfHealth;
+
+	UPROPERTY()
+	UFormStatComponent* FormStat;
 };

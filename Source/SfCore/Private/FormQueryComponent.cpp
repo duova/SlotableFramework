@@ -7,7 +7,7 @@ USfQuery::USfQuery()
 {
 }
 
-void USfQuery::PerformCheck(float DeltaTime)
+void USfQuery::PerformCheck(float DeltaTime, UFormCoreComponent* FormCore)
 {
 }
 
@@ -31,7 +31,7 @@ void UFormQueryComponent::RegisterQueryImpl(const TSubclassOf<USfQuery> QueryCla
 	bool bHasQuery = false;
 	for (TPair<USfQuery*, uint16>& Pair : ActiveQueryDependentCountPair)
 	{
-		if (Pair.Key->GetClass() == QueryClass->GetClass())
+		if (Pair.Key->GetClass() == QueryClass.Get())
 		{
 			bHasQuery = true;
 			//Increment the number of dependents if it exists.
@@ -63,7 +63,7 @@ void UFormQueryComponent::UnregisterQueryImpl(const TSubclassOf<USfQuery> QueryC
 	USfQuery* ToRemove = nullptr;
 	for (TPair<USfQuery*, uint16>& Pair : ActiveQueryDependentCountPair)
 	{
-		if (Pair.Key->GetClass() == QueryClass->GetClass())
+		if (Pair.Key->GetClass() == QueryClass.Get())
 		{
 			//Decrease the number of dependents only if it is more than 1.
 			if (Pair.Value > 1)
@@ -109,7 +109,12 @@ void UFormQueryComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	if (!GetOwner()->HasAuthority()) return;
 	for (const TPair<USfQuery*, uint16>& Pair : ActiveQueryDependentCountPair)
 	{
-		Pair.Key->PerformCheck(DeltaTime);
+		Pair.Key->PerformCheck(DeltaTime, FormCore);
 	}
+}
+
+void UFormQueryComponent::SetupFormQuery(UFormCoreComponent* InFormCore)
+{
+	FormCore = InFormCore;
 }
 
