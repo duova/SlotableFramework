@@ -6,16 +6,3 @@
 UCardObject::UCardObject()
 {
 }
-
-void UCardObject::BeginDestroy()
-{
-	UObject::BeginDestroy();
-}
-
-void UCardObject::Initialize()
-{
-}
-
-void UCardObject::Deinitialize()
-{
-}

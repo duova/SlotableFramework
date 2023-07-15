@@ -16,22 +16,22 @@ struct SFCORE_API FActionSet
 {
 	GENERATED_BODY()
 
-	uint8 NumActionsIncludingZero; //Serialized to 2 bits.
+	uint8 NumActionsIncludingZero = 0; //Serialized to 2 bits.
 
-	uint8 ActionZero; //Serialized to 6 bits.
+	uint8 ActionZero = 0; //Serialized to 6 bits.
 
-	uint8 ActionOne; //Serialized to 6 bits.
+	uint8 ActionOne = 0; //Serialized to 6 bits.
 
-	uint8 ActionTwo; //Serialized to 6 bits.
+	uint8 ActionTwo = 0; //Serialized to 6 bits.
 
-	uint8 ActionThree; //Serialized to 6 bits.
+	uint8 ActionThree = 0; //Serialized to 6 bits.
 
 	//Used for checking whether actions were performed in the same frame.
-	float WorldTime;
+	float WorldTime = 0;
 
 	//Since replication needs a variable to change in order to replicate and OnRep, we flip this bool when we want to
 	//force send changes.
-	uint8 bFlipToForceReplicate:1;
+	uint8 bFlipToForceReplicate:1 = false;
 
 	//Do not use default constructor.
 	FActionSet();
@@ -138,10 +138,10 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UPROPERTY(ReplicatedUsing = OnRep_OwningSlotable, Replicated, BlueprintReadOnly, VisibleAnywhere)
-	class USlotable* OwningSlotable;
+	class USlotable* OwningSlotable = nullptr;
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	uint8 bEnableInputsAndPrediction:1;
+	uint8 bEnableInputsAndPrediction:1 = false;
 
 	//Note: Slotables should async load all assets on init and unload on deinit.
 	
@@ -192,7 +192,7 @@ public:
 	UFUNCTION(BlueprintImplementableEvent)
 	void OnInputUp(const bool bIsPredictableContext);
 
-	static void ErrorIfIdNotWithinRange(const uint8 Id);
+	static bool IsIdWithinRange(const uint8 Id);
 
 	UFUNCTION(BlueprintPure)
 	uint8 GetInstanceId() const;
@@ -216,7 +216,7 @@ public:
 
 	//Unique identifier within each inventory.
 	UPROPERTY(Replicated)
-	uint8 InstanceId;
+	uint8 InstanceId = 0;
 
 	//We use ActionSet instead of just uint8 for multiple reasons. Most importantly we need to do so as more than one action
 	//can be executed within a frame. ActionSet allows us to work with up to four actions that execute in the same frame,
@@ -225,13 +225,13 @@ public:
 	
 	//This is changed during a predicted execution. Client version is sent to the server via FormCharacter, checked, added
 	//to LastActionSet of that frame, and corrected to the client if necessary.
-	FActionSet PredictedLastActionSet;
+	FActionSet PredictedLastActionSet = FActionSet();
 
 	//Set to true when we predict an action. Set to false when FormCharacter collects pending actions.
-	uint8 bPredictedLastActionSetUpdated:1;
+	uint8 bPredictedLastActionSetUpdated:1 = false;
 
 	//Used to know how long ago the last action took place so we can fast forward the effects after replay.
-	FUint16_Quantize100 TimeSincePredictedLastActionSet;
+	FUint16_Quantize100 TimeSincePredictedLastActionSet = FUint16_Quantize100();
 
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
@@ -241,22 +241,24 @@ private:
 	UFUNCTION()
 	void OnRep_OwningSlotable();
 
-	uint8 bAwaitingClientInit:1;
+	void SetFormCore();
+
+	uint8 bAwaitingClientInit:1 = true;
 
 	//Actions performed on the last frame any actions were performed.
 	UPROPERTY(Replicated, ReplicatedUsing = OnRep_LastActionSet)
-	FActionSet LastActionSet;
+	FActionSet LastActionSet = FActionSet();
 
 	//Only mark dirty when LastActionSet is changed. This is for replicating effects that started right before relevancy.
 	//Uses replicated non-compensated timestamp found in form core.
 	UPROPERTY(Replicated)
-	float LastActionSetTimestamp;
+	float LastActionSetTimestamp = 0;
 
 	UPROPERTY()
-	UFormCoreComponent* FormCore;
+	UFormCoreComponent* FormCore = nullptr;
 
 	UPROPERTY(Replicated)
-	UConstituent* OriginatingConstituent;
+	UConstituent* OriginatingConstituent = nullptr;
 	
 	//In case the naming is confusing:
 	//On the server, neither "time since" is relevant because actions are always executed instantly. On the simulated proxy,

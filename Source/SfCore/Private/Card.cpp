@@ -6,22 +6,16 @@
 #include "CardObject.h"
 #include "FormCharacterComponent.h"
 
-FCard::FCard(): ClassIndex(0), OwnerConstituentInstanceId(0), bUsingPredictedTimestamp(0), LifetimeEndTimestamp(0),
-                bIsNotCorrected(0),
-                bIsDisabledForDestroy(0),
-                ServerAwaitClientSyncTimeoutTimestamp(0)
+FCard::FCard()
 {
 }
 
-FCard::FCard(const TSubclassOf<UCardObject>& CardClass, const ECardType CardType, const uint8 InOwnerConstituentInstanceId,
-             UFormCharacterComponent* IfPredictedFormCharacter, UFormCoreComponent* IfServerFormCore, const float CustomLifetime):
-	Class(CardClass), ClassIndex(0),
-	OwnerConstituentInstanceId(InOwnerConstituentInstanceId),
-	bUsingPredictedTimestamp(0),
-	LifetimeEndTimestamp(0),
-	bIsNotCorrected(0),
-	bIsDisabledForDestroy(0),
-	ServerAwaitClientSyncTimeoutTimestamp(0)
+FCard::FCard(const TSubclassOf<UCardObject>& CardClass, const ECardType CardType,
+             const uint8 InOwnerConstituentInstanceId,
+             UFormCharacterComponent* NullUnlessUsingPredictedTimestampFormCharacter,
+             UFormCoreComponent* NullUnlessUsingServerTimestampFormCore, const float CustomLifetime):
+	Class(CardClass),
+	OwnerConstituentInstanceId(InOwnerConstituentInstanceId)
 {
 	const UCardObject* CardCDO = CardClass.GetDefaultObject();
 
@@ -37,7 +31,11 @@ FCard::FCard(const TSubclassOf<UCardObject>& CardClass, const ECardType CardType
 			}
 		}
 	}
-	
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("FCard has no CardObject."));
+	}
+
 	switch (CardType)
 	{
 	case ECardType::DoNotUseLifetime:
@@ -45,11 +43,20 @@ FCard::FCard(const TSubclassOf<UCardObject>& CardClass, const ECardType CardType
 		break;
 
 	case ECardType::UseDefaultLifetimePredictedTimestamp:
+		if (!CardCDO)
+		{
+			UE_LOG(LogTemp, Error, TEXT("FCard could not get CardObject CDO."));
+			break;
+		}
 		if (CardCDO->bUseLifetime)
 		{
 			bUsingPredictedTimestamp = true;
-			checkf(IfPredictedFormCharacter, TEXT("FCard constructor requires form character reference."));
-			LifetimeEndTimestamp = IfPredictedFormCharacter->
+			if (!NullUnlessUsingPredictedTimestampFormCharacter)
+			{
+				UE_LOG(LogTemp, Error, TEXT("FCard constructor requires form character reference."));
+				break;
+			}
+			LifetimeEndTimestamp = NullUnlessUsingPredictedTimestampFormCharacter->
 				CalculateFuturePredictedTimestamp(CardCDO->DefaultLifetime);
 		}
 		else
@@ -59,11 +66,21 @@ FCard::FCard(const TSubclassOf<UCardObject>& CardClass, const ECardType CardType
 		break;
 
 	case ECardType::UseDefaultLifetimeServerTimestamp:
+		if (!CardCDO)
+		{
+			UE_LOG(LogTemp, Error, TEXT("FCard could not get CardObject CDO."));
+			break;
+		}
 		if (CardCDO->bUseLifetime)
 		{
 			bUsingPredictedTimestamp = false;
-			checkf(IfServerFormCore, TEXT("FCard constructor requires form core reference."));
-			LifetimeEndTimestamp = IfServerFormCore->CalculateFutureServerTimestamp(CardCDO->DefaultLifetime);
+			if (!NullUnlessUsingServerTimestampFormCore)
+			{
+				UE_LOG(LogTemp, Error, TEXT("FCard constructor requires form core reference."));
+				break;
+			}
+			LifetimeEndTimestamp = NullUnlessUsingServerTimestampFormCore->CalculateFutureServerTimestamp(
+				CardCDO->DefaultLifetime);
 		}
 		else
 		{
@@ -73,14 +90,23 @@ FCard::FCard(const TSubclassOf<UCardObject>& CardClass, const ECardType CardType
 
 	case ECardType::UseCustomLifetimePredictedTimestamp:
 		bUsingPredictedTimestamp = true;
-		checkf(IfPredictedFormCharacter, TEXT("FCard constructor requires form character reference."));
-		LifetimeEndTimestamp = IfPredictedFormCharacter->CalculateFuturePredictedTimestamp(CustomLifetime);
+		if (!NullUnlessUsingPredictedTimestampFormCharacter)
+		{
+			UE_LOG(LogTemp, Error, TEXT("FCard constructor requires form character reference."));
+			break;
+		}
+		LifetimeEndTimestamp = NullUnlessUsingPredictedTimestampFormCharacter->CalculateFuturePredictedTimestamp(
+			CustomLifetime);
 		break;
 
 	case ECardType::UseCustomLifetimeServerTimestamp:
 		bUsingPredictedTimestamp = false;
-		checkf(IfServerFormCore, TEXT("FCard constructor requires form core reference."));
-		LifetimeEndTimestamp = IfServerFormCore->CalculateFutureServerTimestamp(CustomLifetime);
+		if (!NullUnlessUsingServerTimestampFormCore)
+		{
+			UE_LOG(LogTemp, Error, TEXT("FCard constructor requires form core reference."));
+			break;
+		}
+		LifetimeEndTimestamp = NullUnlessUsingServerTimestampFormCore->CalculateFutureServerTimestamp(CustomLifetime);
 		break;
 	}
 }
@@ -92,6 +118,7 @@ FNetCardIdentifier FCard::GetNetCardIdentifier() const
 
 bool FCard::operator==(const FCard& Other) const
 {
-	return Class == Other.Class && OwnerConstituentInstanceId == Other.OwnerConstituentInstanceId && bUsingPredictedTimestamp == Other.bUsingPredictedTimestamp &&
+	return Class == Other.Class && OwnerConstituentInstanceId == Other.OwnerConstituentInstanceId &&
+		bUsingPredictedTimestamp == Other.bUsingPredictedTimestamp &&
 		LifetimeEndTimestamp == Other.LifetimeEndTimestamp;
 }

@@ -17,40 +17,40 @@ class SFCORE_API UCardObject : public UObject
 
 public:
 	UCardObject();
-	
-	virtual void BeginDestroy() override;
 
 	UPROPERTY(BlueprintReadOnly)
-	class UInventory* OwningInventory;
+	class UInventory* OwningInventory = nullptr;
 
+	UFUNCTION(BlueprintImplementableEvent)
 	void Initialize();
 
+	UFUNCTION(BlueprintImplementableEvent)
 	void Deinitialize();
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	uint8 bSpawnCardObjectOnClient:1;
+	uint8 bSpawnCardObjectOnClient:1 = false;
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	uint8 bUseLifetime:1;
+	uint8 bUseLifetime:1 = false;
 
-	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	float DefaultLifetime;
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, meta = (ClampMin = 0))
+	float DefaultLifetime = 0;
 	
-	uint16 OwnerConstituentInstanceId;
+	uint16 OwnerConstituentInstanceId = 0;
 
 	//Initial +- to movement speed.
 	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	float AdditiveMovementSpeedModifier;
+	float AdditiveMovementSpeedModifier = 0;
 
 	//Movement speed is multiplied by (sums of these values + 1).
 	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	float AdditiveMultiplicativeMovementSpeedModifier;
+	float AdditiveMultiplicativeMovementSpeedModifier = 0;
 
 	//Directly multiplies movement speed by this value, after additive multiplicative. Multiple values multiply.
 	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	float TrueMultiplicativeMovementSpeedModifier;
+	float TrueMultiplicativeMovementSpeedModifier = 1;
 
 	//+- to movement speed after all other modifications.
 	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	float FlatAdditiveMovementSpeedModifier;
+	float FlatAdditiveMovementSpeedModifier = 0;
 };

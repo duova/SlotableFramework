@@ -36,32 +36,32 @@ struct SFCORE_API FCard
 	TSubclassOf<UCardObject> Class;
 
 	//For serialization only.
-	uint16 ClassIndex;
+	uint16 ClassIndex = 0;
 	
-	uint8 OwnerConstituentInstanceId;
+	uint8 OwnerConstituentInstanceId = 0;
 	
-	bool bUsingPredictedTimestamp;
+	bool bUsingPredictedTimestamp = false;
 
 	//If negative we don't check.
-	float LifetimeEndTimestamp;
+	float LifetimeEndTimestamp = 0;
 
 	//For predicted forms, this is set to true after card creation on server until either the client syncs up or timeout.
 	//We don't check this card while this is true to prevent unnecessary rollbacks.
-	uint8 bIsNotCorrected:1;
+	uint8 bIsNotCorrected:1 = false;
 
 	//For predicted forms, this is set to true after card should be destroyed on the server until either the client syncs
 	//up or timeout. We don't check this card while this is true to prevent unnecessary rollbacks.
-	bool bIsDisabledForDestroy;
+	bool bIsDisabledForDestroy = false;
 	
-	double ServerAwaitClientSyncTimeoutTimestamp;
+	double ServerAwaitClientSyncTimeoutTimestamp = 0;
 
 	inline static constexpr float ServerAwaitClientSyncTimeoutDuration = 0.4;
 
 	FCard();
 	
 	FCard(const TSubclassOf<UCardObject>& CardClass, ECardType CardType, uint8 InOwnerConstituentInstanceId = 0,
-	      UFormCharacterComponent* IfPredictedFormCharacter = nullptr,
-	      UFormCoreComponent* IfServerFormCore = nullptr, const float CustomLifetime = 0);
+	      UFormCharacterComponent* NullUnlessUsingPredictedTimestampFormCharacter = nullptr,
+	      UFormCoreComponent* NullUnlessUsingServerTimestampFormCore = nullptr, const float CustomLifetime = 0);
 
 	struct FNetCardIdentifier GetNetCardIdentifier() const;
 

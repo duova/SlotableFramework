@@ -10,44 +10,50 @@
 #include "FormQueryComponent.h"
 #include "Net/UnrealNetwork.h"
 
-FActionSet::FActionSet(): NumActionsIncludingZero(0), ActionZero(0), ActionOne(0), ActionTwo(0), ActionThree(0),
-                          WorldTime(0), bFlipToForceReplicate(0)
+FActionSet::FActionSet()
 {
 }
 
 FActionSet::FActionSet(const float CurrentWorldTime, const uint8 ActionZero, const uint8 ActionOne,
-                       const uint8 ActionTwo, const uint8 ActionThree): NumActionsIncludingZero(0),
-                                                                        ActionZero(ActionZero), ActionOne(ActionOne),
+                       const uint8 ActionTwo, const uint8 ActionThree): ActionZero(ActionZero), ActionOne(ActionOne),
                                                                         ActionTwo(ActionTwo),
                                                                         ActionThree(ActionThree),
-                                                                        WorldTime(CurrentWorldTime),
-                                                                        bFlipToForceReplicate(0)
+                                                                        WorldTime(CurrentWorldTime)
 {
-	checkf(ActionZero != 0, TEXT("Created ActionSet with no action zero."));
-	UConstituent::ErrorIfIdNotWithinRange(ActionZero);
+	if (ActionZero == 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Created ActionSet with no action zero."));
+	}
+	UConstituent::IsIdWithinRange(ActionZero);
 	if (ActionOne != 0)
 	{
 		NumActionsIncludingZero = 1;
-		UConstituent::ErrorIfIdNotWithinRange(ActionOne);
+		UConstituent::IsIdWithinRange(ActionOne);
 	}
 	if (ActionTwo != 0)
 	{
 		NumActionsIncludingZero = 2;
-		checkf(ActionOne != 0, TEXT("Created ActionSet with action two but no action one."));
-		UConstituent::ErrorIfIdNotWithinRange(ActionTwo);
+		if (ActionOne == 0)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Created ActionSet with action two but no action one."));
+		}
+		UConstituent::IsIdWithinRange(ActionTwo);
 	}
 	if (ActionThree != 0)
 	{
 		NumActionsIncludingZero = 3;
-		checkf(ActionTwo != 0, TEXT("Created ActionSet with action three but no action two."));
-		UConstituent::ErrorIfIdNotWithinRange(ActionThree);
+		if (ActionTwo == 0)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Created ActionSet with action three but no action two."));
+		}
+		UConstituent::IsIdWithinRange(ActionThree);
 	}
 }
 
 bool FActionSet::TryAddActionCheckIfSameFrame(const float CurrentWorldTime, const uint8 Action)
 {
 	if (CurrentWorldTime != WorldTime) return false;
-	UConstituent::ErrorIfIdNotWithinRange(Action);
+	UConstituent::IsIdWithinRange(Action);
 	if (NumActionsIncludingZero == 0)
 	{
 		ActionOne = Action;
@@ -97,11 +103,6 @@ TArray<uint8> FActionSet::ToArray() const
 
 UConstituent::UConstituent()
 {
-	if (!GetOwner()) return;
-	if (!HasAuthority())
-	{
-		bAwaitingClientInit = true;
-	}
 }
 
 void UConstituent::BeginDestroy()
@@ -128,72 +129,65 @@ void UConstituent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 
 void UConstituent::OnRep_OwningSlotable()
 {
-	if (bAwaitingClientInit)
+	if (!GetOwner()) return;
+	if (bAwaitingClientInit && !HasAuthority())
 	{
 		bAwaitingClientInit = false;
 		ClientInitialize();
 	}
 }
 
+void UConstituent::SetFormCore()
+{
+	checkf(OwningSlotable, TEXT("Constituent has no OwningSlotable."));
+	checkf(OwningSlotable->OwningInventory, TEXT("Constituent has no OwningInventory."));
+	FormCore = OwningSlotable->OwningInventory->OwningFormCore;
+	checkf(FormCore, TEXT("Constituent has no FormCore."));
+}
+
 void UConstituent::ClientInitialize()
 {
-	if (!OwningSlotable) return;
-	FormCore = OwningSlotable->OwningInventory->OwningFormCore;
-	if (FormCore)
-	{
-		FormCore->ConstituentRegistry.Add(this);
-	}
+	SetFormCore();
+	FormCore->ConstituentRegistry.Add(this);
 	Client_Initialize();
 }
 
 void UConstituent::ServerInitialize()
 {
-	if (!OwningSlotable) return;
-	FormCore = OwningSlotable->OwningInventory->OwningFormCore;
-	if (FormCore)
-	{
-		FormCore->ConstituentRegistry.Add(this);
-		FormCore->GetFormQuery()->RegisterQueryDependencies(QueryDependencyClasses);
-	}
+	SetFormCore();
+	FormCore->ConstituentRegistry.Add(this);
+	FormCore->GetFormQuery()->RegisterQueryDependencies(QueryDependencyClasses);
 	Server_Initialize();
 }
 
 void UConstituent::ClientDeinitialize()
 {
 	Client_Deinitialize();
-	if (FormCore)
-	{
-		FormCore->ConstituentRegistry.Remove(this);
-	}
+	FormCore->ConstituentRegistry.Remove(this);
 }
 
 void UConstituent::ServerDeinitialize()
 {
 	Server_Deinitialize();
-	if (FormCore)
-	{
-		FormCore->GetFormQuery()->UnregisterQueryDependencies(QueryDependencyClasses);
-		FormCore->ConstituentRegistry.Remove(this);
-	}
-	if (OwningSlotable && OwningSlotable->OwningInventory)
-	{
-		OwningSlotable->OwningInventory->RemoveCardsOfOwner(InstanceId);
-	}
+	FormCore->GetFormQuery()->UnregisterQueryDependencies(QueryDependencyClasses);
+	FormCore->ConstituentRegistry.Remove(this);
+	OwningSlotable->OwningInventory->RemoveCardsOfOwner(InstanceId);
 }
 
 void UConstituent::ExecuteAction(const uint8 ActionId, const bool bIsPredictableContext)
 {
 	if (!GetOwner()) return;
-	if (GetOwner()->GetLocalRole() == ROLE_SimulatedProxy) UE_LOG(LogTemp, Error,
-	                                                              TEXT("Tried to ExecuteAction as simulated proxy."));
-	ErrorIfIdNotWithinRange(ActionId);
+	if (GetOwner()->GetLocalRole() == ROLE_SimulatedProxy)
+	{
+		UE_LOG(LogTemp, Error,
+			  TEXT("Tried to ExecuteAction as simulated proxy."));
+		return;
+	}
+	if (!IsIdWithinRange(ActionId)) return;
 	if (HasAuthority())
 	{
 		float ServerWorldTime = 0;
-		if (GetOwner())
-		{
-			ServerWorldTime = GetOwner()->GetWorld()->GetTimeSeconds();
-		}
+		ServerWorldTime = GetOwner()->GetWorld()->GetTimeSeconds();
 		if (bIsPredictableContext)
 		{
 			//If the action is executed in a predictable context, we want to update PredictedLastActionSet so the predicted
@@ -214,7 +208,7 @@ void UConstituent::ExecuteAction(const uint8 ActionId, const bool bIsPredictable
 		//LastActionSet always needs to be updated if we execute an action, no matter the context.
 		if (!LastActionSet.TryAddActionCheckIfSameFrame(ServerWorldTime, ActionId))
 		{
-			bool bFlipToReplicate = LastActionSet.bFlipToForceReplicate;
+			const bool bFlipToReplicate = LastActionSet.bFlipToForceReplicate;
 			LastActionSet = FActionSet(ServerWorldTime, ActionId);
 			//Make a guaranteed change to make sure OnRep is fired.
 			LastActionSet.bFlipToForceReplicate = !bFlipToReplicate;
@@ -227,7 +221,8 @@ void UConstituent::ExecuteAction(const uint8 ActionId, const bool bIsPredictable
 		//We only mark this dirty when we execute.
 		MARK_PROPERTY_DIRTY_FROM_NAME(UConstituent, LastActionSetTimestamp, this);
 	}
-	else if (bEnableInputsAndPrediction && IsFormCharacter() && bIsPredictableContext && GetOwner() && GetOwner()->GetLocalRole() ==
+	else if (bEnableInputsAndPrediction && IsFormCharacter() && bIsPredictableContext && GetOwner()->
+		GetLocalRole() ==
 		ROLE_AutonomousProxy)
 	{
 		//On client we only want to execute if we are predicting.
@@ -244,9 +239,14 @@ void UConstituent::ExecuteAction(const uint8 ActionId, const bool bIsPredictable
 	//Other roles change their states OnRep.
 }
 
-void UConstituent::ErrorIfIdNotWithinRange(const uint8 Id)
+bool UConstituent::IsIdWithinRange(const uint8 Id)
 {
-	checkf(Id < 64, TEXT("Action id not within range."));
+	if (Id >= 64)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Action id not within range."));
+		return false;
+	}
+	return true;
 }
 
 uint8 UConstituent::GetInstanceId() const
@@ -310,7 +310,11 @@ void UConstituent::IncrementTimeSincePredictedLastActionSet(const float Time)
 
 USfQuery* UConstituent::GetQuery(const TSubclassOf<USfQuery> QueryClass) const
 {
-	if (!FormCore || !FormCore->GetFormQuery()) return nullptr;
+	if (!FormCore) return nullptr;
+	if (!FormCore->GetFormQuery())
+	{
+		UE_LOG(LogTemp, Error, TEXT("GetQuery called on a constituent without a FormQueryComponent"));
+	}
 	for (const TPair<USfQuery*, uint16>& Pair : FormCore->GetFormQuery()->ActiveQueryDependentCountPair)
 	{
 		if (Pair.Key->GetClass() == QueryClass.Get())
@@ -318,6 +322,6 @@ USfQuery* UConstituent::GetQuery(const TSubclassOf<USfQuery> QueryClass) const
 			return Pair.Key;
 		}
 	}
-	UE_LOG(LogTemp, Error, TEXT("GetQuery could not find query. Is the query a dependency of the constituent?"))
+	UE_LOG(LogTemp, Error, TEXT("GetQuery could not find query. Is the query a dependency of the constituent?"));
 	return nullptr;
 }
