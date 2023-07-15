@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 #include "Components/ActorComponent.h"
 #include "FormCoreComponent.generated.h"
 
@@ -36,6 +37,12 @@ public:
 	 */
 	UFUNCTION(BlueprintPure)
 	TArray<UInventory*> GetInventories();
+
+	UFUNCTION(BlueprintPure)
+	FGameplayTag GetTeam();
+
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
+	void Server_SetTeam(const FGameplayTag InTeam);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	UInventory* Server_AddInventory(const TSubclassOf<UInventory>& InventoryClass);
@@ -93,6 +100,9 @@ protected:
 private:
 	UPROPERTY(Replicated, VisibleAnywhere)
 	TArray<UInventory*> Inventories;
+
+	UPROPERTY(Replicated, VisibleAnywhere)
+	FGameplayTag Team;
 
 	UPROPERTY(VisibleAnywhere)
 	uint8 bIsFirstPerson:1;

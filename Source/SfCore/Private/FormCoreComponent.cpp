@@ -115,6 +115,7 @@ void UFormCoreComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	DefaultParams.bIsPushBased = true;
 	DefaultParams.Condition = COND_None;
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, Inventories, DefaultParams);
+	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, Team, DefaultParams);
 }
 
 TArray<UInventory*> UFormCoreComponent::GetInventories()
@@ -125,6 +126,16 @@ TArray<UInventory*> UFormCoreComponent::GetInventories()
 		InventoriesCopy.Add(Inventory);
 	}
 	return InventoriesCopy;
+}
+
+FGameplayTag UFormCoreComponent::GetTeam()
+{
+	return Team;
+}
+
+void UFormCoreComponent::Server_SetTeam(const FGameplayTag InTeam)
+{
+	Team = InTeam;
 }
 
 UInventory* UFormCoreComponent::Server_AddInventory(const TSubclassOf<UInventory>& InventoryClass)
