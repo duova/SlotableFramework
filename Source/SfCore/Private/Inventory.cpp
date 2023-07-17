@@ -42,7 +42,7 @@ void UInventory::AuthorityTick(float DeltaTime)
 {
 	//We remove server timestamp cards with ended lifetimes only on the server.
 	//This is synchronize to clients through the FormCharacter and normal replication depending on the role of the client.
-	TArray<const FCard&> ToRemove;
+	TArray<FCard> ToRemove;
 	for (const FCard& Card : Cards)
 	{
 		if (!Card.bUsingPredictedTimestamp && OwningFormCore->CalculateTimeUntilServerTimestamp(Card.LifetimeEndTimestamp) < 0)

@@ -243,7 +243,7 @@ private:
 
 	void SetFormCore();
 
-	uint8 bAwaitingClientInit:1 = true;
+	bool bAwaitingClientInit = true;
 
 	//Actions performed on the last frame any actions were performed.
 	UPROPERTY(Replicated, ReplicatedUsing = OnRep_LastActionSet)

@@ -900,7 +900,7 @@ void UFormCharacterComponent::RemovePredictedCardWithEndedLifetimes()
 {
 	for (UInventory* Inventory : FormCore->GetInventories())
 	{
-		TArray<const FCard&> ToRemove;
+		TArray<FCard> ToRemove;
 		for (const FCard& Card : Inventory->Cards)
 		{
 			if (Card.bUsingPredictedTimestamp && CalculateTimeUntilPredictedTimestamp(Card.LifetimeEndTimestamp) < 0)
