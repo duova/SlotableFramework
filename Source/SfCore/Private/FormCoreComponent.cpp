@@ -16,7 +16,7 @@
 UFormCoreComponent::UFormCoreComponent()
 {
 	if (!GetOwner()) return;
-	PrimaryComponentTick.bCanEverTick = false;
+	PrimaryComponentTick.bCanEverTick = true;
 	bReplicateUsingRegisteredSubObjectList = true;
 	SetIsReplicatedByDefault(true);
 }
@@ -106,6 +106,11 @@ void UFormCoreComponent::TickComponent(float DeltaTime, ELevelTick TickType,
                                        FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	if (!GetOwner()->HasAuthority()) return;
+	for (UInventory* Inventory : Inventories)
+	{
+		Inventory->AuthorityTick(DeltaTime);
+	}
 }
 
 void UFormCoreComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

@@ -38,6 +38,24 @@ void UInventory::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifeti
 	DOREPLIFETIME_WITH_PARAMS_FAST(UInventory, Cards, CardParams)
 }
 
+void UInventory::AuthorityTick(float DeltaTime)
+{
+	//We remove server timestamp cards with ended lifetimes only on the server.
+	//This is synchronize to clients through the FormCharacter and normal replication depending on the role of the client.
+	TArray<const FCard&> ToRemove;
+	for (const FCard& Card : Cards)
+	{
+		if (!Card.bUsingPredictedTimestamp && OwningFormCore->CalculateTimeUntilServerTimestamp(Card.LifetimeEndTimestamp) < 0)
+		{
+			ToRemove.Emplace(Card);
+		}
+	}
+	for (const FCard& CardToRemove : ToRemove)
+	{
+		Server_RemoveOwnedCard(CardToRemove.Class, CardToRemove.OwnerConstituentInstanceId);
+	}
+}
+
 void UInventory::BeginDestroy()
 {
 	UObject::BeginDestroy();
@@ -483,6 +501,7 @@ bool UInventory::Server_RemoveOwnedCard(const TSubclassOf<UCardObject>& CardClas
 				Card.bIsDisabledForDestroy = true;
 				Card.ServerAwaitClientSyncTimeoutTimestamp = Card.ServerAwaitClientSyncTimeoutDuration + GetWorld()->TimeSeconds;
 				GetFormCharacter()->MarkCardsDirty();
+				MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
 				return true;
 			}
 			IndexToDestroy = Cards.Find(Card);

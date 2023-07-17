@@ -525,6 +525,8 @@ protected:
 	void HandleCardClientSyncTimeout() const;
 
 	static void ApplyInputBitsToInventory(uint32 InputBits, const UInventory* Inventory);
+	
+	void RemovePredictedCardWithEndedLifetimes();
 
 	//This is where all the logic actually takes place.
 	virtual void UpdateCharacterStateBeforeMovement(float DeltaSeconds) override;

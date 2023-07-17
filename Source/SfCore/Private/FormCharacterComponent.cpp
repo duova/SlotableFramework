@@ -896,6 +896,25 @@ void UFormCharacterComponent::ApplyInputBitsToInventory(const uint32 InputBits, 
 	}
 }
 
+void UFormCharacterComponent::RemovePredictedCardWithEndedLifetimes()
+{
+	for (UInventory* Inventory : FormCore->GetInventories())
+	{
+		TArray<const FCard&> ToRemove;
+		for (const FCard& Card : Inventory->Cards)
+		{
+			if (Card.bUsingPredictedTimestamp && CalculateTimeUntilPredictedTimestamp(Card.LifetimeEndTimestamp) < 0)
+			{
+				ToRemove.Emplace(Card);
+			}
+		}
+		for (const FCard& CardToRemove : ToRemove)
+		{
+			Inventory->Predicted_RemoveOwnedCard(CardToRemove.Class, CardToRemove.OwnerConstituentInstanceId);
+		}
+	}
+}
+
 void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeconds)
 {
 	Super::UpdateCharacterStateBeforeMovement(DeltaSeconds);
@@ -930,6 +949,8 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 		{
 			PredictedNetClock = 0;
 		}
+		
+		RemovePredictedCardWithEndedLifetimes();
 		
 		//Run input if we're not replaying, or if we want to predict anything that is not movement.
 		const uint32 InputBits = GetInputSetsJoinedBits();

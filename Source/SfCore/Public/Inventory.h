@@ -30,6 +30,8 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+	void AuthorityTick(float DeltaTime);
+
 	/**
 	 * Read-only copy of slotables.
 	 */
