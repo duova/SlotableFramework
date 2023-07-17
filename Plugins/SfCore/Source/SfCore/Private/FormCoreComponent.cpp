@@ -107,9 +107,25 @@ void UFormCoreComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	if (!GetOwner()->HasAuthority()) return;
+	
 	for (UInventory* Inventory : Inventories)
 	{
 		Inventory->AuthorityTick(DeltaTime);
+	}
+	
+	if (GetOwner()->HasAuthority())
+	{
+		NonCompensatedServerWorldTime = GetWorld()->TimeSeconds;
+	}
+	else
+	{
+		NonCompensatedServerWorldTime += DeltaTime;
+	}
+	
+	if (static_cast<int>(NonCompensatedServerWorldTime) % 2)
+	{
+		//We synchronize every 2 seconds.
+		MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, NonCompensatedServerWorldTime, this);
 	}
 }
 
@@ -121,6 +137,7 @@ void UFormCoreComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	DefaultParams.Condition = COND_None;
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, Inventories, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, Team, DefaultParams);
+	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, NonCompensatedServerWorldTime, DefaultParams);
 }
 
 TArray<UInventory*> UFormCoreComponent::GetInventories()
@@ -229,27 +246,27 @@ bool UFormCoreComponent::IsFirstPerson()
 	return bIsFirstPerson;
 }
 
-float UFormCoreComponent::GetNonCompensatedServerWorldTime()
+float UFormCoreComponent::GetNonCompensatedServerWorldTime() const
 {
-	return 0;
+	return NonCompensatedServerWorldTime;
 }
 
-float UFormCoreComponent::CalculateFutureServerTimestamp(float AdditionalTime)
+float UFormCoreComponent::CalculateFutureServerTimestamp(const float AdditionalTime) const
 {
-	return 0;
+	return NonCompensatedServerWorldTime + AdditionalTime;
 }
 
-float UFormCoreComponent::CalculateTimeUntilServerTimestamp(float Timestamp)
+float UFormCoreComponent::CalculateTimeUntilServerTimestamp(const float Timestamp) const
 {
-	return 0;
+	return NonCompensatedServerWorldTime - Timestamp;
 }
 
-float UFormCoreComponent::CalculateTimeSinceServerTimestamp(float Timestamp)
+float UFormCoreComponent::CalculateTimeSinceServerTimestamp(const float Timestamp) const
 {
-	return 0;
+	return Timestamp - NonCompensatedServerWorldTime;
 }
 
-bool UFormCoreComponent::HasServerTimestampPassed(float Timestamp)
+bool UFormCoreComponent::HasServerTimestampPassed(const float Timestamp) const
 {
-	return false;
+	return CalculateTimeUntilServerTimestamp(Timestamp) <= 0;
 }

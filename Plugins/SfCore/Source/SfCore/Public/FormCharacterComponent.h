@@ -436,16 +436,15 @@ public:
 	//and the server will only issue a correction when necessary.
 	float PredictedNetClock;
 	uint32 NetClockNextInteger;
+	
+	float CalculateFuturePredictedTimestamp(const float AdditionalTime) const;
 
-	//TODO: Functions that account for the net clock resetting upon hitting max value.
-	float CalculateFuturePredictedTimestamp(float AdditionalTime);
+	float CalculateTimeUntilPredictedTimestamp(const float Timestamp) const;
 
-	float CalculateTimeUntilPredictedTimestamp(float Timestamp);
+	float CalculateTimeSincePredictedTimestamp(const float Timestamp) const;
 
-	float CalculateTimeSincePredictedTimestamp(float Timestamp);
-
-	bool HasPredictedTimestampPassed(float Timestamp);
-
+	bool HasPredictedTimestampPassed(const float Timestamp) const;
+	
 	//+/- acceptable range.
 	const float NetClockAcceptableTolerance = 0.02f;
 

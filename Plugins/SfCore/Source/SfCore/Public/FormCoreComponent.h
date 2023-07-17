@@ -59,24 +59,24 @@ public:
 
 	UFUNCTION(BlueprintPure)
 	bool IsFirstPerson();
-
-	//TODO
-	float ClientNonCompensatedServerWorldTime;
-
-	//Works for client and server.
-	float GetNonCompensatedServerWorldTime();
+	
+	UPROPERTY(Replicated)
+	float NonCompensatedServerWorldTime;
 
 	//Works for client and server.
-	float CalculateFutureServerTimestamp(float AdditionalTime);
+	float GetNonCompensatedServerWorldTime() const;
 
 	//Works for client and server.
-	float CalculateTimeUntilServerTimestamp(float Timestamp);
+	float CalculateFutureServerTimestamp(const float AdditionalTime) const;
 
 	//Works for client and server.
-	float CalculateTimeSinceServerTimestamp(float Timestamp);
+	float CalculateTimeUntilServerTimestamp(const float Timestamp) const;
 
 	//Works for client and server.
-	bool HasServerTimestampPassed(float Timestamp);
+	float CalculateTimeSinceServerTimestamp(const float Timestamp) const;
+
+	//Works for client and server.
+	bool HasServerTimestampPassed(const float Timestamp) const;
 
 	static const TArray<UClass*>& GetAllCardObjectClassesSortedByName();
 
