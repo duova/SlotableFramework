@@ -11,6 +11,5 @@ public class SlotableFrameworkTarget : TargetRules
 		DefaultBuildSettings = BuildSettingsVersion.V2;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_1;
 		ExtraModuleNames.Add("SlotableFramework");
-		ExtraModuleNames.Add("SfCore");
 	}
 }
