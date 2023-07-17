@@ -10,7 +10,9 @@
 #include "FormQueryComponent.h"
 #include "Net/UnrealNetwork.h"
 
-FActionSet::FActionSet()
+FActionSet::FActionSet(): NumActionsIncludingZero(0), ActionZero(0), ActionOne(0), ActionTwo(0), ActionThree(0),
+                          WorldTime(0),
+                          bFlipToForceReplicate(0)
 {
 }
 
@@ -18,7 +20,8 @@ FActionSet::FActionSet(const float CurrentWorldTime, const uint8 ActionZero, con
                        const uint8 ActionTwo, const uint8 ActionThree): ActionZero(ActionZero), ActionOne(ActionOne),
                                                                         ActionTwo(ActionTwo),
                                                                         ActionThree(ActionThree),
-                                                                        WorldTime(CurrentWorldTime)
+                                                                        WorldTime(CurrentWorldTime),
+                                                                        bFlipToForceReplicate(0)
 {
 	if (ActionZero == 0)
 	{
@@ -186,8 +189,7 @@ void UConstituent::ExecuteAction(const uint8 ActionId, const bool bIsPredictable
 	if (!IsIdWithinRange(ActionId)) return;
 	if (HasAuthority())
 	{
-		float ServerWorldTime = 0;
-		ServerWorldTime = GetOwner()->GetWorld()->GetTimeSeconds();
+		const float ServerWorldTime = GetOwner()->GetWorld()->GetTimeSeconds();
 		if (bIsPredictableContext)
 		{
 			//If the action is executed in a predictable context, we want to update PredictedLastActionSet so the predicted

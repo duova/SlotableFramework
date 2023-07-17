@@ -36,24 +36,24 @@ struct SFCORE_API FCard
 	TSubclassOf<UCardObject> Class;
 
 	//For serialization only.
-	uint16 ClassIndex = 0;
+	uint16 ClassIndex;
 	
-	uint8 OwnerConstituentInstanceId = 0;
+	uint8 OwnerConstituentInstanceId;
 	
-	bool bUsingPredictedTimestamp = false;
+	bool bUsingPredictedTimestamp;
 
 	//If negative we don't check.
-	float LifetimeEndTimestamp = 0;
+	float LifetimeEndTimestamp;
 
 	//For predicted forms, this is set to true after card creation on server until either the client syncs up or timeout.
 	//We don't check this card while this is true to prevent unnecessary rollbacks.
-	uint8 bIsNotCorrected:1 = false;
+	uint8 bIsNotCorrected:1;
 
 	//For predicted forms, this is set to true after card should be destroyed on the server until either the client syncs
 	//up or timeout. We don't check this card while this is true to prevent unnecessary rollbacks.
-	bool bIsDisabledForDestroy = false;
+	bool bIsDisabledForDestroy;
 	
-	double ServerAwaitClientSyncTimeoutTimestamp = 0;
+	double ServerAwaitClientSyncTimeoutTimestamp;
 
 	inline static constexpr float ServerAwaitClientSyncTimeoutDuration = 0.4;
 

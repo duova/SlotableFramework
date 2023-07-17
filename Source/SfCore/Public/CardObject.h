@@ -28,23 +28,23 @@ public:
 	void Deinitialize();
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	uint8 bSpawnCardObjectOnClient:1 = false;
+	uint8 bSpawnCardObjectOnClient:1;
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	uint8 bUseLifetime:1 = false;
+	uint8 bUseLifetime:1;
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, meta = (ClampMin = 0))
-	float DefaultLifetime = 0;
+	float DefaultLifetime;
 	
-	uint16 OwnerConstituentInstanceId = 0;
+	uint16 OwnerConstituentInstanceId;
 
 	//Initial +- to movement speed.
 	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	float AdditiveMovementSpeedModifier = 0;
+	float AdditiveMovementSpeedModifier;
 
 	//Movement speed is multiplied by (sums of these values + 1).
 	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	float AdditiveMultiplicativeMovementSpeedModifier = 0;
+	float AdditiveMultiplicativeMovementSpeedModifier;
 
 	//Directly multiplies movement speed by this value, after additive multiplicative. Multiple values multiply.
 	UPROPERTY(BlueprintReadOnly, EditAnywhere)
@@ -52,5 +52,5 @@ public:
 
 	//+- to movement speed after all other modifications.
 	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	float FlatAdditiveMovementSpeedModifier = 0;
+	float FlatAdditiveMovementSpeedModifier;
 };

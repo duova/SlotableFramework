@@ -6,7 +6,10 @@
 #include "CardObject.h"
 #include "FormCharacterComponent.h"
 
-FCard::FCard()
+FCard::FCard(): ClassIndex(0), OwnerConstituentInstanceId(0), bUsingPredictedTimestamp(false), LifetimeEndTimestamp(0),
+                bIsNotCorrected(0),
+                bIsDisabledForDestroy(false),
+                ServerAwaitClientSyncTimeoutTimestamp(0)
 {
 }
 
@@ -15,7 +18,8 @@ FCard::FCard(const TSubclassOf<UCardObject>& CardClass, const ECardType CardType
              UFormCharacterComponent* NullUnlessUsingPredictedTimestampFormCharacter,
              UFormCoreComponent* NullUnlessUsingServerTimestampFormCore, const float CustomLifetime):
 	Class(CardClass),
-	OwnerConstituentInstanceId(InOwnerConstituentInstanceId)
+	OwnerConstituentInstanceId(InOwnerConstituentInstanceId), bIsNotCorrected(0), bIsDisabledForDestroy(false),
+	ServerAwaitClientSyncTimeoutTimestamp(0)
 {
 	const UCardObject* CardCDO = CardClass.GetDefaultObject();
 
