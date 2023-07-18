@@ -211,7 +211,6 @@ public:
 
 	//Returns the query of QueryClass.
 	//This needs to be casted to the class to get the event from the query.
-	UFUNCTION(BlueprintPure)
 	USfQuery* GetQuery(const TSubclassOf<USfQuery> QueryClass) const;
 
 	//Unique identifier within each inventory.

@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Constituent.h"
 #include "Components/ActorComponent.h"
 #include "FormQueryComponent.generated.h"
 
@@ -31,28 +32,35 @@ public:
 
 //This is an example of how an SfQuery is implemented.
 /*
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDeath, bool, bDidInFactDie);
-
 UCLASS()
 class SFCORE_API UDeathQuery : public USfQuery
 {
 	GENERATED_BODY()
 
-	UPROPERTY(BlueprintAssignable)
-	FOnDeath OnDeath;
-
 public:
 
-	UDeathQuery();
+	//We declare two matching delegates. An input delegate that is added to a multicast delegate on the query.
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE(FDeathQueryMulticastDelegate);
+	DECLARE_DYNAMIC_DELEGATE(FDeathQueryInputDelegate);
+
+	//Multicast delegate is what should be called when the query succeeds.
+	FDeathQueryMulticastDelegate DeathQueryDelegate;
+
+	//This is the function used to bind the delegate of a query to a blueprint event.
+	UFUNCTION(BlueprintCallable, Meta=(DefaultToSelf="Dependent"))
+	static void BindDeathQuery(const UConstituent* Dependent, const FDeathQueryInputDelegate EventToBind)
+	{
+		static_cast<UDeathQuery*>(Dependent->GetQuery(StaticClass()))->DeathQueryDelegate.Add(EventToBind);
+	};
 	
-	virtual void PerformCheck(float DeltaTime) override;
+	UDeathQuery();
+
+	//Overriden functions used to perform the query.
+	virtual void PerformCheck(float DeltaTime, UFormCoreComponent* FormCore) override;
 
 	virtual void Initialize() override;
 
 	virtual void Deinitialize() override;
-
-	UFUNCTION(BlueprintPure)
-	static UDeathQuery* CastToDeathQuery(USfQuery* Query);
 };
 */
 
