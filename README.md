@@ -18,3 +18,7 @@ Operators - Blueprint functions that produces some sort of change to a target. T
 Vfx, Animation, and Audio functions - Blueprint functions that serve as an abstraction for audiovisual feature calls. These have prediction and replication in mind. They are designed for humanoid characters - where the usage is as simplified as possible - but can still be used for other rigs.
 
 Other concepts are generally self-explanatory.
+
+# Gauntlet
+
+Gauntlet code compiled with UAT cannot be in the project directory and is kept in a separate repository here: https://github.com/duova/SfTests.Automation.git
