@@ -40,6 +40,10 @@
 		{
 			"Name": "SfCore",
 			"Enabled": true
+		},
+		{
+			"Name": "SfTests",
+			"Enabled": true
 		}
 	]
 }
