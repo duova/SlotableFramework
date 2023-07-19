@@ -14,12 +14,15 @@ class UFormCharacterComponent;
 class UConstituent;
 class UInventory;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FTriggerDelegate);
+DECLARE_DYNAMIC_DELEGATE(FTriggerInputDelegate);
+
 /**
  * The FormCoreComponent is responsible for the core logic of a form.
  * Forms should extend APawn or ACharacter. This component must be replicated.
  * The component mainly holds the slotable hierarchy and its functions.
  */
-UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
+UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent), Blueprintable)
 class SFCORE_API UFormCoreComponent : public UActorComponent
 {
 	GENERATED_BODY()
@@ -86,8 +89,22 @@ public:
 
 	UFormStatComponent* GetFormStat() const;
 
+	//False if trigger doesn't exist.
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
+	bool ActivateTrigger(FGameplayTag Trigger);
+
+	//False if trigger doesn't exist.
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
+	bool BindTrigger(FGameplayTag Trigger, FTriggerInputDelegate EventToBind);
+
+	UFUNCTION(BlueprintPure, BlueprintAuthorityOnly)
+	bool HasTrigger(FGameplayTag Trigger);
+
 	UPROPERTY()
 	TArray<UConstituent*> ConstituentRegistry;
+
+	UPROPERTY(EditAnywhere)
+	TArray<FGameplayTag> TriggersToUse;
 
 protected:
 	virtual void BeginPlay() override;
@@ -122,4 +139,6 @@ private:
 
 	UPROPERTY()
 	UFormStatComponent* FormStat;
+	
+	TMap<FGameplayTag, FTriggerDelegate> Triggers;
 };

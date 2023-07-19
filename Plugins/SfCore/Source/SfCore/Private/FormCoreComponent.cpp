@@ -41,6 +41,47 @@ UFormStatComponent* UFormCoreComponent::GetFormStat() const
 	return FormStat;
 }
 
+bool UFormCoreComponent::ActivateTrigger(const FGameplayTag Trigger)
+{
+	for (const TPair<FGameplayTag, FTriggerDelegate>& Pair : Triggers)
+	{
+		if (Pair.Key == Trigger)
+		{
+			if (Pair.Value.IsBound())
+			{
+				Pair.Value.Broadcast();
+			}
+			return true;
+		}
+	}
+	return false;
+}
+
+bool UFormCoreComponent::BindTrigger(const FGameplayTag Trigger, const FTriggerInputDelegate EventToBind)
+{
+	for (TPair<FGameplayTag, FTriggerDelegate>& Pair : Triggers)
+	{
+		if (Pair.Key == Trigger)
+		{
+			Pair.Value.Add(EventToBind);
+			return true;
+		}
+	}
+	return false;
+}
+
+bool UFormCoreComponent::HasTrigger(const FGameplayTag Trigger)
+{
+	for (const TPair<FGameplayTag, FTriggerDelegate>& Pair : Triggers)
+	{
+		if (Pair.Key == Trigger)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 void UFormCoreComponent::BeginPlay()
 {
 	Super::BeginPlay();
@@ -86,6 +127,16 @@ void UFormCoreComponent::BeginPlay()
 		for (TSubclassOf<UInventory> InventoryClass : DefaultInventoryClasses)
 		{
 			Server_AddInventory(InventoryClass);
+		}
+
+		for (const FGameplayTag& TriggerTag : TriggersToUse)
+		{
+			if (Triggers.Contains(TriggerTag))
+			{
+				UE_LOG(LogTemp, Warning, TEXT("Duplicated trigger."));
+				continue;
+			}
+			Triggers.Add(TriggerTag, FTriggerDelegate());
 		}
 	}
 }
