@@ -178,6 +178,17 @@ void UFormCoreComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 		//We synchronize every 2 seconds.
 		MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, NonCompensatedServerWorldTime, this);
 	}
+
+	if (!GetOwner()->HasAuthority()) return;
+	LowFrequencyTickDeltaTime += DeltaTime;
+	if (LowFrequencyTickDeltaTime >= 1.0 / LowFrequencyTicksPerSecond)
+	{
+		for (UConstituent* Constituent : ConstituentRegistry)
+		{
+			Constituent->Server_LowFrequencyTick(LowFrequencyTickDeltaTime);
+		}
+		LowFrequencyTickDeltaTime = 0;
+	}
 }
 
 void UFormCoreComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

@@ -16,7 +16,7 @@ class UConstituent;
  * A slotable is itself only supposed to be a container for constituents,
  * which composes a slotable's functionality.
  */
-UCLASS()
+UCLASS(Blueprintable)
 class SFCORE_API USlotable : public USfObject
 {
 	GENERATED_BODY()

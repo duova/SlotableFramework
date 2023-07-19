@@ -194,7 +194,7 @@ private:
 
 	UPROPERTY(VisibleAnywhere)
 	TArray<UCardObject*> ClientCardObjects;
-
+	
 	USlotable* CreateUninitializedSlotable(const TSubclassOf<USlotable>& SlotableClass) const;
 
 	UCardObject* CreateUninitializedCardObject(const TSubclassOf<UCardObject>& CardClass) const;

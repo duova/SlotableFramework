@@ -192,6 +192,10 @@ public:
 	UFUNCTION(BlueprintImplementableEvent)
 	void OnInputUp(const bool bIsPredictableContext);
 
+	//Ticks at a rate set in FormCore.
+	UFUNCTION(BlueprintImplementableEvent)
+	void Server_LowFrequencyTick(const float DeltaTime);
+
 	static bool IsIdWithinRange(const uint8 Id);
 
 	UFUNCTION(BlueprintPure)

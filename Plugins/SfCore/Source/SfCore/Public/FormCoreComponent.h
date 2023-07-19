@@ -106,6 +106,9 @@ public:
 	UPROPERTY(EditAnywhere)
 	TArray<FGameplayTag> TriggersToUse;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	int LowFrequencyTicksPerSecond = 10;
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -141,4 +144,6 @@ private:
 	UFormStatComponent* FormStat;
 	
 	TMap<FGameplayTag, FTriggerDelegate> Triggers;
+	
+	float LowFrequencyTickDeltaTime;
 };
