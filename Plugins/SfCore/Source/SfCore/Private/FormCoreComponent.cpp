@@ -121,24 +121,28 @@ void UFormCoreComponent::BeginPlay()
 		CardObjectClassesFetched = true;
 	}
 
-	if (!GetOwner()) return;
-	if (GetOwner()->HasAuthority())
+	if (GetOwner())
 	{
-		for (TSubclassOf<UInventory> InventoryClass : DefaultInventoryClasses)
+		if (GetOwner()->HasAuthority())
 		{
-			Server_AddInventory(InventoryClass);
-		}
-
-		for (const FGameplayTag& TriggerTag : TriggersToUse)
-		{
-			if (Triggers.Contains(TriggerTag))
+			for (TSubclassOf<UInventory> InventoryClass : DefaultInventoryClasses)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("Duplicated trigger."));
-				continue;
+				Server_AddInventory(InventoryClass);
 			}
-			Triggers.Add(TriggerTag, FTriggerDelegate());
+
+			for (const FGameplayTag& TriggerTag : TriggersToUse)
+			{
+				if (Triggers.Contains(TriggerTag))
+				{
+					UE_LOG(LogTemp, Warning, TEXT("Duplicated trigger."));
+					continue;
+				}
+				Triggers.Add(TriggerTag, FTriggerDelegate());
+			}
 		}
 	}
+
+	FormCharacter->CalculateMovementSpeed();
 }
 
 void UFormCoreComponent::BeginDestroy()
@@ -151,6 +155,14 @@ void UFormCoreComponent::BeginDestroy()
 		//We clear index 0 because the list shifts down.
 		Server_RemoveInventoryByIndex(0);
 	}
+}
+
+void UFormCoreComponent::SetMovementStatsDirty() const
+{
+	MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, WalkSpeedStat, this);
+	MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, SwimSpeedStat, this);
+	MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, FlySpeedStat, this);
+	MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, AccelerationStat, this);
 }
 
 void UFormCoreComponent::TickComponent(float DeltaTime, ELevelTick TickType,
@@ -200,6 +212,10 @@ void UFormCoreComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, Inventories, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, Team, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, NonCompensatedServerWorldTime, DefaultParams);
+	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, WalkSpeedStat, DefaultParams);
+	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, SwimSpeedStat, DefaultParams);
+	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, FlySpeedStat, DefaultParams);
+	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, AccelerationStat, DefaultParams);
 }
 
 TArray<UInventory*> UFormCoreComponent::GetInventories()

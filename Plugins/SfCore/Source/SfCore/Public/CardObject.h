@@ -38,6 +38,9 @@ public:
 	
 	uint16 OwnerConstituentInstanceId;
 
+	UPROPERTY(BlueprintReadOnly, EditAnywhere)
+	uint8 bUseMovementSpeedModifiers:1;
+
 	//Initial +- to movement speed.
 	UPROPERTY(BlueprintReadOnly, EditAnywhere)
 	float AdditiveMovementSpeedModifier;

@@ -396,6 +396,12 @@ class SFCORE_API UFormCharacterComponent : public UCharacterMovementComponent
 {
 	GENERATED_BODY()
 
+	friend class FSavedMove_Sf;
+	friend struct FSfNetworkMoveData;
+	friend struct FSfMoveResponseDataContainer;
+	friend class UInventory;
+	friend struct FCard;
+	
 public:
 	UFormCharacterComponent();
 
@@ -415,9 +421,61 @@ public:
 
 	void SetupFormCharacter(UFormCoreComponent* FormCoreComponent);
 
+	void CalculateMovementSpeed();
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	float BaseWalkSpeed;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	float BaseSwimSpeed;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	float BaseFlySpeed;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	float BaseAcceleration;
+
+	//Defaults to 1. Change for functionality like sprinting. Applied after card speed modifiers.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float VariableWalkSpeedMultiplier = 1;
+
+	//Defaults to 1. Applied after card speed modifiers.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float VariableSwimSpeedMultiplier = 1;
+
+	//Defaults to 1. Applied after card speed modifiers.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float VariableFlySpeedMultiplier = 1;
+
+	//Defaults to 1. Applied after card speed modifiers.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float VariableAccelerationMultiplier = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bWalkSpeedCalculatedByFormCharacter = true;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bSwimSpeedCalculatedByFormCharacter;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bFlySpeedCalculatedByFormCharacter;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bAccelerationCalculatedByFormCharacter;
+	
 	//Movement inputs.
 	uint8 bWantsToSprint:1;
 
+	//Cases where this needs to be set to true:
+	//-On the server when it locally adds or removes cards.
+	//-On the predicted client if the server force updates cards through the CMC.
+	//-On the predicted client & server when a card is synchronously added or removed.
+	//The server should set the calculated variables on simulated proxies.
+	//Only non-DisabledForDestroy cards with movement speed modifiers enabled should have their values included in the calculation.
+	uint8 bMovementSpeedNeedsRecalculation:1;
+
+protected:
+	
 	//Number of input sets to enable, this is automatically set based on how many inputs are registered.
 	uint8 EnabledInputSets:2;
 
@@ -428,7 +486,7 @@ public:
 
 	//This is used to determine how the pipeline is supposed to handle the separate sections of correction data to rollback
 	//as little as possible and send as little as possible.
-	uint8 CorrectionConditionFlags; //Only first 4 bits is used.
+	uint8 CorrectionConditionFlags; //Only first 4 bits is used, bit field can't be used due to dereferencing.
 
 	//This is obviously not optimal as we are already sending the client TimeStamp. However, this is the most direct way
 	//of ensuring that time discrepancies will not cause more rollbacks - by having the clock incremented in tandem with
@@ -484,8 +542,7 @@ public:
 	void OnInputDown(const FInputActionInstance& Instance);
 
 	void OnInputUp(const FInputActionInstance& Instance);
-
-protected:
+	
 	virtual void BeginPlay() override;
 
 	virtual void UpdateFromCompressedFlags(uint8 Flags) override;

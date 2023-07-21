@@ -25,6 +25,7 @@ DECLARE_DYNAMIC_DELEGATE(FTriggerInputDelegate);
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent), Blueprintable)
 class SFCORE_API UFormCoreComponent : public UActorComponent
 {
+	
 	GENERATED_BODY()
 
 public:
@@ -88,6 +89,8 @@ public:
 	USfHealthComponent* GetHealth() const;
 
 	UFormStatComponent* GetFormStat() const;
+	
+	void SetMovementStatsDirty() const;
 
 	//False if trigger doesn't exist.
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
@@ -108,6 +111,18 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	int LowFrequencyTicksPerSecond = 10;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)
+	float WalkSpeedStat;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)
+	float SwimSpeedStat;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)
+	float FlySpeedStat;
+
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)
+	float AccelerationStat;
 
 protected:
 	virtual void BeginPlay() override;

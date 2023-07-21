@@ -476,6 +476,7 @@ bool UInventory::Server_AddOwnedCard(const TSubclassOf<UCardObject>& CardClass,
 	}
 	if (IsFormCharacter())
 	{
+		GetFormCharacter()->bMovementSpeedNeedsRecalculation = true;
 		FCard& CardAdded = Cards.Last();
 		//We set it to be not corrected and set a timeout so the client has a chance to synchronize before we start issuing corrections.
 		CardAdded.bIsNotCorrected = true;
@@ -514,6 +515,10 @@ bool UInventory::Server_RemoveOwnedCard(const TSubclassOf<UCardObject>& CardClas
 		MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
 		return true;
 	}
+	if (IsFormCharacter())
+	{
+		GetFormCharacter()->bMovementSpeedNeedsRecalculation = true;
+	}
 	return false;
 }
 
@@ -533,6 +538,7 @@ bool UInventory::Predicted_AddOwnedCard(const TSubclassOf<UCardObject>& CardClas
 	if (!GetOwner()) return false;
 	checkf(GetOwner()->GetLocalRole() != ROLE_SimulatedProxy, TEXT("Called Predicted_ function on simulated proxy."))
 	checkf(IsFormCharacter(), TEXT("Predicted_ function called by non-form character."));
+	GetFormCharacter()->bMovementSpeedNeedsRecalculation = true;
 	for (FCard Card : Cards)
 	{
 		//Check for duplicates.
@@ -570,6 +576,7 @@ bool UInventory::Predicted_RemoveOwnedCard(const TSubclassOf<UCardObject>& CardC
 	if (!GetOwner()) return false;
 	checkf(GetOwner()->GetLocalRole() != ROLE_SimulatedProxy, TEXT("Called Predicted_ function on simulated proxy."))
 	checkf(IsFormCharacter(), TEXT("Predicted_ function called by non-form character."));
+	GetFormCharacter()->bMovementSpeedNeedsRecalculation = true;
 	int16 IndexToDestroy = INDEX_NONE;
 	for (FCard Card : Cards)
 	{

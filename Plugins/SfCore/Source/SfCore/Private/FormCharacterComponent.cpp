@@ -2,6 +2,8 @@
 
 
 #include "FormCharacterComponent.h"
+
+#include "CardObject.h"
 #include "Inventory.h"
 #include "Slotable.h"
 #include "EnhancedInputComponent.h"
@@ -313,6 +315,7 @@ void FSfMoveResponseDataContainer::SerializeCardResponse(FArchive& Ar, UFormChar
 	if (!bIsSaving)
 	{
 		CharacterComponent->bClientCardsWereUpdated = true;
+		CharacterComponent->bMovementSpeedNeedsRecalculation = true;
 		CharacterComponent->OldInventoryCardIdentifiers.Empty();
 		for (FInventoryCards InventoryCards : CardResponse)
 		{
@@ -937,6 +940,86 @@ void UFormCharacterComponent::RemovePredictedCardWithEndedLifetimes()
 	}
 }
 
+void UFormCharacterComponent::CalculateMovementSpeed()
+{
+	//Collect modifiers.
+	float AdditiveMovementSpeedMultiplierSum = 0;
+	//1 as the base to multiply into the modifier.
+	float AdditiveMultiplicativeMovementSpeedModifierSum = 1;
+	float TrueMultiplicativeMovementSpeedModifierProduct = 0;
+	float FlatAdditiveMovementSpeedModifierSum = 0;
+
+	for (const UInventory* Inventory : FormCore->GetInventories())
+	{
+		for (const FCard& Card : Inventory->Cards)
+		{
+			if (Card.bIsDisabledForDestroy) continue;
+			const UCardObject* CardCDO = static_cast<UCardObject*>(Card.Class->ClassDefaultObject);
+			if (CardCDO->bUseMovementSpeedModifiers) continue;
+			AdditiveMovementSpeedMultiplierSum += CardCDO->AdditiveMovementSpeedModifier;
+			AdditiveMultiplicativeMovementSpeedModifierSum += CardCDO->AdditiveMultiplicativeMovementSpeedModifier;
+			TrueMultiplicativeMovementSpeedModifierProduct *= CardCDO->TrueMultiplicativeMovementSpeedModifier;
+			FlatAdditiveMovementSpeedModifierSum += CardCDO->FlatAdditiveMovementSpeedModifier;
+
+			//TrueMultiplicative needs to be checked for negative every iteration to avoid double negatives being missed.
+			TrueMultiplicativeMovementSpeedModifierProduct = FMath::Clamp(TrueMultiplicativeMovementSpeedModifierProduct, 0.f, 999999.f);
+		}
+	}
+
+	//Zero out negatives for multiplicative modifier.
+	AdditiveMultiplicativeMovementSpeedModifierSum = FMath::Clamp(AdditiveMultiplicativeMovementSpeedModifierSum, 0.f, 999999.f);
+	
+	//Apply modifiers if applicable.
+	if (bWalkSpeedCalculatedByFormCharacter)
+	{
+		MaxWalkSpeed = BaseWalkSpeed;
+		MaxWalkSpeed += AdditiveMovementSpeedMultiplierSum;
+		MaxWalkSpeed *= AdditiveMultiplicativeMovementSpeedModifierSum;
+		MaxWalkSpeed *= TrueMultiplicativeMovementSpeedModifierProduct;
+		MaxWalkSpeed += FlatAdditiveMovementSpeedModifierSum;
+		MaxWalkSpeed *= VariableWalkSpeedMultiplier;
+	}
+
+	if (bSwimSpeedCalculatedByFormCharacter)
+	{
+		MaxSwimSpeed = BaseSwimSpeed;
+		MaxSwimSpeed += AdditiveMovementSpeedMultiplierSum;
+		MaxSwimSpeed *= AdditiveMultiplicativeMovementSpeedModifierSum;
+		MaxSwimSpeed *= TrueMultiplicativeMovementSpeedModifierProduct;
+		MaxSwimSpeed += FlatAdditiveMovementSpeedModifierSum;
+		MaxSwimSpeed *= VariableSwimSpeedMultiplier;
+	}
+
+	if (bFlySpeedCalculatedByFormCharacter)
+	{
+		MaxFlySpeed = BaseFlySpeed;
+		MaxFlySpeed += AdditiveMovementSpeedMultiplierSum;
+		MaxFlySpeed *= AdditiveMultiplicativeMovementSpeedModifierSum;
+		MaxFlySpeed *= TrueMultiplicativeMovementSpeedModifierProduct;
+		MaxFlySpeed += FlatAdditiveMovementSpeedModifierSum;
+		MaxFlySpeed *= VariableFlySpeedMultiplier;
+	}
+
+	if (bAccelerationCalculatedByFormCharacter)
+	{
+		MaxAcceleration = BaseAcceleration;
+		MaxAcceleration += AdditiveMovementSpeedMultiplierSum;
+		MaxAcceleration *= AdditiveMultiplicativeMovementSpeedModifierSum;
+		MaxAcceleration *= TrueMultiplicativeMovementSpeedModifierProduct;
+		MaxAcceleration += FlatAdditiveMovementSpeedModifierSum;
+		MaxAcceleration *= VariableAccelerationMultiplier;
+	}
+
+	if (GetOwner() && GetOwner()->GetLocalRole() == ROLE_AutonomousProxy)
+	{
+		FormCore->WalkSpeedStat = MaxWalkSpeed;
+		FormCore->SwimSpeedStat = MaxSwimSpeed;
+		FormCore->FlySpeedStat = MaxFlySpeed;
+		FormCore->AccelerationStat = MaxAcceleration;
+		FormCore->SetMovementStatsDirty();
+	}
+}
+
 void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeconds)
 {
 	Super::UpdateCharacterStateBeforeMovement(DeltaSeconds);
@@ -1009,6 +1092,12 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 			PackActionSets();
 			PackCards();
 		}
+	}
+
+	if (bMovementSpeedNeedsRecalculation)
+	{
+		CalculateMovementSpeed();
+		bMovementSpeedNeedsRecalculation = false;
 	}
 }
 
