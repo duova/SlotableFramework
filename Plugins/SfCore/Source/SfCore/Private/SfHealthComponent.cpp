@@ -12,16 +12,18 @@ FHealthDeltaData::FHealthDeltaData(): InValue(0), OutValue(0), Source(nullptr), 
 }
 
 FHealthDeltaData::FHealthDeltaData(const float InValue, const float OutValue, UConstituent* Source,
-	const TArray<TSubclassOf<UHealthDeltaProcessor>>& Processors, const float TimeoutTimestamp): InValue(InValue),
-	OutValue(OutValue),
-	Source(Source), Processors(Processors),
-	TimeoutTimestamp(TimeoutTimestamp)
+                                   const TArray<TSubclassOf<UHealthDeltaProcessor>>& Processors,
+                                   const float TimeoutTimestamp): InValue(InValue),
+                                                                  OutValue(OutValue),
+                                                                  Source(Source), Processors(Processors),
+                                                                  TimeoutTimestamp(TimeoutTimestamp)
 {
 }
 
 bool FHealthDeltaData::operator==(const FHealthDeltaData& Other) const
 {
-	if (Other.InValue == InValue && Other.OutValue == OutValue && Other.Source == Source && Other.Processors == Processors && Other.TimeoutTimestamp == TimeoutTimestamp) return true;
+	if (Other.InValue == InValue && Other.OutValue == OutValue && Other.Source == Source && Other.Processors ==
+		Processors && Other.TimeoutTimestamp == TimeoutTimestamp) return true;
 	return false;
 }
 
@@ -41,7 +43,8 @@ bool FHealthDeltaData::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSu
 	{
 		for (TSubclassOf<UHealthDeltaProcessor> Processor : Processors)
 		{
-			ProcessorClassIndicesToNetSerialize.Add(USfHealthComponent::AllHealthDeltaProcessorClassesSortedByName.Find(Processor));
+			ProcessorClassIndicesToNetSerialize.Add(
+				USfHealthComponent::AllHealthDeltaProcessorClassesSortedByName.Find(Processor));
 		}
 	}
 	Ar << ProcessorClassIndicesToNetSerialize;
@@ -65,7 +68,8 @@ UDeathHandler::UDeathHandler()
 {
 }
 
-void UDeathHandler::InternalServerOnDeath(USfHealthComponent* Health, const TArray<FHealthDeltaData>& OrderedRecentHealthDelta)
+void UDeathHandler::InternalServerOnDeath(USfHealthComponent* Health,
+                                          const TArray<FHealthDeltaData>& OrderedRecentHealthDelta)
 {
 	//Call BP functions to handle death on instances.
 	Server_OnDeath(Health, OrderedRecentHealthDelta);
@@ -73,7 +77,7 @@ void UDeathHandler::InternalServerOnDeath(USfHealthComponent* Health, const TArr
 }
 
 void UDeathHandler::InternalClientOnDeathRPC_Implementation(USfHealthComponent* Health,
-	const TArray<FHealthDeltaData>& OrderedRecentHealthDelta)
+                                                            const TArray<FHealthDeltaData>& OrderedRecentHealthDelta)
 {
 	Autonomous_OnDeath(Health, OrderedRecentHealthDelta);
 }
@@ -95,16 +99,20 @@ void USfHealthComponent::BeginPlay()
 	//Assign all health delta processors an ID for net serialization.
 	if (!HealthDeltaProcessorClassesFetched)
 	{
-		for(TObjectIterator<UClass> It; It; ++It)
+		for (TObjectIterator<UClass> It; It; ++It)
 		{
-			if(It->IsChildOf(UHealthDeltaProcessor::StaticClass()) && !It->HasAnyClassFlags(CLASS_Abstract))
+			if (It->IsChildOf(UHealthDeltaProcessor::StaticClass()) && !It->HasAnyClassFlags(CLASS_Abstract))
 			{
 				AllHealthDeltaProcessorClassesSortedByName.Add(*It);
 			}
 		}
 		//We sort this in a deterministic order to index items.
-		checkf(AllHealthDeltaProcessorClassesSortedByName.Num() < 256, TEXT("Only 255 health delta processors can exist."))
-		AllHealthDeltaProcessorClassesSortedByName.Sort([](const UClass& A, const UClass& B) { return A.GetFullName() > B.GetFullName(); });
+		checkf(AllHealthDeltaProcessorClassesSortedByName.Num() < 256,
+		       TEXT("Only 255 health delta processors can exist."))
+		AllHealthDeltaProcessorClassesSortedByName.Sort([](const UClass& A, const UClass& B)
+		{
+			return A.GetFullName() > B.GetFullName();
+		});
 		HealthDeltaProcessorClassesFetched = true;
 	}
 	if (FormCore) return;
@@ -138,15 +146,20 @@ float USfHealthComponent::ApplyHealthDelta(const float Value, UConstituent* Sour
 	}
 	
 	const float OriginalHealth = Health;
-	Health = FMath::Clamp(Health + ProcessedValue, 0, GetMaxHealth());
-	
+	float NewHealth = FMath::Clamp(Health + ProcessedValue, 0, GetMaxHealth());
+
+	//Broadcast delegate to allow for intervening or calling other events.
+	OnHealthChange.Broadcast(OriginalHealth, NewHealth, Source, Processors);
+
+	Health = NewHealth;
+
 	//We want to return the actual health change, not the processed value.
 	const float FinalHealthDelta = Health - OriginalHealth;
 
 	//We compress health delta data with identical sources and processors together in order to prevent ticked
 	//health changes (damage over time) to bloat our buffer.
 	AddHealthDeltaDataAndCompress(Value, FinalHealthDelta, Source, Processors,
-									 FormCore->CalculateFutureServerTimestamp(RecentHealthDeltaDataTimeout));
+	                              FormCore->CalculateFutureServerTimestamp(RecentHealthDeltaDataTimeout));
 	TrimTimeout();
 	if (Health <= 0)
 	{
@@ -163,7 +176,8 @@ float USfHealthComponent::ApplyHealthDeltaFractionOfMax(const float Value, UCons
 }
 
 float USfHealthComponent::ApplyHealthDeltaFractionOfRemaining(const float Value, UConstituent* Source,
-                                                              const TArray<TSubclassOf<UHealthDeltaProcessor>> Processors)
+                                                              const TArray<TSubclassOf<UHealthDeltaProcessor>>
+                                                              Processors)
 {
 	const float ActualValue = Value * Health;
 	return ApplyHealthDelta(ActualValue, Source, Processors);
@@ -194,8 +208,9 @@ void USfHealthComponent::SetupSfHealth(UFormCoreComponent* InFormCore)
 	Health = GetMaxHealth();
 }
 
-void USfHealthComponent::AddHealthDeltaDataAndCompress(const float InValue, const float OutValue, UConstituent* Source,
-                                                       const TArray<TSubclassOf<UHealthDeltaProcessor>>& Processors, const float TimeoutTimestamp)
+const FHealthDeltaData& USfHealthComponent::AddHealthDeltaDataAndCompress(
+	const float InValue, const float OutValue, UConstituent* Source,
+	const TArray<TSubclassOf<UHealthDeltaProcessor>>& Processors, const float TimeoutTimestamp)
 {
 	FHealthDeltaData SimilarData;
 	bool bFoundSimilarData = false;
@@ -218,11 +233,10 @@ void USfHealthComponent::AddHealthDeltaDataAndCompress(const float InValue, cons
 		//Move to the front since it becomes the most recent.
 		OrderedRecentHealthDelta.Remove(SimilarData);
 		OrderedRecentHealthDelta.Insert(SimilarData, 0);
+		return SimilarData;
 	}
-	else
-	{
-		OrderedRecentHealthDelta.Insert(FHealthDeltaData(InValue, OutValue, Source, Processors, TimeoutTimestamp), 0);
-	}
+	return OrderedRecentHealthDelta[OrderedRecentHealthDelta.Insert(
+		FHealthDeltaData(InValue, OutValue, Source, Processors, TimeoutTimestamp), 0)];
 }
 
 void USfHealthComponent::TrimTimeout()
@@ -240,4 +254,3 @@ void USfHealthComponent::TrimTimeout()
 		OrderedRecentHealthDelta.Remove(Data);
 	}
 }
-

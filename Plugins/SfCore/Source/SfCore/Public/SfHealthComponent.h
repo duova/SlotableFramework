@@ -14,6 +14,8 @@ class UFormCoreComponent;
 class UConstituent;
 class UHealthDeltaProcessor;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(FOnHealthChange, const float&, InHealthBefore, float&, MutableHealthAfter, UConstituent*, Source, const TArray<TSubclassOf<UHealthDeltaProcessor>>&, Processors);
+
 //Data that represents damage done to the health by a certain source using a certain health delta processor.
 USTRUCT(BlueprintType)
 struct SFCORE_API FHealthDeltaData
@@ -140,11 +142,14 @@ public:
 
 	void SetupSfHealth(UFormCoreComponent* InFormCore);
 	
-	virtual void AddHealthDeltaDataAndCompress(const float InValue, const float OutValue, UConstituent* Source,
+	virtual const FHealthDeltaData& AddHealthDeltaDataAndCompress(const float InValue, const float OutValue, UConstituent* Source,
 									   const TArray<TSubclassOf<UHealthDeltaProcessor>>& Processors,
 									   const float TimeoutTimestamp);
 
 	virtual void TrimTimeout();
+
+	UPROPERTY(BlueprintAssignable)
+	FOnHealthChange OnHealthChange;
 
 protected:
 	UPROPERTY(Replicated)

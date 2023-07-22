@@ -3,8 +3,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Constituent.h"
 #include "InputAction.h"
+#include "Card.h"
 #include "SfObject.h"
 #include "Inventory.generated.h"
 
@@ -12,6 +12,11 @@ struct FCard;
 class USlotable;
 class UConstituent;
 class UCardObject;
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAddSlotable, USlotable*, Slotable);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRemoveSlotable, USlotable*, Slotable);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAddCard, FCard&, Card);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRemoveCard, FCard&, Card);
 
 /**
  * Inventories of slotables.
@@ -141,6 +146,18 @@ public:
 	void ReassignAllConstituentInstanceIds();
 
 	void RemoveCardsOfOwner(const uint8 OwnerConstituentInstanceId);
+
+	UPROPERTY(BlueprintAssignable)
+	FOnAddSlotable Server_OnAddSlotable;
+
+	UPROPERTY(BlueprintAssignable)
+	FOnRemoveSlotable Server_OnRemoveSlotable;
+
+	UPROPERTY(BlueprintAssignable)
+	FOnAddCard Server_OnAddCard;
+
+	UPROPERTY(BlueprintAssignable)
+	FOnRemoveCard Server_OnRemoveCard;
 
 protected:
 

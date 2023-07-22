@@ -3,7 +3,6 @@
 
 #include "Inventory.h"
 
-#include "Card.h"
 #include "CardObject.h"
 #include "FormCharacterComponent.h"
 #include "FormCoreComponent.h"
@@ -284,6 +283,7 @@ USlotable* UInventory::Server_AddSlotable(const TSubclassOf<USlotable>& Slotable
 	InitializeSlotable(SlotableInstance, Origin);
 	ConstituentCount += SlotableInstance->GetConstituents().Num();
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
+	Server_OnAddSlotable.Broadcast(SlotableInstance);
 	return SlotableInstance;
 }
 
@@ -310,6 +310,7 @@ void UInventory::Server_RemoveSlotableByIndex(const int32 Index, const bool bRem
 	{
 		if (USlotable* Slotable = Slotables[Index])
 		{
+			Server_OnRemoveSlotable.Broadcast(Slotable);
 			ConstituentCount -= Slotable->GetConstituents().Num();
 			DeinitializeSlotable(Slotable);
 			//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
@@ -319,6 +320,10 @@ void UInventory::Server_RemoveSlotableByIndex(const int32 Index, const bool bRem
 	}
 	else
 	{
+		if (USlotable* Slotable = Slotables[Index])
+		{
+			Server_OnRemoveSlotable.Broadcast(Slotable);
+		}
 		Server_SetSlotable(EmptySlotableClass, Index, false, nullptr);
 	}
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
@@ -338,6 +343,7 @@ USlotable* UInventory::Server_SetSlotable(const TSubclassOf<USlotable>& Slotable
 			checkf(CurrentSlotable->GetClass() == EmptySlotableClass,
 			       TEXT("Attempted to set a slotable to a slot that is occupied."));
 		}
+		Server_OnRemoveSlotable.Broadcast(CurrentSlotable);
 		DeinitializeSlotable(CurrentSlotable);
 		//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
 		CurrentSlotable->Destroy();
@@ -346,6 +352,7 @@ USlotable* UInventory::Server_SetSlotable(const TSubclassOf<USlotable>& Slotable
 	Slotables[Index] = SlotableInstance;
 	InitializeSlotable(SlotableInstance, Origin);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
+	Server_OnAddSlotable.Broadcast(SlotableInstance);
 	return SlotableInstance;
 }
 
@@ -360,6 +367,7 @@ USlotable* UInventory::Server_InsertSlotable(const TSubclassOf<USlotable>& Slota
 	InitializeSlotable(SlotableInstance, Origin);
 	ConstituentCount += SlotableInstance->GetConstituents().Num();
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
+	Server_OnAddSlotable.Broadcast(SlotableInstance);
 	return SlotableInstance;
 }
 
@@ -410,6 +418,8 @@ void UInventory::Server_TradeSlotablesBetweenInventories(USlotable* SlotableA, U
 	const int8 IndexB = InventoryB->GetSlotables().Find(SlotableB);
 	checkf(!InventoryA->bIsChangeLocked && !InventoryB->bIsChangeLocked,
 	       TEXT("Attempted to trade slotables between change locked inventories."));
+	InventoryA->Server_OnRemoveSlotable.Broadcast(SlotableA);
+	InventoryB->Server_OnRemoveSlotable.Broadcast(SlotableB);
 	DeinitializeSlotable(SlotableA);
 	DeinitializeSlotable(SlotableB);
 	InventoryA->Slotables[IndexA] = DuplicateObject(SlotableB, SlotableA->GetTypedOuter<AActor>());
@@ -421,6 +431,8 @@ void UInventory::Server_TradeSlotablesBetweenInventories(USlotable* SlotableA, U
 	InitializeSlotable(InventoryB->Slotables[IndexB], OriginA);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, InventoryA);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, InventoryB);
+	InventoryA->Server_OnAddSlotable.Broadcast(InventoryA->Slotables[IndexA]);
+	InventoryB->Server_OnAddSlotable.Broadcast(InventoryB->Slotables[IndexB]);
 }
 
 bool UInventory::Server_AddSharedCard(const TSubclassOf<UCardObject>& CardClass, const float CustomLifetime)
@@ -474,16 +486,17 @@ bool UInventory::Server_AddOwnedCard(const TSubclassOf<UCardObject>& CardClass,
 			              nullptr, OwningFormCore);
 		}
 	}
+	FCard& CardAdded = Cards.Last();
 	if (IsFormCharacter())
 	{
 		GetFormCharacter()->bMovementSpeedNeedsRecalculation = true;
-		FCard& CardAdded = Cards.Last();
 		//We set it to be not corrected and set a timeout so the client has a chance to synchronize before we start issuing corrections.
 		CardAdded.bIsNotCorrected = true;
 		CardAdded.ServerAwaitClientSyncTimeoutTimestamp = CardAdded.ServerAwaitClientSyncTimeoutDuration + GetWorld()->TimeSeconds;
 		GetFormCharacter()->MarkCardsDirty();
 	}
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
+	Server_OnAddCard.Broadcast(CardAdded);
 	return true;
 }
 
@@ -511,6 +524,7 @@ bool UInventory::Server_RemoveOwnedCard(const TSubclassOf<UCardObject>& CardClas
 	}
 	if (IndexToDestroy != INDEX_NONE)
 	{
+		Server_OnRemoveCard.Broadcast(Cards[IndexToDestroy]);
 		Cards.RemoveAt(IndexToDestroy);
 		MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
 		return true;
@@ -562,6 +576,7 @@ bool UInventory::Predicted_AddOwnedCard(const TSubclassOf<UCardObject>& CardClas
 	if (HasAuthority())
 	{
 		MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
+		Server_OnAddCard.Broadcast(Cards.Last());
 	}
 	else
 	{
@@ -589,6 +604,10 @@ bool UInventory::Predicted_RemoveOwnedCard(const TSubclassOf<UCardObject>& CardC
 	}
 	if (IndexToDestroy != INDEX_NONE)
 	{
+		if (HasAuthority())
+		{
+			Server_OnRemoveCard.Broadcast(Cards[IndexToDestroy]);
+		}
 		Cards.RemoveAt(IndexToDestroy);
 		if (HasAuthority())
 		{
