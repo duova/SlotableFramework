@@ -138,6 +138,33 @@ void USlotable::ServerDeinitializeConstituent(UConstituent* Constituent)
 	GetOwner()->RemoveReplicatedSubObject(Constituent);
 }
 
+void USlotable::OnRep_Constituents()
+{
+	//Register and deregister subobjects on client.
+	for (UConstituent* ReplicatedConstituent : Constituents)
+	{
+		if (!ReplicatedConstituent) continue;
+		if (!ClientSubObjectListRegisteredConstituents.Contains(ReplicatedConstituent) && GetOwner())
+		{
+			GetOwner()->AddReplicatedSubObject(ReplicatedConstituent);
+			ClientSubObjectListRegisteredConstituents.Add(ReplicatedConstituent);
+		}
+	}
+	TArray<UConstituent*> ToRemove;
+	for (UConstituent* RegisteredConstituent : ClientSubObjectListRegisteredConstituents)
+	{
+		if (!Constituents.Contains(RegisteredConstituent) && GetOwner())
+		{
+			GetOwner()->RemoveReplicatedSubObject(RegisteredConstituent);
+			ToRemove.Add(RegisteredConstituent);
+		}
+	}
+	for (UConstituent* ConstituentToRemove : ToRemove)
+	{
+		ClientSubObjectListRegisteredConstituents.Remove(ConstituentToRemove);
+	}
+}
+
 UConstituent* USlotable::CreateUninitializedConstituent(const TSubclassOf<UConstituent>& ConstituentClass) const
 {
 	ErrorIfNoAuthority();

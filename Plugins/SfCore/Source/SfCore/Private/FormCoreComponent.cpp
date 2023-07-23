@@ -157,6 +157,33 @@ void UFormCoreComponent::BeginDestroy()
 	}
 }
 
+void UFormCoreComponent::OnRep_Inventories()
+{
+	//Register and deregister subobjects on client.
+	for (UInventory* ReplicatedInventory : Inventories)
+	{
+		if (!ReplicatedInventory) continue;
+		if (!ClientSubObjectListRegisteredInventories.Contains(ReplicatedInventory) && GetOwner())
+		{
+			GetOwner()->AddReplicatedSubObject(ReplicatedInventory);
+			ClientSubObjectListRegisteredInventories.Add(ReplicatedInventory);
+		}
+	}
+	TArray<UInventory*> ToRemove;
+	for (UInventory* RegisteredInventory : ClientSubObjectListRegisteredInventories)
+	{
+		if (!Inventories.Contains(RegisteredInventory) && GetOwner())
+		{
+			GetOwner()->RemoveReplicatedSubObject(RegisteredInventory);
+			ToRemove.Add(RegisteredInventory);
+		}
+	}
+	for (UInventory* InventoryToRemove : ToRemove)
+	{
+		ClientSubObjectListRegisteredInventories.Remove(InventoryToRemove);
+	}
+}
+
 void UFormCoreComponent::SetMovementStatsDirty() const
 {
 	MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, WalkSpeedStat, this);

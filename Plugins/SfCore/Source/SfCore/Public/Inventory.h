@@ -198,8 +198,14 @@ protected:
 	void DeinitializeSlotable(USlotable* Slotable);
 
 private:
-	UPROPERTY(Replicated, VisibleAnywhere)
+
+	UFUNCTION()
+	void OnRep_Slotables();
+	
+	UPROPERTY(Replicated, VisibleAnywhere, ReplicatedUsing = OnRep_Slotables)
 	TArray<USlotable*> Slotables;
+
+	TArray<USlotable*> ClientSubObjectListRegisteredSlotables;
 
 	TArray<int8> OrderedInputBindingIndices;
 

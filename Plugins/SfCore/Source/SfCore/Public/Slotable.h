@@ -79,8 +79,14 @@ protected:
 	void ServerDeinitializeConstituent(UConstituent* Constituent);
 
 private:
-	UPROPERTY(Replicated, VisibleAnywhere)
+
+	UFUNCTION()
+	void OnRep_Constituents();
+	
+	UPROPERTY(Replicated, VisibleAnywhere, ReplicatedUsing = OnRep_Constituents)
 	TArray<UConstituent*> Constituents;
+
+	TArray<UConstituent*> ClientSubObjectListRegisteredConstituents;
 
 	UConstituent* CreateUninitializedConstituent(const TSubclassOf<UConstituent>& ConstituentClass) const;
 

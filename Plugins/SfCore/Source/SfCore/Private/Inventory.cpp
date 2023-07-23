@@ -778,6 +778,33 @@ void UInventory::DeinitializeSlotable(USlotable* Slotable)
 	GetOwner()->RemoveReplicatedSubObject(Slotable);
 }
 
+void UInventory::OnRep_Slotables()
+{
+	//Register and deregister subobjects on client.
+	for (USlotable* ReplicatedSlotable : Slotables)
+	{
+		if (!ReplicatedSlotable) continue;
+		if (!ClientSubObjectListRegisteredSlotables.Contains(ReplicatedSlotable) && GetOwner())
+		{
+			GetOwner()->AddReplicatedSubObject(ReplicatedSlotable);
+			ClientSubObjectListRegisteredSlotables.Add(ReplicatedSlotable);
+		}
+	}
+	TArray<USlotable*> ToRemove;
+	for (USlotable* RegisteredSlotable : ClientSubObjectListRegisteredSlotables)
+	{
+		if (!Slotables.Contains(RegisteredSlotable) && GetOwner())
+		{
+			GetOwner()->RemoveReplicatedSubObject(RegisteredSlotable);
+			ToRemove.Add(RegisteredSlotable);
+		}
+	}
+	for (USlotable* SlotableToRemove : ToRemove)
+	{
+		ClientSubObjectListRegisteredSlotables.Remove(SlotableToRemove);
+	}
+}
+
 float UInventory::GetCardLifetime(const TSubclassOf<UCardObject>& CardClass, const int32 InOwnerConstituentInstanceId)
 {
 	float Value = 0;

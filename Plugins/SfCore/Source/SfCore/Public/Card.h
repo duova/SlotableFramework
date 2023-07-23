@@ -18,7 +18,7 @@ class UCardObject;
  * It is possible to search for the card by owner and class in each inventory, and as such only one card of a class and
  * owner may exist per inventory. Shared cards have no owner and only one of each class can exist in each inventory.
  */
-USTRUCT()
+USTRUCT(BlueprintType)
 struct SFCORE_API FCard
 {
 	GENERATED_BODY()
@@ -32,7 +32,7 @@ struct SFCORE_API FCard
 		UseCustomLifetimeServerTimestamp
 	};
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly)
 	TSubclassOf<UCardObject> Class;
 
 	//For serialization only.

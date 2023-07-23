@@ -133,8 +133,14 @@ protected:
 	TArray<TSubclassOf<UInventory>> DefaultInventoryClasses;
 
 private:
-	UPROPERTY(Replicated, VisibleAnywhere)
+
+	UFUNCTION()
+	void OnRep_Inventories();
+	
+	UPROPERTY(Replicated, VisibleAnywhere, ReplicatedUsing = OnRep_Inventories)
 	TArray<UInventory*> Inventories;
+
+	TArray<UInventory*> ClientSubObjectListRegisteredInventories;
 
 	UPROPERTY(Replicated, VisibleAnywhere)
 	FGameplayTag Team;
