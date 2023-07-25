@@ -87,7 +87,7 @@ USfHealthComponent::USfHealthComponent()
 	if (!GetOwner()) return;
 	PrimaryComponentTick.bCanEverTick = false;
 	bReplicateUsingRegisteredSubObjectList = true;
-	SetIsReplicatedByDefault(true);
+	SetIsReplicated(true);
 }
 
 void USfHealthComponent::BeginPlay()

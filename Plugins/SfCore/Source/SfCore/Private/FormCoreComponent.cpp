@@ -18,7 +18,7 @@ UFormCoreComponent::UFormCoreComponent()
 	if (!GetOwner()) return;
 	PrimaryComponentTick.bCanEverTick = true;
 	bReplicateUsingRegisteredSubObjectList = true;
-	SetIsReplicatedByDefault(true);
+	SetIsReplicated(true);
 }
 
 const TArray<UClass*>& UFormCoreComponent::GetAllCardObjectClassesSortedByName()

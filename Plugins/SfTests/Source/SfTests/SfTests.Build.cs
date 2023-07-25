@@ -17,7 +17,7 @@ public class SfTests : ModuleRules
 		PublicDependencyModuleNames.AddRange(new string[] { "Core" });
 			
 		
-		PrivateDependencyModuleNames.AddRange(new string[] { "CoreUObject", "Engine", "Slate", "SlateCore", "SfCore", "Gauntlet" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "CoreUObject", "Engine", "SfCore", "Gauntlet" });
 		
 		
 		DynamicallyLoadedModuleNames.AddRange(new string[] { });

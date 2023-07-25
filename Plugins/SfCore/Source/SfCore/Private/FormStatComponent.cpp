@@ -42,6 +42,7 @@ UFormStatComponent::UFormStatComponent()
 	if (!GetOwner()) return;
 	PrimaryComponentTick.bCanEverTick = false;
 	CurrentStats.OwningFormStat = this;
+	SetIsReplicated(true);
 	for (const FStat& BaseStat : BaseStats)
 	{
 		auto Duplicate = [BaseStat](const FStat& CheckedStat)
