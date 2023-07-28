@@ -165,15 +165,9 @@ void UInventory::ClientCheckAndUpdateCardObjects()
 	}
 }
 
-TArray<USlotable*> UInventory::GetSlotables()
+const TArray<USlotable*>& UInventory::GetSlotables()
 {
-	TArray<USlotable*> SlotablesCopy;
-	SlotablesCopy.Reserve(Slotables.Num());
-	for (USlotable* Slotable : Slotables)
-	{
-		SlotablesCopy.Add(Slotable);
-	}
-	return SlotablesCopy;
+	return Slotables;
 }
 
 TArray<USlotable*> UInventory::GetSlotablesOfType(const TSubclassOf<USlotable>& SlotableClass)
@@ -265,6 +259,11 @@ TArray<UCardObject*> UInventory::GetCardObjects(const TSubclassOf<UCardObject>& 
 		if (Card->GetClass() == CardClass) Objects.Add(Card);
 	}
 	return Objects;
+}
+
+int32 UInventory::GetRemainingCapacity() const
+{
+	return Capacity - Slotables.Num();
 }
 
 USlotable* UInventory::Server_AddSlotable(const TSubclassOf<USlotable>& SlotableClass, UConstituent* Origin)
@@ -751,6 +750,11 @@ void UInventory::RemoveCardsOfOwner(const uint8 OwnerConstituentInstanceId)
 	{
 		Server_RemoveOwnedCard(CardClass, OwnerConstituentInstanceId);
 	}
+}
+
+bool UInventory::IsDynamicLength() const
+{
+	return bIsDynamic;
 }
 
 //Must be called after the slotable has been placed in an inventory.

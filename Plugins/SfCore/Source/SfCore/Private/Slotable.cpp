@@ -38,14 +38,9 @@ void USlotable::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetim
 	DOREPLIFETIME_WITH_PARAMS_FAST(USlotable, OwningInventory, DefaultParams);
 }
 
-TArray<UConstituent*> USlotable::GetConstituents()
+const TArray<UConstituent*>& USlotable::GetConstituents()
 {
-	TArray<UConstituent*> ConstituentsCopy;
-	for (UConstituent* Constituent : Constituents)
-	{
-		ConstituentsCopy.Add(Constituent);
-	}
-	return ConstituentsCopy;
+	return Constituents;
 }
 
 TArray<UConstituent*> USlotable::GetConstituentsOfClass(const TSubclassOf<UConstituent> ConstituentClass)

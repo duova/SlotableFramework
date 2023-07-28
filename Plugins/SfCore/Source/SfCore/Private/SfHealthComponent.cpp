@@ -149,7 +149,7 @@ float USfHealthComponent::ApplyHealthDelta(const float Value, UConstituent* Sour
 	float NewHealth = FMath::Clamp(Health + ProcessedValue, 0, GetMaxHealth());
 
 	//Broadcast delegate to allow for intervening or calling other events.
-	OnHealthChange.Broadcast(OriginalHealth, NewHealth, Source, Processors);
+	Server_OnHealthChange.Broadcast(OriginalHealth, NewHealth, Source, Processors);
 
 	Health = NewHealth;
 

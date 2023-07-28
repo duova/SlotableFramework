@@ -149,7 +149,7 @@ public:
 	virtual void TrimTimeout();
 
 	UPROPERTY(BlueprintAssignable)
-	FOnHealthChange OnHealthChange;
+	FOnHealthChange Server_OnHealthChange;
 
 protected:
 	UPROPERTY(Replicated)

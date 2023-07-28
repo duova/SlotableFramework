@@ -35,12 +35,9 @@ public:
 	                           FActorComponentTickFunction* ThisTickFunction) override;
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
-
-	/**
-	 * Read-only copy of inventories.
-	 */
+	
 	UFUNCTION(BlueprintPure)
-	TArray<UInventory*> GetInventories();
+	const TArray<UInventory*>& GetInventories();
 
 	UFUNCTION(BlueprintPure)
 	FGameplayTag GetTeam();
@@ -148,6 +145,8 @@ private:
 	UPROPERTY(VisibleAnywhere)
 	uint8 bIsFirstPerson:1;
 
+	//CardObjectClasses are indexed as they're net referenced very often and is worth using a simplified index for instead
+	//of repeatedly serializing the class reference.
 	inline static TArray<UClass*> AllCardObjectClassesSortedByName = TArray<UClass*>();
 
 	inline static bool CardObjectClassesFetched = false;

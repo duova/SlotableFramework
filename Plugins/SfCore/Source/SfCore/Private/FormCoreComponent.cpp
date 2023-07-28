@@ -245,14 +245,9 @@ void UFormCoreComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, AccelerationStat, DefaultParams);
 }
 
-TArray<UInventory*> UFormCoreComponent::GetInventories()
+const TArray<UInventory*>& UFormCoreComponent::GetInventories()
 {
-	TArray<UInventory*> InventoriesCopy;
-	for (UInventory* Inventory : Inventories)
-	{
-		InventoriesCopy.Add(Inventory);
-	}
-	return InventoriesCopy;
+	return Inventories;
 }
 
 FGameplayTag UFormCoreComponent::GetTeam()

@@ -29,12 +29,9 @@ public:
 
 	UPROPERTY(ReplicatedUsing = OnRep_OwningInventory, Replicated, BlueprintReadOnly, VisibleAnywhere)
 	class UInventory* OwningInventory;
-
-	/**
-	 * Read-only copy of constituents.
-	 */
+	
 	UFUNCTION(BlueprintPure)
-	TArray<UConstituent*> GetConstituents();
+	const TArray<UConstituent*>& GetConstituents();
 	
 	UFUNCTION(BlueprintPure)
 	TArray<UConstituent*> GetConstituentsOfClass(const TSubclassOf<UConstituent> ConstituentClass);

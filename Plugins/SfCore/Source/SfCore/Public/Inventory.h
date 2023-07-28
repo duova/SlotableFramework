@@ -36,12 +36,9 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	void AuthorityTick(float DeltaTime);
-
-	/**
-	 * Read-only copy of slotables.
-	 */
+	
 	UFUNCTION(BlueprintPure)
-	TArray<USlotable*> GetSlotables();
+	const TArray<USlotable*>& GetSlotables();
 
 	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)
 	class UFormCoreComponent* OwningFormCore;
@@ -121,6 +118,9 @@ public:
 	UFUNCTION(BlueprintPure)
 	TArray<UCardObject*> GetCardObjects(const TSubclassOf<UCardObject>& CardClass);
 
+	UFUNCTION(BlueprintCallable)
+	int32 GetRemainingCapacity() const;
+
 	void ClientInitialize();
 
 	void ServerInitialize();
@@ -146,6 +146,8 @@ public:
 	void ReassignAllConstituentInstanceIds();
 
 	void RemoveCardsOfOwner(const uint8 OwnerConstituentInstanceId);
+
+	bool IsDynamicLength() const;
 
 	UPROPERTY(BlueprintAssignable)
 	FOnAddSlotable Server_OnAddSlotable;

@@ -1,0 +1,66 @@
+﻿// Fill out your copyright notice in the Description page of Project Settings.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
+#include "Components/ActorComponent.h"
+#include "SfCurrencyComponent.generated.h"
+
+//The amount of a certain currency type.
+USTRUCT(BlueprintType)
+struct SFECONOMY_API FCurrencyValuePair
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	FGameplayTag Currency;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, meta = (ClampMin = 0))
+	int32 Value;
+
+	FCurrencyValuePair();
+
+	bool operator==(const FCurrencyValuePair& Other) const;
+
+	bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess);
+};
+
+//Container for different currencies identified by a FGameplayTag.
+UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
+class SFECONOMY_API USfCurrencyComponent : public UActorComponent
+{
+	GENERATED_BODY()
+
+public:
+	USfCurrencyComponent();
+
+protected:
+	virtual void BeginPlay() override;
+
+public:
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	UFUNCTION(BlueprintPure, BlueprintAuthorityOnly)
+	bool Server_HasCurrency(const FGameplayTag Currency) const;
+
+	//Returns 0 if currency doesn't exist.
+	UFUNCTION(BlueprintPure, BlueprintAuthorityOnly)
+	int32 Server_GetCurrencyValue(const FGameplayTag Currency) const;
+
+	//Returns false if currency doesn't exist. Adds to a max value of 2,147,483,647, operation will be rejected if not possible or negative value provided.
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
+	bool Server_AddCurrency(const FGameplayTag Currency, const int32 Value);
+
+	//Returns false if currency doesn't exist. Deducts to a min value of 0. Operation is rejected if value is negative.
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
+	bool Server_DeductCurrency(const FGameplayTag Currency, const int32 Value);
+
+	//Returns false if currency doesn't exist. Value must be between 0 and 2,147,483,647 or the operation will be rejected.
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
+	bool Server_SetCurrency(const FGameplayTag Currency, const int32 Value);
+
+private:
+	UPROPERTY(Replicated)
+	TArray<FCurrencyValuePair> HeldCurrencyValues;
+};
