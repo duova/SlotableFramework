@@ -46,6 +46,11 @@ const TArray<FShopOfferWithAmount>& USfShopBroadcasterComponent::GetShopOffers()
 
 void USfShopBroadcasterComponent::Server_AddShopOffer(const UShopOffer* InShopOffer, const int32 InAmount)
 {
+	ServerAddShopOffer(InShopOffer, InAmount);
+}
+
+void USfShopBroadcasterComponent::ServerAddShopOffer(const UShopOffer* InShopOffer, const int32 InAmount)
+{
 	if (InAmount < 0) return;
 	for (FShopOfferWithAmount& ShopOffer : ShopOffers)
 	{
@@ -61,6 +66,11 @@ void USfShopBroadcasterComponent::Server_AddShopOffer(const UShopOffer* InShopOf
 }
 
 bool USfShopBroadcasterComponent::Server_RemoveShopOffer(const UShopOffer* InShopOffer)
+{
+	return ServerRemoveShopOffer(InShopOffer);
+}
+
+bool USfShopBroadcasterComponent::ServerRemoveShopOffer(const UShopOffer* InShopOffer)
 {
 	if (!InShopOffer) return false;
 	const FShopOfferWithAmount* ToRemove = ShopOffers.FindByPredicate(
@@ -79,6 +89,11 @@ bool USfShopBroadcasterComponent::Server_RemoveShopOffer(const UShopOffer* InSho
 
 bool USfShopBroadcasterComponent::Server_SetShopOfferAmount(const UShopOffer* InShopOffer, const int32 InAmount)
 {
+	return ServerSetShopOfferAmount(InShopOffer, InAmount);
+}
+
+bool USfShopBroadcasterComponent::ServerSetShopOfferAmount(const UShopOffer* InShopOffer, const int32 InAmount)
+{
 	if (!InShopOffer) return false;
 	if (InAmount < 0) return false;
 	FShopOfferWithAmount* ToChange = ShopOffers.FindByPredicate([InShopOffer](const FShopOfferWithAmount& CheckedOffer)
@@ -96,6 +111,13 @@ bool USfShopBroadcasterComponent::Server_SetShopOfferAmount(const UShopOffer* In
 		ShopOffers.Remove(*ToChange);
 	}
 	return true;
+}
+
+bool USfShopBroadcasterComponent::Server_Purchase(USfShopAccessorComponent* InAccessor, const UShopOffer* InShopOffer,
+                                                  const TArray<USlotable*>& OfferedSlotables, const int32 InAmount,
+                                                  UInventory* TargetInventory)
+{
+	return ServerPurchase(InAccessor, InShopOffer, OfferedSlotables, InAmount, TargetInventory);
 }
 
 void USfShopBroadcasterComponent::FindMatchingSlotables(const TArray<USlotable*>& InOfferedSlotables,
@@ -123,10 +145,9 @@ void USfShopBroadcasterComponent::FindMatchingSlotables(const TArray<USlotable*>
 	}
 }
 
-bool USfShopBroadcasterComponent::Server_Purchase(USfShopAccessorComponent* InAccessor,
-                                                  const UShopOffer* InShopOffer, const int32 InAmount,
-                                                  TArray<USlotable*> OfferedSlotables,
-                                                  UInventory* TargetInventory)
+bool USfShopBroadcasterComponent::ServerPurchase(USfShopAccessorComponent* InAccessor, const UShopOffer* InShopOffer,
+                                                 const TArray<USlotable*>& OfferedSlotables, const int32 InAmount,
+                                                 UInventory* TargetInventory)
 {
 	if (!GetOwner()->HasAuthority()) return false;
 
@@ -302,4 +323,29 @@ bool FSlotableClassAndConditions::NetSerialize(FArchive& Ar, UPackageMap* Map, b
 
 UShopOffer::UShopOffer()
 {
+}
+
+FShopOfferWithAmount::FShopOfferWithAmount(): ShopOffer(nullptr)
+{
+}
+
+FShopOfferWithAmount::FShopOfferWithAmount(const UShopOffer* InShopOffer, const int32 InAmount): ShopOffer(nullptr)
+{
+	ShopOffer = InShopOffer;
+	Amount = InAmount;
+}
+
+bool FShopOfferWithAmount::operator==(const FShopOfferWithAmount& Other) const
+{
+	return ShopOffer == Other.ShopOffer && Amount == Other.Amount;
+}
+
+bool FShopOfferWithAmount::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
+{
+	bOutSuccess = true;
+	UObject* ShopOfferObject = const_cast<UShopOffer*>(ShopOffer);
+	Map->SerializeObject(Ar, ShopOffer->GetClass(), ShopOfferObject);
+	ShopOffer = static_cast<UShopOffer*>(ShopOfferObject);
+	Ar << Amount;
+	return bOutSuccess;
 }

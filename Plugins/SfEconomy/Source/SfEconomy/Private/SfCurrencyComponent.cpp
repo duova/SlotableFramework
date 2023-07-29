@@ -52,7 +52,7 @@ void USfCurrencyComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 
 bool USfCurrencyComponent::Server_HasCurrency(const FGameplayTag Currency) const
 {
-	return HeldCurrencyValues.Contains(Currency);
+	return HeldCurrencyValues.FindByPredicate([Currency](const FCurrencyValuePair Pair){ return Pair.Currency == Currency; }) == nullptr;
 }
 
 int32 USfCurrencyComponent::Server_GetCurrencyValue(const FGameplayTag Currency) const

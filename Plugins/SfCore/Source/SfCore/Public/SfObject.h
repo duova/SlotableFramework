@@ -102,9 +102,9 @@ TMap<T, TSet<T*>> USfObject::TArrayGroupEquivalentElements(const TArray<T>& Arra
 template <class T, class F>
 bool USfObject::TArrayCheckDuplicate(const TArray<T>& Array, F&& Predicate)
 {
-	for (uint32 i = 0; i < Array.Num() - 1; i++)
+	for (int32 i = 0; i < Array.Num() - 1; i++)
 	{
-		for (uint32 j = i + 1; j < Array.Num(); j++)
+		for (int32 j = i + 1; j < Array.Num(); j++)
 		{
 			if (Predicate(Array[i], Array[j]))
 			{

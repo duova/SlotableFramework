@@ -93,7 +93,7 @@ struct SFECONOMY_API FShopOfferWithAmount
 
 	FShopOfferWithAmount();
 
-	FShopOfferWithAmount(const UShopOffer* InShopOffer, int32 InAmount);
+	FShopOfferWithAmount(const UShopOffer* InShopOffer, const int32 InAmount);
 
 	bool operator==(const FShopOfferWithAmount& Other) const;
 
@@ -131,15 +131,23 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	void Server_AddShopOffer(const UShopOffer* InShopOffer, const int32 InAmount = 1);
 
+	void ServerAddShopOffer(const UShopOffer* InShopOffer, const int32 InAmount = 1);
+
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	bool Server_RemoveShopOffer(const UShopOffer* InShopOffer);
 
+	bool ServerRemoveShopOffer(const UShopOffer* InShopOffer);
+
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	bool Server_SetShopOfferAmount(const UShopOffer* InShopOffer, const int32 InAmount);
+
+	bool ServerSetShopOfferAmount(const UShopOffer* InShopOffer, const int32 InAmount);
 	
 	//Leaving TargetInventory as null will put the slotables into the first inventory that is of the default inventory class.
-	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	bool Server_Purchase(USfShopAccessorComponent* InAccessor, const UShopOffer* InShopOffer, const int32 InAmount = 1, TArray<USlotable*> OfferedSlotables = TArray<USlotable*>(), UInventory* TargetInventory = nullptr);
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, meta = (AutoCreateRefTerm = "OfferedSlotables"))
+	bool Server_Purchase(USfShopAccessorComponent* InAccessor, const UShopOffer* InShopOffer, const TArray<USlotable*>& OfferedSlotables, const int32 InAmount = 1, UInventory* TargetInventory = nullptr);
+
+	bool ServerPurchase(USfShopAccessorComponent* InAccessor, const UShopOffer* InShopOffer, const TArray<USlotable*>& OfferedSlotables = TArray<USlotable*>(), const int32 InAmount = 1, UInventory* TargetInventory = nullptr);
 
 	static void FindMatchingSlotables(const TArray<USlotable*>& InOfferedSlotables, TArray<USlotable*>& OutSlotablesToTrade, const FSlotableClassAndConditions& InClassAndConditions, const int32 InAmount);
 

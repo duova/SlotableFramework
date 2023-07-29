@@ -15,7 +15,7 @@ class UShopOffer;
 
 //Ones prefixed with Error are considered issues with framework implementation and is unintended behaviour.
 UENUM(BlueprintType)
-enum class EPurchaseResponse
+enum class EPurchaseResponse : uint8
 {
 	Success,
 	OfferOutOfStock,
@@ -44,10 +44,13 @@ protected:
 public:
 	//Call to attempt to make a purchase at a certain shop. PurchaseCallback will be called as a response with a enum
 	//that represents the approximate result.
-	UFUNCTION(BlueprintCallable, Server)
-	void Client_Purchase(USfShopBroadcasterComponent* Shop, const UShopOffer* InShopOffer, const int32 InAmount, TArray<USlotable*> OfferedSlotables = TArray<USlotable*>());
+	UFUNCTION(BlueprintCallable, meta = (AutoCreateRefTerm = "OfferedSlotables"))
+	void Client_Purchase(USfShopBroadcasterComponent* Shop, const UShopOffer* InShopOffer, const int32 InAmount, const TArray<USlotable*>& OfferedSlotables);
 
-	UFUNCTION(Client)
+	UFUNCTION(Server, Reliable)
+	void ClientPurchase(USfShopBroadcasterComponent* Shop, const UShopOffer* InShopOffer, const int32 InAmount, const TArray<USlotable*>& OfferedSlotables = TArray<USlotable*>());
+
+	UFUNCTION(Client, Reliable)
 	void InternalClientRpcForPurchaseCallback(const EPurchaseResponse Response);
 
 	//Called as a response whenever a purchase is attempted by the client.

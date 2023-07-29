@@ -21,6 +21,12 @@ void USfShopAccessorComponent::BeginPlay()
 	
 }
 
+void USfShopAccessorComponent::Client_Purchase(USfShopBroadcasterComponent* Shop, const UShopOffer* InShopOffer,
+	const int32 InAmount, const TArray<USlotable*>& OfferedSlotables)
+{
+	ClientPurchase(Shop, InShopOffer, InAmount, OfferedSlotables);
+}
+
 void USfShopAccessorComponent::InternalClientRpcForPurchaseCallback_Implementation(const EPurchaseResponse Response)
 {
 	Client_PurchaseCallback(Response);
@@ -42,8 +48,8 @@ UFormCoreComponent* USfShopAccessorComponent::GetFormCore()
 	return CachedFormCore;
 }
 
-void USfShopAccessorComponent::Client_Purchase_Implementation(USfShopBroadcasterComponent* Shop, const UShopOffer* InShopOffer,
-                                                              const int32 InAmount, TArray<USlotable*> OfferedSlotables)
+void USfShopAccessorComponent::ClientPurchase_Implementation(USfShopBroadcasterComponent* Shop, const UShopOffer* InShopOffer,
+                                                              const int32 InAmount, const TArray<USlotable*>& OfferedSlotables)
 {
-	Shop->Server_Purchase(this, InShopOffer, InAmount, OfferedSlotables);
+	Shop->ServerPurchase(this, InShopOffer, OfferedSlotables, InAmount);
 }
