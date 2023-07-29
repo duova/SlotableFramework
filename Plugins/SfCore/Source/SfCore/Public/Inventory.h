@@ -29,6 +29,7 @@ class SFCORE_API UInventory : public USfObject
 	GENERATED_BODY()
 
 	friend class UFormCharacterComponent;
+	friend struct FBufferedInput;
 
 public:
 	UInventory();
@@ -38,13 +39,13 @@ public:
 	void AuthorityTick(float DeltaTime);
 	
 	UFUNCTION(BlueprintPure)
-	const TArray<USlotable*>& GetSlotables();
+	const TArray<USlotable*>& GetSlotables() const;
 
 	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)
 	class UFormCoreComponent* OwningFormCore;
 
 	UFUNCTION(BlueprintPure)
-	TArray<USlotable*> GetSlotablesOfType(const TSubclassOf<USlotable>& SlotableClass);
+	TArray<USlotable*> GetSlotablesOfType(const TSubclassOf<USlotable>& SlotableClass) const;
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	USlotable* Server_AddSlotable(const TSubclassOf<USlotable>& SlotableClass, UConstituent* Origin);
@@ -87,6 +88,8 @@ public:
 
 	UFUNCTION(BlueprintCallable)
 	bool Predicted_RemoveSharedCard(const TSubclassOf<UCardObject>& CardClass);
+	
+	void UpdateAndRunBufferedInputs(UConstituent* Constituent);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	bool Predicted_AddOwnedCard(const TSubclassOf<UCardObject>& CardClass, const uint8 InOwnerConstituentInstanceId, float CustomLifetime = 0);
@@ -101,10 +104,10 @@ public:
 	uint8 SlotableCount(const TSubclassOf<USlotable>& SlotableClass);
 
 	UFUNCTION(BlueprintPure)
-	bool HasSharedCard(const TSubclassOf<UCardObject>& CardClass);
+	bool HasSharedCard(const TSubclassOf<UCardObject>& CardClass) const;
 
 	UFUNCTION(BlueprintPure)
-	bool HasOwnedCard(const TSubclassOf<UCardObject>& CardClass, const uint8 InOwnerConstituentInstanceId);
+	bool HasOwnedCard(const TSubclassOf<UCardObject>& CardClass, const uint8 InOwnerConstituentInstanceId) const;
 
 	//Will return 0 if could not find or infinite lifetime.
 	UFUNCTION(BlueprintPure)
@@ -148,6 +151,8 @@ public:
 	void RemoveCardsOfOwner(const uint8 OwnerConstituentInstanceId);
 
 	bool IsDynamicLength() const;
+
+	TArray<const FCard*> GetCardsOfClass(const TSubclassOf<UCardObject> Class) const;
 
 	UPROPERTY(BlueprintAssignable)
 	FOnAddSlotable Server_OnAddSlotable;

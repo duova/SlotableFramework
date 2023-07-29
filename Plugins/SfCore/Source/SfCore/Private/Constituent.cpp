@@ -3,6 +3,7 @@
 
 #include "Constituent.h"
 
+#include "CardObject.h"
 #include "FormCharacterComponent.h"
 #include "FormCoreComponent.h"
 #include "Inventory.h"
@@ -104,6 +105,74 @@ TArray<uint8> FActionSet::ToArray() const
 	return Array;
 }
 
+FBufferedInput::FBufferedInput(): LifetimePredictedTimestamp(0)
+{
+}
+
+FBufferedInput::FBufferedInput(const TArray<TSubclassOf<UCardObject>>& InOwnedCardsRequired,
+                               const TArray<TSubclassOf<UCardObject>>& InOwnedCardsRequiredGone,
+                               const TArray<TSubclassOf<UCardObject>>& InSharedCardsRequired,
+                               const TArray<TSubclassOf<UCardObject>>& InSharedCardsRequiredGone,
+                               const float InLifetimePredictedTimestamp,
+                               const FBufferedInputDelegate& InDelegate)
+{
+	OwnedCardsRequired = InOwnedCardsRequired;
+	OwnedCardsRequiredGone = InOwnedCardsRequiredGone;
+	SharedCardsRequired = InSharedCardsRequired;
+	SharedCardsRequiredGone = InSharedCardsRequiredGone;
+	LifetimePredictedTimestamp = InLifetimePredictedTimestamp;
+	Delegate = InDelegate;
+}
+
+bool FBufferedInput::CheckConditionsMet(const UInventory* InInventoryToCheck, const UConstituent* InCurrentConstituent)
+{
+	//This might look like a heavy check every time an input is pressed and when cards are added and removed. However,
+	//note that most of the time only 1 for loop will run as it's likely that only 1 type of card will be checked.
+	for (const TSubclassOf<UCardObject>& OwnedCardRequired : OwnedCardsRequired)
+	{
+		if (!InInventoryToCheck->Cards.FindByPredicate([OwnedCardRequired, InCurrentConstituent](const FCard& Card)
+		{
+			return Card.OwnerConstituentInstanceId == InCurrentConstituent->InstanceId && Card.Class ==
+				OwnedCardRequired;
+		}))
+		{
+			return false;
+		}
+	}
+	for (const TSubclassOf<UCardObject>& OwnedCardRequiredGone : OwnedCardsRequiredGone)
+	{
+		if (InInventoryToCheck->Cards.FindByPredicate([OwnedCardRequiredGone, InCurrentConstituent](const FCard& Card)
+		{
+			return Card.OwnerConstituentInstanceId == InCurrentConstituent->InstanceId && Card.Class ==
+				OwnedCardRequiredGone;
+		}))
+		{
+			return false;
+		}
+	}
+	for (const TSubclassOf<UCardObject>& SharedCardRequired : SharedCardsRequired)
+	{
+		if (!InInventoryToCheck->Cards.FindByPredicate([SharedCardRequired, InCurrentConstituent](const FCard& Card)
+		{
+			return Card.OwnerConstituentInstanceId == 0 && Card.Class == SharedCardRequired;
+		}))
+		{
+			return false;
+		}
+	}
+	for (const TSubclassOf<UCardObject>& SharedCardRequiredGone : SharedCardsRequiredGone)
+	{
+		if (InInventoryToCheck->Cards.FindByPredicate([SharedCardRequiredGone, InCurrentConstituent](const FCard& Card)
+		{
+			return Card.OwnerConstituentInstanceId == 0 && Card.Class == SharedCardRequiredGone;
+		}))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 UConstituent::UConstituent()
 {
 }
@@ -183,7 +252,7 @@ void UConstituent::ExecuteAction(const uint8 ActionId, const bool bIsPredictable
 	if (GetOwner()->GetLocalRole() == ROLE_SimulatedProxy)
 	{
 		UE_LOG(LogTemp, Error,
-			  TEXT("Tried to ExecuteAction as simulated proxy."));
+		       TEXT("Tried to ExecuteAction as simulated proxy."));
 		return;
 	}
 	if (!IsIdWithinRange(ActionId)) return;
@@ -326,4 +395,34 @@ USfQuery* UConstituent::GetQuery(const TSubclassOf<USfQuery> QueryClass) const
 	}
 	UE_LOG(LogTemp, Error, TEXT("GetQuery could not find query. Is the query a dependency of the constituent?"));
 	return nullptr;
+}
+
+void UConstituent::BufferInput(const TArray<TSubclassOf<UCardObject>> InOwnedCardsRequiredToActivate,
+                               const TArray<TSubclassOf<UCardObject>> InOwnedCardsRequiredGoneToActivate,
+                               const TArray<TSubclassOf<UCardObject>> InSharedCardsRequiredToActivate,
+                               const TArray<TSubclassOf<UCardObject>> InSharedCardsRequiredGoneToActivate,
+                               const float Timeout,
+                               const FBufferedInputDelegate& EventToBind)
+{
+	const uint16 Index = BufferedInputs.Emplace(InOwnedCardsRequiredToActivate, InOwnedCardsRequiredGoneToActivate,
+	                       InSharedCardsRequiredToActivate, InSharedCardsRequiredGoneToActivate,
+	                       GetFormCharacter()->CalculateFuturePredictedTimestamp(Timeout), EventToBind);
+	//We check buffed inputs instantly just in case they can be run already.
+	OwningSlotable->OwningInventory->UpdateAndRunBufferedInputs(this);
+}
+
+void UConstituent::HandleBufferInputTimeout()
+{
+	TArray<FBufferedInput*> ToRemove;
+	for (FBufferedInput& BufferedInput : BufferedInputs)
+	{
+		if (GetFormCharacter()->CalculateTimeUntilPredictedTimestamp(BufferedInput.LifetimePredictedTimestamp) < 0)
+		{
+			ToRemove.Add(&BufferedInput);
+		}
+	}
+	for (const FBufferedInput* Element : ToRemove)
+	{
+		BufferedInputs.Remove(*Element);
+	}
 }

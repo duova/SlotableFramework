@@ -6,6 +6,9 @@
 #include "SfObject.h"
 #include "Constituent.generated.h"
 
+class UConstituent;
+class UInventory;
+class UCardObject;
 class USfQuery;
 class UFormCoreComponent;
 class UFormCharacterComponent;
@@ -36,7 +39,8 @@ struct SFCORE_API FActionSet
 	//Do not use default constructor.
 	FActionSet();
 
-	FActionSet(float CurrentWorldTime, uint8 ActionZero, uint8 ActionOne = 0, uint8 ActionTwo = 0, uint8 ActionThree = 0);
+	FActionSet(float CurrentWorldTime, uint8 ActionZero, uint8 ActionOne = 0, uint8 ActionTwo = 0,
+	           uint8 ActionThree = 0);
 
 	//Returns false if the action was created on another frame.
 	bool TryAddActionCheckIfSameFrame(float CurrentWorldTime, uint8 Action);
@@ -63,6 +67,37 @@ struct SFCORE_API FActionSet
 		}
 		return Ar;
 	}
+};
+
+DECLARE_DYNAMIC_DELEGATE(FBufferedInputDelegate);
+
+USTRUCT()
+struct SFCORE_API FBufferedInput
+{
+	
+	GENERATED_BODY()
+
+	TArray<TSubclassOf<UCardObject>> OwnedCardsRequired;
+
+	TArray<TSubclassOf<UCardObject>> OwnedCardsRequiredGone;
+
+	TArray<TSubclassOf<UCardObject>> SharedCardsRequired;
+
+	TArray<TSubclassOf<UCardObject>> SharedCardsRequiredGone;
+
+	float LifetimePredictedTimestamp;
+
+	FBufferedInputDelegate Delegate;
+
+	FBufferedInput();
+
+	FBufferedInput(const TArray<TSubclassOf<UCardObject>>& InOwnedCardsRequired,
+	               const TArray<TSubclassOf<UCardObject>>& InOwnedCardsRequiredGone,
+	               const TArray<TSubclassOf<UCardObject>>& InSharedCardsRequired,
+	               const TArray<TSubclassOf<UCardObject>>& InSharedCardsRequiredGone,
+	               const float InLifetimePredictedTimestamp, const FBufferedInputDelegate& InDelegate);
+
+	bool CheckConditionsMet(const UInventory* InInventoryToCheck, const UConstituent* InCurrentConstituent);
 };
 
 /**
@@ -127,14 +162,15 @@ class SFCORE_API UConstituent : public USfObject
 {
 	GENERATED_BODY()
 
+	friend class UFormCharacterComponent;
+
 	friend class UInventory;
-	
+
 public:
-	
 	UConstituent();
-	
+
 	virtual void BeginDestroy() override;
-	
+
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UPROPERTY(ReplicatedUsing = OnRep_OwningSlotable, Replicated, BlueprintReadOnly, VisibleAnywhere)
@@ -144,11 +180,11 @@ public:
 	uint8 bEnableInputsAndPrediction:1;
 
 	//Note: Slotables should async load all assets on init and unload on deinit.
-	
+
 	void ClientInitialize();
 
 	void ServerInitialize();
-	
+
 	void ClientDeinitialize();
 
 	void ServerDeinitialize();
@@ -164,7 +200,7 @@ public:
 
 	UFUNCTION(BlueprintImplementableEvent)
 	void Server_Deinitialize();
-	
+
 	UFUNCTION(BlueprintCallable)
 	void ExecuteAction(const uint8 ActionId, const bool bIsPredictableContext);
 
@@ -176,7 +212,7 @@ public:
 	void Predicted_OnExecute(const uint8 ActionId, const bool bIsReplaying);
 
 	//TimeSinceLastActionSet does not increment past 655 seconds.
-	
+
 	UFUNCTION(BlueprintImplementableEvent)
 	void Autonomous_OnExecute(const uint8 ActionId, const float TimeSinceExecution);
 
@@ -207,7 +243,7 @@ public:
 
 	UFUNCTION(BlueprintPure)
 	UConstituent* GetOriginatingConstituent() const;
-	
+
 	UFUNCTION()
 	void OnRep_LastActionSet();
 
@@ -217,6 +253,16 @@ public:
 	//This needs to be casted to the class to get the event from the query.
 	USfQuery* GetQuery(const TSubclassOf<USfQuery> QueryClass) const;
 
+	UFUNCTION(BlueprintCallable)
+	void BufferInput(const TArray<TSubclassOf<UCardObject>> InOwnedCardsRequiredToActivate,
+	                 const TArray<TSubclassOf<UCardObject>> InOwnedCardsRequiredGoneToActivate,
+	                 const TArray<TSubclassOf<UCardObject>> InSharedCardsRequiredToActivate,
+	                 const TArray<TSubclassOf<UCardObject>> InSharedCardsRequiredGoneToActivate,
+	                 const float Timeout,
+	                 const FBufferedInputDelegate& EventToBind);
+
+	void HandleBufferInputTimeout();
+
 	//Unique identifier within each inventory.
 	UPROPERTY(Replicated)
 	uint8 InstanceId;
@@ -225,7 +271,7 @@ public:
 	//can be executed within a frame. ActionSet allows us to work with up to four actions that execute in the same frame,
 	//which should guarantee actions should not be skipped assuming the guidelines for creating them are followed. ActionSet
 	//performs serialization with lossless compression and checks that only actions from the same frame are added.
-	
+
 	//This is changed during a predicted execution. Client version is sent to the server via FormCharacter, checked, added
 	//to LastActionSet of that frame, and corrected to the client if necessary.
 	FActionSet PredictedLastActionSet;
@@ -239,7 +285,7 @@ public:
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	TArray<TSubclassOf<USfQuery>> QueryDependencyClasses;
-	
+
 private:
 	UFUNCTION()
 	void OnRep_OwningSlotable();
@@ -262,10 +308,12 @@ private:
 
 	UPROPERTY(Replicated)
 	UConstituent* OriginatingConstituent;
-	
+
 	//In case the naming is confusing:
 	//On the server, neither "time since" is relevant because actions are always executed instantly. On the simulated proxy,
 	//we always use LastActionSet paired with TimeSinceLastActionSet because prediction isn't running. On the autonomous proxy,
 	//TimeSinceLastActionSet will almost always be 0 since we're always relevant, so we only recreate the effects from
 	//PredictedLastActionSet using the respective "time since" and let OnRep handle LastActionSet changes.
+
+	TArray<FBufferedInput> BufferedInputs;
 };

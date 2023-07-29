@@ -421,6 +421,14 @@ public:
 
 	void SetupFormCharacter(UFormCoreComponent* FormCoreComponent);
 
+	float CalculateFuturePredictedTimestamp(const float AdditionalTime) const;
+
+	float CalculateTimeUntilPredictedTimestamp(const float Timestamp) const;
+
+	float CalculateTimeSincePredictedTimestamp(const float Timestamp) const;
+
+	bool HasPredictedTimestampPassed(const float Timestamp) const;
+
 	void CalculateMovementSpeed();
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
@@ -495,16 +503,8 @@ protected:
 	float PredictedNetClock;
 	uint32 NetClockNextInteger;
 	
-	float CalculateFuturePredictedTimestamp(const float AdditionalTime) const;
-
-	float CalculateTimeUntilPredictedTimestamp(const float Timestamp) const;
-
-	float CalculateTimeSincePredictedTimestamp(const float Timestamp) const;
-
-	bool HasPredictedTimestampPassed(const float Timestamp) const;
-	
 	//+/- acceptable range.
-	const float NetClockAcceptableTolerance = 0.02f;
+	const float NetClockAcceptableTolerance = 0.01f;
 
 	//Actions executed in a given frame that we send to the server for checking.
 	//Note that this is representative of PredictedLastActionSet in Constituent and not LastActionSet.

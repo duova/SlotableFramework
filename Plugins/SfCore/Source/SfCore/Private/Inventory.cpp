@@ -165,12 +165,12 @@ void UInventory::ClientCheckAndUpdateCardObjects()
 	}
 }
 
-const TArray<USlotable*>& UInventory::GetSlotables()
+const TArray<USlotable*>& UInventory::GetSlotables() const
 {
 	return Slotables;
 }
 
-TArray<USlotable*> UInventory::GetSlotablesOfType(const TSubclassOf<USlotable>& SlotableClass)
+TArray<USlotable*> UInventory::GetSlotablesOfType(const TSubclassOf<USlotable>& SlotableClass) const
 {
 	TArray<USlotable*> SlotablesCopy;
 	for (USlotable* Slotable : Slotables)
@@ -207,7 +207,7 @@ uint8 UInventory::SlotableCount(const TSubclassOf<USlotable>& SlotableClass)
 	return Value;
 }
 
-bool UInventory::HasSharedCard(const TSubclassOf<UCardObject>& CardClass)
+bool UInventory::HasSharedCard(const TSubclassOf<UCardObject>& CardClass) const
 {
 	bool Value = false;
 	for (FCard Card : Cards)
@@ -223,7 +223,7 @@ bool UInventory::HasSharedCard(const TSubclassOf<UCardObject>& CardClass)
 	return Value;
 }
 
-bool UInventory::HasOwnedCard(const TSubclassOf<UCardObject>& CardClass, const uint8 InOwnerConstituentInstanceId)
+bool UInventory::HasOwnedCard(const TSubclassOf<UCardObject>& CardClass, const uint8 InOwnerConstituentInstanceId) const
 {
 	bool Value = false;
 	for (FCard Card : Cards)
@@ -504,7 +504,7 @@ bool UInventory::Server_RemoveOwnedCard(const TSubclassOf<UCardObject>& CardClas
 {
 	ErrorIfNoAuthority();
 	int16 IndexToDestroy = INDEX_NONE;
-	for (FCard Card : Cards)
+	for (FCard& Card : Cards)
 	{
 		if (Card.Class == CardClass && Card.OwnerConstituentInstanceId == InOwnerConstituentInstanceId)
 		{
@@ -545,6 +545,23 @@ bool UInventory::Predicted_RemoveSharedCard(const TSubclassOf<UCardObject>& Card
 	return Predicted_RemoveOwnedCard(CardClass, 0);
 }
 
+void UInventory::UpdateAndRunBufferedInputs(UConstituent* Constituent)
+{
+	TArray<FBufferedInput*> ToRemove;
+	for (FBufferedInput& BufferedInput : Constituent->BufferedInputs)
+	{
+		if (BufferedInput.CheckConditionsMet(this, Constituent))
+		{
+			BufferedInput.Delegate.ExecuteIfBound();
+			ToRemove.Add(&BufferedInput);
+		}
+	}
+	for (const FBufferedInput* Element : ToRemove)
+	{
+		Constituent->BufferedInputs.Remove(*Element);
+	}
+}
+
 bool UInventory::Predicted_AddOwnedCard(const TSubclassOf<UCardObject>& CardClass,
                                         const uint8 InOwnerConstituentInstanceId, float CustomLifetime)
 {
@@ -580,6 +597,14 @@ bool UInventory::Predicted_AddOwnedCard(const TSubclassOf<UCardObject>& CardClas
 	else
 	{
 		ClientCheckAndUpdateCardObjects();
+	}
+	//Check buffered inputs.
+	for (USlotable* Slotable : Slotables)
+	{
+		for (UConstituent* Constituent : Slotable->GetConstituents())
+		{
+			UpdateAndRunBufferedInputs(Constituent);
+		}
 	}
 	return true;
 }
@@ -617,6 +642,14 @@ bool UInventory::Predicted_RemoveOwnedCard(const TSubclassOf<UCardObject>& CardC
 			ClientCheckAndUpdateCardObjects();
 		}
 		return true;
+	}
+	//Check buffered inputs.
+	for (USlotable* Slotable : Slotables)
+	{
+		for (UConstituent* Constituent : Slotable->GetConstituents())
+		{
+			UpdateAndRunBufferedInputs(Constituent);
+		}
 	}
 	return false;
 }
@@ -755,6 +788,19 @@ void UInventory::RemoveCardsOfOwner(const uint8 OwnerConstituentInstanceId)
 bool UInventory::IsDynamicLength() const
 {
 	return bIsDynamic;
+}
+
+TArray<const FCard*> UInventory::GetCardsOfClass(const TSubclassOf<UCardObject> Class) const
+{
+	TArray<const FCard*> Result;
+	for (const FCard& Card : Cards)
+	{
+		if (Card.Class == Class)
+		{
+			Result.Add(&Card);
+		}
+	}
+	return Result;
 }
 
 //Must be called after the slotable has been placed in an inventory.
