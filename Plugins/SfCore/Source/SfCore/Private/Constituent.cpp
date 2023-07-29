@@ -124,6 +124,17 @@ FBufferedInput::FBufferedInput(const TArray<TSubclassOf<UCardObject>>& InOwnedCa
 	Delegate = InDelegate;
 }
 
+bool FBufferedInput::operator==(const FBufferedInput& Other) const
+{
+	if (OwnedCardsRequired != Other.OwnedCardsRequired) return false;
+	if (OwnedCardsRequiredGone != Other.OwnedCardsRequiredGone) return false;
+	if (SharedCardsRequired != Other.SharedCardsRequired) return false;
+	if (SharedCardsRequiredGone != Other.SharedCardsRequiredGone) return false;
+	if (LifetimePredictedTimestamp != Other.LifetimePredictedTimestamp) return false;
+	if (Delegate != Other.Delegate) return false;
+	return true;
+}
+
 bool FBufferedInput::CheckConditionsMet(const UInventory* InInventoryToCheck, const UConstituent* InCurrentConstituent)
 {
 	//This might look like a heavy check every time an input is pressed and when cards are added and removed. However,

@@ -97,6 +97,8 @@ struct SFCORE_API FBufferedInput
 	               const TArray<TSubclassOf<UCardObject>>& InSharedCardsRequiredGone,
 	               const float InLifetimePredictedTimestamp, const FBufferedInputDelegate& InDelegate);
 
+	bool operator==(const FBufferedInput& Other) const;
+
 	bool CheckConditionsMet(const UInventory* InInventoryToCheck, const UConstituent* InCurrentConstituent);
 };
 
