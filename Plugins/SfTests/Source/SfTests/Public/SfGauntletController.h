@@ -4,7 +4,6 @@
 
 #include "CoreMinimal.h"
 #include "GauntletTestController.h"
-#include "UObject/Object.h"
 #include "SfGauntletController.generated.h"
 
 /**

@@ -12,7 +12,7 @@ USfShopAccessorComponent::USfShopAccessorComponent()
 	if (!GetOwner()) return;
 	PrimaryComponentTick.bCanEverTick = false;
 	bReplicateUsingRegisteredSubObjectList = true;
-	SetIsReplicated(true);
+	SetIsReplicatedByDefault(true);
 }
 
 void USfShopAccessorComponent::BeginPlay()

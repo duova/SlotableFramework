@@ -29,7 +29,7 @@ USfCurrencyComponent::USfCurrencyComponent()
 	if (!GetOwner()) return;
 	PrimaryComponentTick.bCanEverTick = false;
 	bReplicateUsingRegisteredSubObjectList = true;
-	SetIsReplicated(true);
+	SetIsReplicatedByDefault(true);
 }
 
 void USfCurrencyComponent::BeginPlay()
