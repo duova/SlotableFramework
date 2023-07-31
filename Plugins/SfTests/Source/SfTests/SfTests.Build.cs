@@ -7,19 +7,7 @@ public class SfTests : ModuleRules
 	public SfTests(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
-		
-		PublicIncludePaths.AddRange(new string[] { });
-				
-		
-		PrivateIncludePaths.AddRange(new string[] { });
-			
-		
-		PublicDependencyModuleNames.AddRange(new string[] { "Core" });
-			
-		
-		PrivateDependencyModuleNames.AddRange(new string[] { "CoreUObject", "Engine", "SfCore", "Gauntlet" });
-		
-		
-		DynamicallyLoadedModuleNames.AddRange(new string[] { });
+
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "SfCore", "CoreUObject", "Engine", "SfCore", "Gauntlet" });
 	}
 }

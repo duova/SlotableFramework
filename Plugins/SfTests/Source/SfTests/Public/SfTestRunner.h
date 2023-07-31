@@ -41,7 +41,6 @@ public:
 
 	void EndTest();
 
-
 private:
 	UPROPERTY(Replicated)
 	USfTest* CurrentTest;

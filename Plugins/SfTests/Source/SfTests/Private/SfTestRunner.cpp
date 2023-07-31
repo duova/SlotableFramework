@@ -3,19 +3,27 @@
 
 #include "SfTestRunner.h"
 
+#include "GauntletModule.h"
 #include "Net/UnrealNetwork.h"
 
 ASfTestRunner::ASfTestRunner()
 {
 	PrimaryActorTick.bCanEverTick = true;
-	SetReplicates(true);
+	bReplicates = true;
 	bReplicateUsingRegisteredSubObjectList = true;
 }
 
 void ASfTestRunner::BeginPlay()
 {
 	Super::BeginPlay();
-	
+	if (GetLocalRole() == ROLE_AutonomousProxy)
+	{
+		UE_LOG(LogGauntlet, Display, TEXT("Test runner spawned as AutonomousProxy."));
+	}
+	if (GetLocalRole() == ROLE_SimulatedProxy)
+	{
+		UE_LOG(LogGauntlet, Display, TEXT("Test runner spawned as SimulatedProxy."));
+	}
 }
 
 void ASfTestRunner::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -30,5 +38,13 @@ void ASfTestRunner::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLif
 void ASfTestRunner::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+}
+
+void ASfTestRunner::StartTest(TSubclassOf<USfTest> TestClass)
+{
+}
+
+void ASfTestRunner::EndTest()
+{
 }
 

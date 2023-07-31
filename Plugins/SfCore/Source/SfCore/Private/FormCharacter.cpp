@@ -8,5 +8,5 @@
 AFormCharacter::AFormCharacter(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer.SetDefaultSubobjectClass<UFormCharacterComponent>(CharacterMovementComponentName))
 {
 	FormCore = CreateDefaultSubobject<UFormCoreComponent>(FormCoreComponentName);
-	SetReplicates(true);
+	bReplicates = true;
 }

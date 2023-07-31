@@ -3,6 +3,8 @@
 
 #include "SfGauntletController.h"
 
+#include "SfTestRunner.h"
+
 void USfGauntletController::OnPostMapChange(UWorld* World)
 {
 	Super::OnPostMapChange(World);
@@ -24,4 +26,9 @@ void USfGauntletController::OnPostMapChange(UWorld* World)
 		NetRole = "ListenServer";
 	}
 	UE_LOG(LogGauntlet, Display, TEXT("Gauntlet controller loaded into world with role: %s"), *FString(NetRole));
+
+	if (World->GetNetMode() == NM_DedicatedServer)
+	{
+		World->SpawnActor(ASfTestRunner::StaticClass());
+	}
 }

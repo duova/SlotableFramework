@@ -20,5 +20,13 @@
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
 		}
+	],
+	"Plugins": [
+		{
+			"Name": "EnhancedInput",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"Enabled": true
+		}
 	]
 }

@@ -10,7 +10,7 @@
 AFormActor::AFormActor()
 {
 	FormCore = CreateDefaultSubobject<UFormCoreComponent>(FormCoreComponentName);
-	SetReplicates(true);
+	bReplicates = true;
 	CreateDefaultSubobject(FName("FormCore"), UFormCoreComponent::StaticClass(), UFormCoreComponent::StaticClass(), true, false);
 }
 
