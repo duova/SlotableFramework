@@ -6,6 +6,7 @@
 #include "GauntletTestController.h"
 #include "SfGauntletController.generated.h"
 
+class ASfTestRunner;
 /**
  * Main test controller for the slotable framework.
  */
@@ -16,4 +17,9 @@ class SFTESTS_API USfGauntletController : public UGauntletTestController
 
 public:
 	virtual void OnPostMapChange(UWorld* World) override;
+
+	UPROPERTY()
+	ASfTestRunner* ServerTestRunner;
+
+	static void SfEndSession();
 };

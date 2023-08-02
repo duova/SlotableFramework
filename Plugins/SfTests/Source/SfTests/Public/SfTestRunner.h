@@ -6,6 +6,7 @@
 #include "GameFramework/Actor.h"
 #include "SfTestRunner.generated.h"
 
+class USfGauntletController;
 class USfTest;
 /**
  * Replicated actor that is responsible for iterating through all available tests and executing them.
@@ -28,6 +29,7 @@ protected:
 	//Server grabs references to all classes at the start, but only initializes them when needed, and they should be instanced.
 	//Each test must register its functions to an ordered array of NetRole - function pointer pairs on initialize, this is abstracted
 	//by a function that registers them automatically and skips if the net role isn't right.
+	//Create a custom iterator for the procedures to tell the server a procedure is finished when one is finished.
 	//These are called Procedures.
 	//The functions will then be executed in that order for those roles.
 	//These functions can contain asserts.
@@ -37,11 +39,28 @@ protected:
 public:
 	virtual void Tick(float DeltaTime) override;
 
-	void StartTest(TSubclassOf<USfTest> TestClass);
+	bool StartTest(const TSubclassOf<USfTest> TestClass);
 
 	void EndTest();
+
+	UPROPERTY()
+	USfGauntletController* ServerSfGauntletController;
 
 private:
 	UPROPERTY(Replicated)
 	USfTest* CurrentTest;
+
+	UPROPERTY(Replicated)
+	uint8 NumClients;
+
+	UPROPERTY(Replicated)
+	double TimeSinceStart;
+
+	static constexpr float ConnectionWaitInSeconds = 2.f;
+
+	TArray<UClass*> ServerIndexedTestsToRun;
+
+	bool ServerSetupPerformed = false;
+
+	uint8 NextTestIndex = 0;
 };
