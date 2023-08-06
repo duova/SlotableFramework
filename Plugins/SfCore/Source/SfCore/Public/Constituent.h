@@ -39,11 +39,11 @@ struct SFCORE_API FActionSet
 	//Do not use default constructor.
 	FActionSet();
 
-	FActionSet(float CurrentWorldTime, uint8 ActionZero, uint8 ActionOne = 0, uint8 ActionTwo = 0,
-	           uint8 ActionThree = 0);
+	FActionSet(const float InCurrentWorldTime, const uint8 InActionZero, const uint8 InActionOne = 0, const uint8 InActionTwo = 0,
+	           const uint8 InActionThree = 0);
 
 	//Returns false if the action was created on another frame.
-	bool TryAddActionCheckIfSameFrame(float CurrentWorldTime, uint8 Action);
+	bool TryAddActionCheckIfSameFrame(const float InCurrentWorldTime, const uint8 InAction);
 
 	bool operator==(const FActionSet& Other) const;
 
@@ -99,8 +99,10 @@ struct SFCORE_API FBufferedInput
 
 	bool operator==(const FBufferedInput& Other) const;
 
-	bool CheckConditionsMet(const UInventory* InInventoryToCheck, const UConstituent* InCurrentConstituent);
+	bool CheckConditionsMet(const UInventory* InInventoryToCheck, const UConstituent* InCurrentConstituent) const;
 };
+
+uint32 GetTypeHash(const FBufferedInput& BufferedInput);
 
 /**
  * Building blocks of a slotable which can be reused to share functionality between slotables.
@@ -178,8 +180,8 @@ public:
 	UPROPERTY(ReplicatedUsing = OnRep_OwningSlotable, Replicated, BlueprintReadOnly, VisibleAnywhere)
 	class USlotable* OwningSlotable;
 
-	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	uint8 bEnableInputsAndPrediction:1;
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Constituent")
+	bool bEnableInputsAndPrediction = false;
 
 	//Note: Slotables should async load all assets on init and unload on deinit.
 
@@ -203,53 +205,65 @@ public:
 	UFUNCTION(BlueprintImplementableEvent)
 	void Server_Deinitialize();
 
+	//Executes an action, which acts as an identifier for certain event graphs. See UConstituent description for details.
+	//ActionId can only be between 1-63 inclusive.
 	UFUNCTION(BlueprintCallable)
-	void ExecuteAction(const uint8 ActionId, const bool bIsPredictableContext);
+	void ExecuteAction(const int32 InActionId, const bool bInIsPredictableContext);
 
+	void InternalExecuteAction(const uint8 InActionId, const bool bInIsPredictableContext);
+
+	//Called when an action is executed on the server.
 	UFUNCTION(BlueprintImplementableEvent)
-	void Server_OnExecute(const uint8 ActionId);
+	void Server_OnExecute(const int32 InActionId);
 
+	//Called when an action is executed on the server and client predictively.
 	//Only use functions marked Predicted_.
 	UFUNCTION(BlueprintImplementableEvent)
-	void Predicted_OnExecute(const uint8 ActionId, const bool bIsReplaying);
+	void Predicted_OnExecute(const int32 InActionId, const bool bInIsReplaying);
 
 	//TimeSinceLastActionSet does not increment past 655 seconds.
 
+	//Called when an action is executed on the autonomous client.
 	UFUNCTION(BlueprintImplementableEvent)
-	void Autonomous_OnExecute(const uint8 ActionId, const float TimeSinceExecution);
+	void Autonomous_OnExecute(const int32 InActionId, const float InTimeSinceExecution);
 
+	//Called when an action is executed on the simulated client if it is set to first person.
 	UFUNCTION(BlueprintImplementableEvent)
-	void SimulatedFP_OnExecute(const uint8 ActionId, const float TimeSinceExecution);
+	void SimulatedFP_OnExecute(const int32 InActionId, const float InTimeSinceExecution);
 
+	//Called when an action is executed on the simulated client if it is set to third person.
 	UFUNCTION(BlueprintImplementableEvent)
-	void SimulatedTP_OnExecute(const uint8 ActionId, const float TimeSinceExecution);
+	void SimulatedTP_OnExecute(const int32 InActionId, const float InTimeSinceExecution);
 
+	//Input down for the input registered to the UConstituent in UFormCharacterComponent.
 	UFUNCTION(BlueprintImplementableEvent)
-	void OnInputDown(const bool bIsPredictableContext);
+	void OnInputDown(const bool bInIsPredictableContext);
 
+	//Input up for the input registered to the UConstituent in UFormCharacterComponent.
 	UFUNCTION(BlueprintImplementableEvent)
-	void OnInputUp(const bool bIsPredictableContext);
+	void OnInputUp(const bool bInIsPredictableContext);
 
-	//Ticks at a rate set in FormCore.
+	//Ticks at a rate set in UFormCoreComponent.
 	UFUNCTION(BlueprintImplementableEvent)
-	void Server_LowFrequencyTick(const float DeltaTime);
+	void Server_LowFrequencyTick(const float InDeltaTime);
 
-	static bool IsIdWithinRange(const uint8 Id);
+	static bool IsIdWithinRange(const uint8 InId);
 
-	UFUNCTION(BlueprintPure)
-	uint8 GetInstanceId() const;
+	UFUNCTION(BlueprintGetter)
+	int32 GetInstanceId() const;
 
-	//Trace originating constituent until nullptr and then find the form core.
+	//Trace originating UConstituent until nullptr and then find the UFormCoreComponent.
 	UFUNCTION(BlueprintPure)
 	UConstituent* GetTrueOriginatingConstituent() const;
 
+	//Get the constituent that created this UConstituent. Is nullable.
 	UFUNCTION(BlueprintPure)
 	UConstituent* GetOriginatingConstituent() const;
 
 	UFUNCTION()
 	void OnRep_LastActionSet();
 
-	void IncrementTimeSincePredictedLastActionSet(float Time);
+	void IncrementTimeSincePredictedLastActionSet(const float InTimePassed);
 
 	//Returns the query of QueryClass.
 	//This needs to be casted to the class to get the event from the query.
@@ -260,7 +274,7 @@ public:
 	                 const TArray<TSubclassOf<UCardObject>> InOwnedCardsRequiredGoneToActivate,
 	                 const TArray<TSubclassOf<UCardObject>> InSharedCardsRequiredToActivate,
 	                 const TArray<TSubclassOf<UCardObject>> InSharedCardsRequiredGoneToActivate,
-	                 const float Timeout,
+	                 const float InTimeout,
 	                 const FBufferedInputDelegate& EventToBind);
 
 	void HandleBufferInputTimeout();
@@ -276,16 +290,17 @@ public:
 
 	//This is changed during a predicted execution. Client version is sent to the server via FormCharacter, checked, added
 	//to LastActionSet of that frame, and corrected to the client if necessary.
-	FActionSet PredictedLastActionSet;
+	FActionSet PredictedLastActionSet = FActionSet();
 
 	//Set to true when we predict an action. Set to false when FormCharacter collects pending actions.
 	uint8 bPredictedLastActionSetUpdated:1;
 
 	//Used to know how long ago the last action took place so we can fast forward the effects after replay.
-	FUint16_Quantize100 TimeSincePredictedLastActionSet;
+	FUint16_Quantize100 TimeSincePredictedLastActionSet = FUint16_Quantize100();
 
 protected:
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	//USfQuery classes that this UConstituent depends on.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Constituent")
 	TArray<TSubclassOf<USfQuery>> QueryDependencyClasses;
 
 private:
@@ -317,5 +332,5 @@ private:
 	//TimeSinceLastActionSet will almost always be 0 since we're always relevant, so we only recreate the effects from
 	//PredictedLastActionSet using the respective "time since" and let OnRep handle LastActionSet changes.
 
-	TArray<FBufferedInput> BufferedInputs;
+	TSet<FBufferedInput> BufferedInputs;
 };

@@ -7,6 +7,8 @@
 #include "SfCoreClasses.h"
 #include "SfObject.generated.h"
 
+DECLARE_LOG_CATEGORY_EXTERN(LogSfCore, Log, All);
+
 /**
  * Base object for objects in the slotable hierarchy.
  * Routes remote function calls through the outer's NetDriver,

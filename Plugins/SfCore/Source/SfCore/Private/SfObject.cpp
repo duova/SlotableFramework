@@ -5,6 +5,8 @@
 
 #include "FormCharacterComponent.h"
 
+DEFINE_LOG_CATEGORY(LogSfCore);
+
 void USfObject::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);

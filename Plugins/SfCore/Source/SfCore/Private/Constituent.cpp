@@ -17,62 +17,62 @@ FActionSet::FActionSet(): NumActionsIncludingZero(0), ActionZero(0), ActionOne(0
 {
 }
 
-FActionSet::FActionSet(const float CurrentWorldTime, const uint8 ActionZero, const uint8 ActionOne,
-                       const uint8 ActionTwo, const uint8 ActionThree): ActionZero(ActionZero), ActionOne(ActionOne),
-                                                                        ActionTwo(ActionTwo),
-                                                                        ActionThree(ActionThree),
-                                                                        WorldTime(CurrentWorldTime),
+FActionSet::FActionSet(const float InCurrentWorldTime, const uint8 InActionZero, const uint8 InActionOne,
+                       const uint8 InActionTwo, const uint8 InActionThree): ActionZero(InActionZero), ActionOne(InActionOne),
+                                                                        ActionTwo(InActionTwo),
+                                                                        ActionThree(InActionThree),
+                                                                        WorldTime(InCurrentWorldTime),
                                                                         bFlipToForceReplicate(0)
 {
-	if (ActionZero == 0)
+	if (InActionZero == 0)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Created ActionSet with no action zero."));
+		UE_LOG(LogSfCore, Error, TEXT("Created ActionSet with no action zero."));
 	}
-	UConstituent::IsIdWithinRange(ActionZero);
-	if (ActionOne != 0)
+	UConstituent::IsIdWithinRange(InActionZero);
+	if (InActionOne != 0)
 	{
 		NumActionsIncludingZero = 1;
-		UConstituent::IsIdWithinRange(ActionOne);
+		UConstituent::IsIdWithinRange(InActionOne);
 	}
-	if (ActionTwo != 0)
+	if (InActionTwo != 0)
 	{
 		NumActionsIncludingZero = 2;
-		if (ActionOne == 0)
+		if (InActionOne == 0)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Created ActionSet with action two but no action one."));
+			UE_LOG(LogSfCore, Error, TEXT("Created ActionSet with action two but no action one."));
 		}
-		UConstituent::IsIdWithinRange(ActionTwo);
+		UConstituent::IsIdWithinRange(InActionTwo);
 	}
-	if (ActionThree != 0)
+	if (InActionThree != 0)
 	{
 		NumActionsIncludingZero = 3;
-		if (ActionTwo == 0)
+		if (InActionTwo == 0)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Created ActionSet with action three but no action two."));
+			UE_LOG(LogSfCore, Error, TEXT("Created ActionSet with action three but no action two."));
 		}
-		UConstituent::IsIdWithinRange(ActionThree);
+		UConstituent::IsIdWithinRange(InActionThree);
 	}
 }
 
-bool FActionSet::TryAddActionCheckIfSameFrame(const float CurrentWorldTime, const uint8 Action)
+bool FActionSet::TryAddActionCheckIfSameFrame(const float InCurrentWorldTime, const uint8 InAction)
 {
-	if (CurrentWorldTime != WorldTime) return false;
-	UConstituent::IsIdWithinRange(Action);
+	if (InCurrentWorldTime != WorldTime) return false;
+	UConstituent::IsIdWithinRange(InAction);
 	if (NumActionsIncludingZero == 0)
 	{
-		ActionOne = Action;
+		ActionOne = InAction;
 	}
 	else if (NumActionsIncludingZero == 1)
 	{
-		ActionTwo = Action;
+		ActionTwo = InAction;
 	}
 	else if (NumActionsIncludingZero == 2)
 	{
-		ActionThree = Action;
+		ActionThree = InAction;
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("Action dropped because too many actions were executed in one frame."))
+		UE_LOG(LogSfCore, Error, TEXT("Action dropped because too many actions were executed in one frame."))
 	}
 	return true;
 }
@@ -135,12 +135,13 @@ bool FBufferedInput::operator==(const FBufferedInput& Other) const
 	return true;
 }
 
-bool FBufferedInput::CheckConditionsMet(const UInventory* InInventoryToCheck, const UConstituent* InCurrentConstituent)
+bool FBufferedInput::CheckConditionsMet(const UInventory* InInventoryToCheck, const UConstituent* InCurrentConstituent) const
 {
 	//This might look like a heavy check every time an input is pressed and when cards are added and removed. However,
 	//note that most of the time only 1 for loop will run as it's likely that only 1 type of card will be checked.
 	for (const TSubclassOf<UCardObject>& OwnedCardRequired : OwnedCardsRequired)
 	{
+		if (!OwnedCardRequired.Get()) continue;
 		if (!InInventoryToCheck->Cards.FindByPredicate([OwnedCardRequired, InCurrentConstituent](const FCard& Card)
 		{
 			return Card.OwnerConstituentInstanceId == InCurrentConstituent->InstanceId && Card.Class ==
@@ -152,6 +153,7 @@ bool FBufferedInput::CheckConditionsMet(const UInventory* InInventoryToCheck, co
 	}
 	for (const TSubclassOf<UCardObject>& OwnedCardRequiredGone : OwnedCardsRequiredGone)
 	{
+		if (!OwnedCardRequiredGone.Get()) continue;
 		if (InInventoryToCheck->Cards.FindByPredicate([OwnedCardRequiredGone, InCurrentConstituent](const FCard& Card)
 		{
 			return Card.OwnerConstituentInstanceId == InCurrentConstituent->InstanceId && Card.Class ==
@@ -163,6 +165,7 @@ bool FBufferedInput::CheckConditionsMet(const UInventory* InInventoryToCheck, co
 	}
 	for (const TSubclassOf<UCardObject>& SharedCardRequired : SharedCardsRequired)
 	{
+		if (!SharedCardRequired.Get()) continue;
 		if (!InInventoryToCheck->Cards.FindByPredicate([SharedCardRequired, InCurrentConstituent](const FCard& Card)
 		{
 			return Card.OwnerConstituentInstanceId == 0 && Card.Class == SharedCardRequired;
@@ -173,6 +176,7 @@ bool FBufferedInput::CheckConditionsMet(const UInventory* InInventoryToCheck, co
 	}
 	for (const TSubclassOf<UCardObject>& SharedCardRequiredGone : SharedCardsRequiredGone)
 	{
+		if (!SharedCardRequiredGone.Get()) continue;
 		if (InInventoryToCheck->Cards.FindByPredicate([SharedCardRequiredGone, InCurrentConstituent](const FCard& Card)
 		{
 			return Card.OwnerConstituentInstanceId == 0 && Card.Class == SharedCardRequiredGone;
@@ -182,6 +186,11 @@ bool FBufferedInput::CheckConditionsMet(const UInventory* InInventoryToCheck, co
 		}
 	}
 	return true;
+}
+
+uint32 GetTypeHash(const FBufferedInput& BufferedInput)
+{
+	return FCrc::MemCrc32(&BufferedInput, sizeof(FBufferedInput));
 }
 
 UConstituent::UConstituent()
@@ -222,10 +231,19 @@ void UConstituent::OnRep_OwningSlotable()
 
 void UConstituent::SetFormCore()
 {
-	checkf(OwningSlotable, TEXT("Constituent has no OwningSlotable."));
-	checkf(OwningSlotable->OwningInventory, TEXT("Constituent has no OwningInventory."));
-	FormCore = OwningSlotable->OwningInventory->OwningFormCore;
-	checkf(FormCore, TEXT("Constituent has no FormCore."));
+	if (!OwningSlotable)
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Constituent of class %s has no OwningSlotable."), *GetClass()->GetName());
+	}
+	else if (!OwningSlotable->OwningInventory)
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Constituent of class %s has no OwningInventory."), *GetClass()->GetName());
+	}
+	else
+	{
+		FormCore = OwningSlotable->OwningInventory->OwningFormCore;
+		UE_LOG(LogSfCore, Error, TEXT("Constituent of class %s has no FormCore."), *GetClass()->GetName());
+	}
 }
 
 void UConstituent::ClientInitialize()
@@ -257,45 +275,55 @@ void UConstituent::ServerDeinitialize()
 	OwningSlotable->OwningInventory->RemoveCardsOfOwner(InstanceId);
 }
 
-void UConstituent::ExecuteAction(const uint8 ActionId, const bool bIsPredictableContext)
+void UConstituent::ExecuteAction(const int32 InActionId, const bool bInIsPredictableContext)
+{
+	if (InActionId < 0 || InActionId > 63)
+	{
+		UE_LOG(LogSfCore, Error,
+			   TEXT("ExecuteAction called with an out of range ActionId of %i on UConstituent class %s"), InActionId, *GetClass()->GetName());
+	}
+	InternalExecuteAction(InActionId, bInIsPredictableContext);
+}
+
+void UConstituent::InternalExecuteAction(const uint8 InActionId, const bool bInIsPredictableContext)
 {
 	if (!GetOwner()) return;
 	if (GetOwner()->GetLocalRole() == ROLE_SimulatedProxy)
 	{
-		UE_LOG(LogTemp, Error,
-		       TEXT("Tried to ExecuteAction as simulated proxy."));
+		UE_LOG(LogSfCore, Error,
+		       TEXT("Tried to ExecuteAction as simulated proxy on UConstituent class %s."), *GetClass()->GetName());
 		return;
 	}
-	if (!IsIdWithinRange(ActionId)) return;
+	if (!IsIdWithinRange(InActionId)) return;
 	if (HasAuthority())
 	{
 		const float ServerWorldTime = GetOwner()->GetWorld()->GetTimeSeconds();
-		if (bIsPredictableContext)
+		if (bInIsPredictableContext)
 		{
 			//If the action is executed in a predictable context, we want to update PredictedLastActionSet so the predicted
 			//client's version can get checked in FormCharacter if necessary.
 			//We first try to add the action to the existing set if the set was created in this frame. If not we build a
 			//new set.
-			if (!PredictedLastActionSet.TryAddActionCheckIfSameFrame(ServerWorldTime, ActionId))
+			if (!PredictedLastActionSet.TryAddActionCheckIfSameFrame(ServerWorldTime, InActionId))
 			{
-				PredictedLastActionSet = FActionSet(ServerWorldTime, ActionId);
+				PredictedLastActionSet = FActionSet(ServerWorldTime, InActionId);
 			}
 			bPredictedLastActionSetUpdated = true;
 			TimeSincePredictedLastActionSet.SetFloat(0);
 			if (bEnableInputsAndPrediction && IsFormCharacter())
 			{
-				Predicted_OnExecute(ActionId, GetFormCharacter()->IsReplaying());
+				Predicted_OnExecute(InActionId, GetFormCharacter()->IsReplaying());
 			}
 		}
 		//LastActionSet always needs to be updated if we execute an action, no matter the context.
-		if (!LastActionSet.TryAddActionCheckIfSameFrame(ServerWorldTime, ActionId))
+		if (!LastActionSet.TryAddActionCheckIfSameFrame(ServerWorldTime, InActionId))
 		{
 			const bool bFlipToReplicate = LastActionSet.bFlipToForceReplicate;
-			LastActionSet = FActionSet(ServerWorldTime, ActionId);
+			LastActionSet = FActionSet(ServerWorldTime, InActionId);
 			//Make a guaranteed change to make sure OnRep is fired.
 			LastActionSet.bFlipToForceReplicate = !bFlipToReplicate;
 		}
-		Server_OnExecute(ActionId);
+		Server_OnExecute(InActionId);
 		//We replicate this so that simulated proxies can know how long their previous action has ran for after they
 		//become relevant.
 		LastActionSetTimestamp = OwningSlotable->OwningInventory->OwningFormCore->GetNonCompensatedServerWorldTime();
@@ -303,35 +331,36 @@ void UConstituent::ExecuteAction(const uint8 ActionId, const bool bIsPredictable
 		//We only mark this dirty when we execute.
 		MARK_PROPERTY_DIRTY_FROM_NAME(UConstituent, LastActionSetTimestamp, this);
 	}
-	else if (bEnableInputsAndPrediction && IsFormCharacter() && bIsPredictableContext && GetOwner()->
+	else if (bEnableInputsAndPrediction && IsFormCharacter() && bInIsPredictableContext && GetOwner()->
 		GetLocalRole() ==
 		ROLE_AutonomousProxy)
 	{
 		//On client we only want to execute if we are predicting.
 		const float ClientWorldTime = GetOwner()->GetWorld()->GetTimeSeconds();
 		//Same concept of checking whether to add or build the set like above.
-		if (!PredictedLastActionSet.TryAddActionCheckIfSameFrame(ClientWorldTime, ActionId))
+		if (!PredictedLastActionSet.TryAddActionCheckIfSameFrame(ClientWorldTime, InActionId))
 		{
-			PredictedLastActionSet = FActionSet(ClientWorldTime, ActionId);
+			PredictedLastActionSet = FActionSet(ClientWorldTime, InActionId);
 		}
 		bPredictedLastActionSetUpdated = true;
 		TimeSincePredictedLastActionSet.SetFloat(0);
-		Predicted_OnExecute(ActionId, GetFormCharacter()->IsReplaying());
+		Predicted_OnExecute(InActionId, GetFormCharacter()->IsReplaying());
 	}
 	//Other roles change their states OnRep.
 }
 
-bool UConstituent::IsIdWithinRange(const uint8 Id)
+bool UConstituent::IsIdWithinRange(const uint8 InId)
 {
-	if (Id >= 64)
+	//ActionId must be under 64 due to the 6-bit serialization.
+	if (InId > 63)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Action id not within range."));
+		UE_LOG(LogSfCore, Error, TEXT("Action id not within range."));
 		return false;
 	}
 	return true;
 }
 
-uint8 UConstituent::GetInstanceId() const
+int32 UConstituent::GetInstanceId() const
 {
 	return InstanceId;
 }
@@ -371,13 +400,16 @@ void UConstituent::OnRep_LastActionSet()
 	}
 	if (GetOwner()->GetLocalRole() == ROLE_SimulatedProxy)
 	{
-		for (const uint8 Id : LastActionSet.ToArray())
+		if (FormCore->IsFirstPerson())
 		{
-			if (OwningSlotable->OwningInventory->OwningFormCore->IsFirstPerson())
+			for (const uint8 Id : LastActionSet.ToArray())
 			{
 				SimulatedFP_OnExecute(Id, TimeSinceExecution);
 			}
-			else
+		}
+		else
+		{
+			for (const uint8 Id : LastActionSet.ToArray())
 			{
 				SimulatedTP_OnExecute(Id, TimeSinceExecution);
 			}
@@ -385,9 +417,9 @@ void UConstituent::OnRep_LastActionSet()
 	}
 }
 
-void UConstituent::IncrementTimeSincePredictedLastActionSet(const float Time)
+void UConstituent::IncrementTimeSincePredictedLastActionSet(const float InTimePassed)
 {
-	TimeSincePredictedLastActionSet.SetFloat(TimeSincePredictedLastActionSet.GetFloat() + Time);
+	TimeSincePredictedLastActionSet.SetFloat(TimeSincePredictedLastActionSet.GetFloat() + InTimePassed);
 }
 
 USfQuery* UConstituent::GetQuery(const TSubclassOf<USfQuery> QueryClass) const
@@ -395,7 +427,11 @@ USfQuery* UConstituent::GetQuery(const TSubclassOf<USfQuery> QueryClass) const
 	if (!FormCore) return nullptr;
 	if (!FormCore->GetFormQuery())
 	{
-		UE_LOG(LogTemp, Error, TEXT("GetQuery called on a constituent without a FormQueryComponent"));
+		UE_LOG(LogSfCore, Error, TEXT("GetQuery called on a UConstituent of class %s without a FormQueryComponent."), *GetClass()->GetName());
+	}
+	if (!QueryClass.Get())
+	{
+		UE_LOG(LogSfCore, Error, TEXT("GetQuery called on a UConstituent of class %s with an empty TSubclassOf."), *GetClass()->GetName());
 	}
 	for (const TPair<USfQuery*, uint16>& Pair : FormCore->GetFormQuery()->ActiveQueryDependentCountPair)
 	{
@@ -404,7 +440,7 @@ USfQuery* UConstituent::GetQuery(const TSubclassOf<USfQuery> QueryClass) const
 			return Pair.Key;
 		}
 	}
-	UE_LOG(LogTemp, Error, TEXT("GetQuery could not find query. Is the query a dependency of the constituent?"));
+	UE_LOG(LogTemp, Error, TEXT("GetQuery could not find query of class %s for UConstituent %s. Is the query a dependency of the constituent?"), *QueryClass->GetName(), *GetClass()->GetName());
 	return nullptr;
 }
 
@@ -412,28 +448,33 @@ void UConstituent::BufferInput(const TArray<TSubclassOf<UCardObject>> InOwnedCar
                                const TArray<TSubclassOf<UCardObject>> InOwnedCardsRequiredGoneToActivate,
                                const TArray<TSubclassOf<UCardObject>> InSharedCardsRequiredToActivate,
                                const TArray<TSubclassOf<UCardObject>> InSharedCardsRequiredGoneToActivate,
-                               const float Timeout,
+                               const float InTimeout,
                                const FBufferedInputDelegate& EventToBind)
 {
-	const uint16 Index = BufferedInputs.Emplace(InOwnedCardsRequiredToActivate, InOwnedCardsRequiredGoneToActivate,
+	if (InTimeout < 0)
+	{
+		UE_LOG(LogSfCore, Error,
+			   TEXT("Timeout on BufferedInput is negative on UConstituent class %s."), *GetClass()->GetName());
+	}
+	if (InTimeout > 1.5)
+	{
+		UE_LOG(LogSfCore, Error,
+			   TEXT("Buffered inputs can only have a timeout of less than 1.5 seconds. Called in UConstituent class %s."), *GetClass()->GetName());
+	}
+	BufferedInputs.Add(FBufferedInput(InOwnedCardsRequiredToActivate, InOwnedCardsRequiredGoneToActivate,
 	                       InSharedCardsRequiredToActivate, InSharedCardsRequiredGoneToActivate,
-	                       GetFormCharacter()->CalculateFuturePredictedTimestamp(Timeout), EventToBind);
+	                       GetFormCharacter()->CalculateFuturePredictedTimestamp(InTimeout), EventToBind));
 	//We check buffed inputs instantly just in case they can be run already.
 	OwningSlotable->OwningInventory->UpdateAndRunBufferedInputs(this);
 }
 
 void UConstituent::HandleBufferInputTimeout()
 {
-	TArray<FBufferedInput*> ToRemove;
-	for (FBufferedInput& BufferedInput : BufferedInputs)
+	for (auto It = BufferedInputs.CreateIterator(); It; ++It)
 	{
-		if (GetFormCharacter()->CalculateTimeUntilPredictedTimestamp(BufferedInput.LifetimePredictedTimestamp) < 0)
+		if (GetFormCharacter()->CalculateTimeUntilPredictedTimestamp(It->LifetimePredictedTimestamp) < 0)
 		{
-			ToRemove.Add(&BufferedInput);
+			It.RemoveCurrent();
 		}
-	}
-	for (const FBufferedInput* Element : ToRemove)
-	{
-		BufferedInputs.Remove(*Element);
 	}
 }

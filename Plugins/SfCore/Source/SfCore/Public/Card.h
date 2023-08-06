@@ -55,13 +55,15 @@ struct SFCORE_API FCard
 	
 	double ServerAwaitClientSyncTimeoutTimestamp;
 
+	//Time before the server forces a correction if a client fails to register a card change sent by the server through
+	//the FormCharacterComponent.
 	inline static constexpr float ServerAwaitClientSyncTimeoutDuration = 0.4;
 
 	FCard();
 	
-	FCard(const TSubclassOf<UCardObject>& CardClass, ECardType CardType, uint8 InOwnerConstituentInstanceId = 0,
-	      UFormCharacterComponent* NullUnlessUsingPredictedTimestampFormCharacter = nullptr,
-	      UFormCoreComponent* NullUnlessUsingServerTimestampFormCore = nullptr, const float CustomLifetime = 0);
+	FCard(const TSubclassOf<UCardObject>& InCardClass, const ECardType InCardType, uint8 InOwnerConstituentInstanceId = 0,
+	      const UFormCharacterComponent* InNullUnlessUsingPredictedTimestampFormCharacter = nullptr,
+	      const UFormCoreComponent* InNullUnlessUsingServerTimestampFormCore = nullptr, const float InCustomLifetime = 0);
 
 	struct FNetCardIdentifier GetNetCardIdentifier() const;
 

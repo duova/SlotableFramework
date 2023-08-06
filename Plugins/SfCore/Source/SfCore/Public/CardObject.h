@@ -27,33 +27,35 @@ public:
 	UFUNCTION(BlueprintImplementableEvent)
 	void Deinitialize();
 
-	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	uint8 bSpawnCardObjectOnClient:1;
-
-	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	uint8 bUseLifetime:1;
-
-	UPROPERTY(BlueprintReadOnly, EditAnywhere, meta = (ClampMin = 0))
-	float DefaultLifetime;
+	//Should this card object be spawned on the client when the form has the card?
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Card Object")
+	bool bSpawnCardObjectOnClient = false;
 	
-	uint16 OwnerConstituentInstanceId;
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Card Object")
+	bool bUseLifetime = false;
+	
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, meta = (ClampMin = 0, ClampMax = 999999), Category = "Card Object")
+	float DefaultLifetimeInSeconds = 0;
+	
+	uint16 OwnerConstituentInstanceId = 0;
 
-	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	uint8 bUseMovementSpeedModifiers:1;
+	//If true, this applies the speed modifier variables to the movement variables of the FormCharacterComponent.
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Card Object")
+	bool bUseMovementSpeedModifiers = false;
 
 	//Initial +- to movement speed.
-	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	float AdditiveMovementSpeedModifier;
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Card Object", meta = (ClampMin = 0, ClampMax = 999999))
+	float AdditiveMovementSpeedModifier = 0;
 
 	//Movement speed is multiplied by (sums of these values + 1).
-	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	float AdditiveMultiplicativeMovementSpeedModifier;
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Card Object", meta = (ClampMin = 0, ClampMax = 999999))
+	float AdditiveMultiplicativeMovementSpeedModifier = 0;
 
 	//Directly multiplies movement speed by this value, after additive multiplicative. Multiple values multiply.
-	UPROPERTY(BlueprintReadOnly, EditAnywhere)
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Card Object", meta = (ClampMin = 0, ClampMax = 999999))
 	float TrueMultiplicativeMovementSpeedModifier = 1;
 
 	//+- to movement speed after all other modifications.
-	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	float FlatAdditiveMovementSpeedModifier;
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Card Object", meta = (ClampMin = 0, ClampMax = 999999))
+	float FlatAdditiveMovementSpeedModifier = 0;
 };
