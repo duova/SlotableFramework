@@ -45,6 +45,8 @@ struct FStatArray : public FFastArraySerializer
 
 	UPROPERTY()
 	UFormStatComponent* OwningFormStat;
+
+	FStatArray();
 	
 	bool NetDeltaSerialize(FNetDeltaSerializeInfo & DeltaParms)
 	{

@@ -21,7 +21,7 @@ USfShopBroadcasterComponent::USfShopBroadcasterComponent()
 void USfShopBroadcasterComponent::BeginPlay()
 {
 	Super::BeginPlay();
-	if (USfObject::TArrayCheckDuplicate(ShopOffers, [](const FShopOfferWithAmount& A, const FShopOfferWithAmount& B)
+	if (TArrayCheckDuplicate(ShopOffers, [](const FShopOfferWithAmount& A, const FShopOfferWithAmount& B)
 	{
 		return A.ShopOffer == B.ShopOffer;
 	}))

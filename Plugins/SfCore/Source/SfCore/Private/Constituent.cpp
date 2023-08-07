@@ -18,11 +18,12 @@ FActionSet::FActionSet(): NumActionsIncludingZero(0), ActionZero(0), ActionOne(0
 }
 
 FActionSet::FActionSet(const float InCurrentWorldTime, const uint8 InActionZero, const uint8 InActionOne,
-                       const uint8 InActionTwo, const uint8 InActionThree): ActionZero(InActionZero), ActionOne(InActionOne),
-                                                                        ActionTwo(InActionTwo),
-                                                                        ActionThree(InActionThree),
-                                                                        WorldTime(InCurrentWorldTime),
-                                                                        bFlipToForceReplicate(0)
+                       const uint8 InActionTwo, const uint8 InActionThree): ActionZero(InActionZero),
+                                                                            ActionOne(InActionOne),
+                                                                            ActionTwo(InActionTwo),
+                                                                            ActionThree(InActionThree),
+                                                                            WorldTime(InCurrentWorldTime),
+                                                                            bFlipToForceReplicate(0)
 {
 	if (InActionZero == 0)
 	{
@@ -135,7 +136,8 @@ bool FBufferedInput::operator==(const FBufferedInput& Other) const
 	return true;
 }
 
-bool FBufferedInput::CheckConditionsMet(const UInventory* InInventoryToCheck, const UConstituent* InCurrentConstituent) const
+bool FBufferedInput::CheckConditionsMet(const UInventory* InInventoryToCheck,
+                                        const UConstituent* InCurrentConstituent) const
 {
 	//This might look like a heavy check every time an input is pressed and when cards are added and removed. However,
 	//note that most of the time only 1 for loop will run as it's likely that only 1 type of card will be checked.
@@ -166,7 +168,7 @@ bool FBufferedInput::CheckConditionsMet(const UInventory* InInventoryToCheck, co
 	for (const TSubclassOf<UCardObject>& SharedCardRequired : SharedCardsRequired)
 	{
 		if (!SharedCardRequired.Get()) continue;
-		if (!InInventoryToCheck->Cards.FindByPredicate([SharedCardRequired, InCurrentConstituent](const FCard& Card)
+		if (!InInventoryToCheck->Cards.FindByPredicate([SharedCardRequired](const FCard& Card)
 		{
 			return Card.OwnerConstituentInstanceId == 0 && Card.Class == SharedCardRequired;
 		}))
@@ -177,7 +179,7 @@ bool FBufferedInput::CheckConditionsMet(const UInventory* InInventoryToCheck, co
 	for (const TSubclassOf<UCardObject>& SharedCardRequiredGone : SharedCardsRequiredGone)
 	{
 		if (!SharedCardRequiredGone.Get()) continue;
-		if (InInventoryToCheck->Cards.FindByPredicate([SharedCardRequiredGone, InCurrentConstituent](const FCard& Card)
+		if (InInventoryToCheck->Cards.FindByPredicate([SharedCardRequiredGone](const FCard& Card)
 		{
 			return Card.OwnerConstituentInstanceId == 0 && Card.Class == SharedCardRequiredGone;
 		}))
@@ -217,6 +219,7 @@ void UConstituent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, LastActionSet, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, LastActionSetTimestamp, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, OriginatingConstituent, DefaultParams);
+	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, InstanceId, DefaultParams);
 }
 
 void UConstituent::OnRep_OwningSlotable()
@@ -280,7 +283,8 @@ void UConstituent::ExecuteAction(const int32 InActionId, const bool bInIsPredict
 	if (InActionId < 0 || InActionId > 63)
 	{
 		UE_LOG(LogSfCore, Error,
-			   TEXT("ExecuteAction called with an out of range ActionId of %i on UConstituent class %s"), InActionId, *GetClass()->GetName());
+		       TEXT("ExecuteAction called with an out of range ActionId of %i on UConstituent class %s"), InActionId,
+		       *GetClass()->GetName());
 	}
 	InternalExecuteAction(InActionId, bInIsPredictableContext);
 }
@@ -312,7 +316,7 @@ void UConstituent::InternalExecuteAction(const uint8 InActionId, const bool bInI
 			TimeSincePredictedLastActionSet.SetFloat(0);
 			if (bEnableInputsAndPrediction && IsFormCharacter())
 			{
-				Predicted_OnExecute(InActionId, GetFormCharacter()->IsReplaying());
+				Predicted_OnExecute(InActionId, GetFormCharacter()->IsReplaying(), FormCore->IsFirstPerson(), true);
 			}
 		}
 		//LastActionSet always needs to be updated if we execute an action, no matter the context.
@@ -344,7 +348,7 @@ void UConstituent::InternalExecuteAction(const uint8 InActionId, const bool bInI
 		}
 		bPredictedLastActionSetUpdated = true;
 		TimeSincePredictedLastActionSet.SetFloat(0);
-		Predicted_OnExecute(InActionId, GetFormCharacter()->IsReplaying());
+		Predicted_OnExecute(InActionId, GetFormCharacter()->IsReplaying(), FormCore->IsFirstPerson(), false);
 	}
 	//Other roles change their states OnRep.
 }
@@ -395,24 +399,14 @@ void UConstituent::OnRep_LastActionSet()
 	{
 		for (const uint8 Id : LastActionSet.ToArray())
 		{
-			Autonomous_OnExecute(Id, TimeSinceExecution);
+			Autonomous_OnExecute(Id, TimeSinceExecution, FormCore->IsFirstPerson());
 		}
 	}
 	if (GetOwner()->GetLocalRole() == ROLE_SimulatedProxy)
 	{
-		if (FormCore->IsFirstPerson())
+		for (const uint8 Id : LastActionSet.ToArray())
 		{
-			for (const uint8 Id : LastActionSet.ToArray())
-			{
-				SimulatedFP_OnExecute(Id, TimeSinceExecution);
-			}
-		}
-		else
-		{
-			for (const uint8 Id : LastActionSet.ToArray())
-			{
-				SimulatedTP_OnExecute(Id, TimeSinceExecution);
-			}
+			Simulated_OnExecute(Id, TimeSinceExecution, FormCore->IsFirstPerson());
 		}
 	}
 }
@@ -427,11 +421,13 @@ USfQuery* UConstituent::GetQuery(const TSubclassOf<USfQuery> QueryClass) const
 	if (!FormCore) return nullptr;
 	if (!FormCore->GetFormQuery())
 	{
-		UE_LOG(LogSfCore, Error, TEXT("GetQuery called on a UConstituent of class %s without a FormQueryComponent."), *GetClass()->GetName());
+		UE_LOG(LogSfCore, Error, TEXT("GetQuery called on a UConstituent of class %s without a FormQueryComponent."),
+		       *GetClass()->GetName());
 	}
 	if (!QueryClass.Get())
 	{
-		UE_LOG(LogSfCore, Error, TEXT("GetQuery called on a UConstituent of class %s with an empty TSubclassOf."), *GetClass()->GetName());
+		UE_LOG(LogSfCore, Error, TEXT("GetQuery called on a UConstituent of class %s with an empty TSubclassOf."),
+		       *GetClass()->GetName());
 	}
 	for (const TPair<USfQuery*, uint16>& Pair : FormCore->GetFormQuery()->ActiveQueryDependentCountPair)
 	{
@@ -440,30 +436,45 @@ USfQuery* UConstituent::GetQuery(const TSubclassOf<USfQuery> QueryClass) const
 			return Pair.Key;
 		}
 	}
-	UE_LOG(LogTemp, Error, TEXT("GetQuery could not find query of class %s for UConstituent %s. Is the query a dependency of the constituent?"), *QueryClass->GetName(), *GetClass()->GetName());
+	UE_LOG(LogTemp, Error,
+	       TEXT(
+		       "GetQuery could not find query of class %s for UConstituent %s. Is the query a dependency of the constituent?"
+	       ), *QueryClass->GetName(), *GetClass()->GetName());
 	return nullptr;
 }
 
-void UConstituent::BufferInput(const TArray<TSubclassOf<UCardObject>> InOwnedCardsRequiredToActivate,
-                               const TArray<TSubclassOf<UCardObject>> InOwnedCardsRequiredGoneToActivate,
-                               const TArray<TSubclassOf<UCardObject>> InSharedCardsRequiredToActivate,
-                               const TArray<TSubclassOf<UCardObject>> InSharedCardsRequiredGoneToActivate,
-                               const float InTimeout,
-                               const FBufferedInputDelegate& EventToBind)
+void UConstituent::BufferInput(const float InTimeout,
+                               const FBufferedInputDelegate& EventToBind,
+                               const TArray<TSubclassOf<UCardObject>>& InOwnedCardsRequiredToActivate,
+                               const TArray<TSubclassOf<UCardObject>>& InOwnedCardsRequiredGoneToActivate,
+                               const TArray<TSubclassOf<UCardObject>>& InSharedCardsRequiredToActivate,
+                               const TArray<TSubclassOf<UCardObject>>& InSharedCardsRequiredGoneToActivate)
+{
+	InternalBufferInput(InTimeout, EventToBind, InOwnedCardsRequiredToActivate, InOwnedCardsRequiredGoneToActivate,
+	                    InSharedCardsRequiredToActivate, InSharedCardsRequiredGoneToActivate);
+}
+
+void UConstituent::InternalBufferInput(const float InTimeout,
+                                       const FBufferedInputDelegate& EventToBind,
+                                       const TArray<TSubclassOf<UCardObject>>& InOwnedCardsRequiredToActivate,
+                                       const TArray<TSubclassOf<UCardObject>>& InOwnedCardsRequiredGoneToActivate,
+                                       const TArray<TSubclassOf<UCardObject>>& InSharedCardsRequiredToActivate,
+                                       const TArray<TSubclassOf<UCardObject>>& InSharedCardsRequiredGoneToActivate)
 {
 	if (InTimeout < 0)
 	{
 		UE_LOG(LogSfCore, Error,
-			   TEXT("Timeout on BufferedInput is negative on UConstituent class %s."), *GetClass()->GetName());
+		       TEXT("Timeout on BufferedInput is negative on UConstituent class %s."), *GetClass()->GetName());
 	}
 	if (InTimeout > 1.5)
 	{
 		UE_LOG(LogSfCore, Error,
-			   TEXT("Buffered inputs can only have a timeout of less than 1.5 seconds. Called in UConstituent class %s."), *GetClass()->GetName());
+		       TEXT("Buffered inputs can only have a timeout of less than 1.5 seconds. Called in UConstituent class %s."
+		       ), *GetClass()->GetName());
 	}
 	BufferedInputs.Add(FBufferedInput(InOwnedCardsRequiredToActivate, InOwnedCardsRequiredGoneToActivate,
-	                       InSharedCardsRequiredToActivate, InSharedCardsRequiredGoneToActivate,
-	                       GetFormCharacter()->CalculateFuturePredictedTimestamp(InTimeout), EventToBind));
+	                                  InSharedCardsRequiredToActivate, InSharedCardsRequiredGoneToActivate,
+	                                  GetFormCharacter()->CalculateFuturePredictedTimestamp(InTimeout), EventToBind));
 	//We check buffed inputs instantly just in case they can be run already.
 	OwningSlotable->OwningInventory->UpdateAndRunBufferedInputs(this);
 }

@@ -35,7 +35,7 @@ USfCurrencyComponent::USfCurrencyComponent()
 void USfCurrencyComponent::BeginPlay()
 {
 	Super::BeginPlay();
-	if (USfObject::TArrayCheckDuplicate(HeldCurrencyValues, [](const FCurrencyValuePair& A, const FCurrencyValuePair& B){return A.Currency == B.Currency;}))
+	if (TArrayCheckDuplicate(HeldCurrencyValues, [](const FCurrencyValuePair& A, const FCurrencyValuePair& B){return A.Currency == B.Currency;}))
 	{
 		UE_LOG(LogTemp, Error, TEXT("Currencies duplicated."));
 	}

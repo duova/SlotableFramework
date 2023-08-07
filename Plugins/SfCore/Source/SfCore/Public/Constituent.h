@@ -39,7 +39,8 @@ struct SFCORE_API FActionSet
 	//Do not use default constructor.
 	FActionSet();
 
-	FActionSet(const float InCurrentWorldTime, const uint8 InActionZero, const uint8 InActionOne = 0, const uint8 InActionTwo = 0,
+	FActionSet(const float InCurrentWorldTime, const uint8 InActionZero, const uint8 InActionOne = 0,
+	           const uint8 InActionTwo = 0,
 	           const uint8 InActionThree = 0);
 
 	//Returns false if the action was created on another frame.
@@ -74,7 +75,6 @@ DECLARE_DYNAMIC_DELEGATE(FBufferedInputDelegate);
 USTRUCT()
 struct SFCORE_API FBufferedInput
 {
-	
 	GENERATED_BODY()
 
 	TArray<TSubclassOf<UCardObject>> OwnedCardsRequired;
@@ -218,22 +218,20 @@ public:
 
 	//Called when an action is executed on the server and client predictively.
 	//Only use functions marked Predicted_.
+	//bIsFirstPerson is only valid on the client.
 	UFUNCTION(BlueprintImplementableEvent)
-	void Predicted_OnExecute(const int32 InActionId, const bool bInIsReplaying);
+	void Predicted_OnExecute(const int32 InActionId, const bool bInIsReplaying, const bool bIsFirstPerson,
+	                         const bool bIsServer);
 
 	//TimeSinceLastActionSet does not increment past 655 seconds.
 
 	//Called when an action is executed on the autonomous client.
 	UFUNCTION(BlueprintImplementableEvent)
-	void Autonomous_OnExecute(const int32 InActionId, const float InTimeSinceExecution);
+	void Autonomous_OnExecute(const int32 InActionId, const float InTimeSinceExecution, const bool bIsFirstPerson);
 
-	//Called when an action is executed on the simulated client if it is set to first person.
+	//Called when an action is executed on the simulated client.
 	UFUNCTION(BlueprintImplementableEvent)
-	void SimulatedFP_OnExecute(const int32 InActionId, const float InTimeSinceExecution);
-
-	//Called when an action is executed on the simulated client if it is set to third person.
-	UFUNCTION(BlueprintImplementableEvent)
-	void SimulatedTP_OnExecute(const int32 InActionId, const float InTimeSinceExecution);
+	void Simulated_OnExecute(const int32 InActionId, const float InTimeSinceExecution, const bool bIsFirstPerson);
 
 	//Input down for the input registered to the UConstituent in UFormCharacterComponent.
 	UFUNCTION(BlueprintImplementableEvent)
@@ -269,13 +267,26 @@ public:
 	//This needs to be casted to the class to get the event from the query.
 	USfQuery* GetQuery(const TSubclassOf<USfQuery> QueryClass) const;
 
-	UFUNCTION(BlueprintCallable)
-	void BufferInput(const TArray<TSubclassOf<UCardObject>> InOwnedCardsRequiredToActivate,
-	                 const TArray<TSubclassOf<UCardObject>> InOwnedCardsRequiredGoneToActivate,
-	                 const TArray<TSubclassOf<UCardObject>> InSharedCardsRequiredToActivate,
-	                 const TArray<TSubclassOf<UCardObject>> InSharedCardsRequiredGoneToActivate,
-	                 const float InTimeout,
-	                 const FBufferedInputDelegate& EventToBind);
+	UFUNCTION(BlueprintCallable, meta = (AutoCreateRefTerm =
+		"InOwnedCardsRequiredToActivate, InOwnedCardsRequiredGoneToActivate, InSharedCardsRequiredToActivate, InSharedCardsRequiredGoneToActivate"
+	))
+	void BufferInput(const float InTimeout,
+	                 const FBufferedInputDelegate& EventToBind,
+	                 const TArray<TSubclassOf<UCardObject>>& InOwnedCardsRequiredToActivate,
+	                 const TArray<TSubclassOf<UCardObject>>& InOwnedCardsRequiredGoneToActivate,
+	                 const TArray<TSubclassOf<UCardObject>>& InSharedCardsRequiredToActivate,
+	                 const TArray<TSubclassOf<UCardObject>>& InSharedCardsRequiredGoneToActivate);
+
+	void InternalBufferInput(const float InTimeout,
+	                         const FBufferedInputDelegate& EventToBind,
+	                         const TArray<TSubclassOf<UCardObject>>& InOwnedCardsRequiredToActivate = TArray<TSubclassOf
+		                         <UCardObject>>(),
+	                         const TArray<TSubclassOf<UCardObject>>& InOwnedCardsRequiredGoneToActivate = TArray<
+		                         TSubclassOf<UCardObject>>(),
+	                         const TArray<TSubclassOf<UCardObject>>& InSharedCardsRequiredToActivate = TArray<
+		                         TSubclassOf<UCardObject>>(),
+	                         const TArray<TSubclassOf<UCardObject>>& InSharedCardsRequiredGoneToActivate = TArray<
+		                         TSubclassOf<UCardObject>>());
 
 	void HandleBufferInputTimeout();
 

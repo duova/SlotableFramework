@@ -37,6 +37,10 @@ void FStat::PostReplicatedChange(const FStatArray& InArraySerializer)
 	InArraySerializer.OwningFormStat->OnClientStatsChange.Broadcast();
 }
 
+FStatArray::FStatArray(): OwningFormStat(nullptr)
+{
+}
+
 UFormStatComponent::UFormStatComponent()
 {
 	if (!GetOwner()) return;

@@ -65,13 +65,11 @@ private:
 	UFormCharacterComponent* FormCharacterComponent;
 
 	uint8 bDoesNotHaveFormCharacter:1;
-
-	template<class T>
-	static void TArrayGroupEquivalentProcessElement(const T Element, TMap<T, TSet<T*>>& SignatureGroupPairs);
+	
 };
 
 template <class T>
-bool USfObject::TArrayCompareOrderless(const TArray<T>& A, const TArray<T>& B)
+bool TArrayCompareOrderless(const TArray<T>& A, const TArray<T>& B)
 {
 	//Early check to gate the more complicated checks.
 	if (A.Num() != B.Num()) return false;
@@ -91,7 +89,7 @@ bool USfObject::TArrayCompareOrderless(const TArray<T>& A, const TArray<T>& B)
 }
 
 template <class T>
-TMap<T, TSet<T*>> USfObject::TArrayGroupEquivalentElements(const TArray<T>& Array)
+TMap<T, TSet<T*>> TArrayGroupEquivalentElements(const TArray<T>& Array)
 {
 	TMap<T, TSet<T*>> SignatureGroupPairs;
 	for (T Element : Array)
@@ -102,7 +100,7 @@ TMap<T, TSet<T*>> USfObject::TArrayGroupEquivalentElements(const TArray<T>& Arra
 }
 
 template <class T, class F>
-bool USfObject::TArrayCheckDuplicate(const TArray<T>& Array, F&& Predicate)
+bool TArrayCheckDuplicate(const TArray<T>& Array, F&& Predicate)
 {
 	for (int32 i = 0; i < Array.Num() - 1; i++)
 	{
@@ -118,7 +116,7 @@ bool USfObject::TArrayCheckDuplicate(const TArray<T>& Array, F&& Predicate)
 }
 
 template <class T>
-void USfObject::TArrayGroupEquivalentProcessElement(const T Element, TMap<T, TSet<T*>>& SignatureGroupPairs)
+void TArrayGroupEquivalentProcessElement(const T Element, TMap<T, TSet<T*>>& SignatureGroupPairs)
 {
 	//Find the signature and add, otherwise create a new signature.
 	for (TPair<T, TSet<T*>> Pair : SignatureGroupPairs)
