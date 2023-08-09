@@ -6,6 +6,8 @@
 #include "SfObject.h"
 #include "Net/UnrealNetwork.h"
 
+DEFINE_LOG_CATEGORY(LogSfEconomy);
+
 FCurrencyValuePair::FCurrencyValuePair(): Value(0)
 {
 }
@@ -37,7 +39,7 @@ void USfCurrencyComponent::BeginPlay()
 	Super::BeginPlay();
 	if (TArrayCheckDuplicate(HeldCurrencyValues, [](const FCurrencyValuePair& A, const FCurrencyValuePair& B){return A.Currency == B.Currency;}))
 	{
-		UE_LOG(LogTemp, Error, TEXT("Currencies tags duplicated on SfCurrencyComponent class %s. Only one will be used."), *GetClass()->GetName());
+		UE_LOG(LogSfEconomy, Error, TEXT("Currencies tags duplicated on SfCurrencyComponent class %s. Only one will be used."), *GetClass()->GetName());
 	}
 }
 

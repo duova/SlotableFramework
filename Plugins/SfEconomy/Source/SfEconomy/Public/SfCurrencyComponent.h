@@ -7,6 +7,8 @@
 #include "Components/ActorComponent.h"
 #include "SfCurrencyComponent.generated.h"
 
+DECLARE_LOG_CATEGORY_EXTERN(LogSfEconomy, Log, All);
+
 //The amount of a certain currency type.
 USTRUCT(BlueprintType)
 struct SFECONOMY_API FCurrencyValuePair

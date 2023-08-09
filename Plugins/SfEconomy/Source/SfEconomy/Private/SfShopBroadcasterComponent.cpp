@@ -26,7 +26,7 @@ void USfShopBroadcasterComponent::BeginPlay()
 		return A.ShopOffer == B.ShopOffer;
 	}))
 	{
-		UE_LOG(LogSfCore, Error, TEXT("Shop offers duplicated on SfShopBroadcasterComponent class %s."), *GetClass()->GetName());
+		UE_LOG(LogSfEconomy, Error, TEXT("Shop offers duplicated on SfShopBroadcasterComponent class %s."), *GetClass()->GetName());
 	}
 }
 
@@ -148,7 +148,7 @@ bool USfShopBroadcasterComponent::ServerPurchase(USfShopAccessorComponent* InAcc
 {
 	if (!GetOwner()->HasAuthority())
 	{
-		UE_LOG(LogSfCore, Error, TEXT("ServerPurchase called without authority on USfShopBroadcasterComponent class %s."), *GetClass()->GetName());
+		UE_LOG(LogSfEconomy, Error, TEXT("ServerPurchase called without authority on USfShopBroadcasterComponent class %s."), *GetClass()->GetName());
 		return false;
 	}
 
@@ -160,7 +160,7 @@ bool USfShopBroadcasterComponent::ServerPurchase(USfShopAccessorComponent* InAcc
 		}
 		if (!TargetInventory)
 		{
-			UE_LOG(LogSfCore, Error, TEXT("ServerPurchase on USfShopBroadcasterComponent class %s could not locate a suitable inventory."), *GetClass()->GetName());
+			UE_LOG(LogSfEconomy, Error, TEXT("ServerPurchase on USfShopBroadcasterComponent class %s could not locate a suitable inventory."), *GetClass()->GetName());
 			InAccessor->InternalClientRpcForPurchaseCallback(EPurchaseResponse::ErrorNoSuitableInventoryToReceiveSlotables);
 			return false;
 		}
@@ -179,14 +179,14 @@ bool USfShopBroadcasterComponent::ServerPurchase(USfShopAccessorComponent* InAcc
 	//Verify that all inventories and all slotables come from the actor.
 	if (!InAccessor)
 	{
-		UE_LOG(LogSfCore, Error, TEXT("ServerPurchase on USfShopBroadcasterComponent class %s called with a null accessor."), *GetClass()->GetName());
+		UE_LOG(LogSfEconomy, Error, TEXT("ServerPurchase on USfShopBroadcasterComponent class %s called with a null accessor."), *GetClass()->GetName());
 		InAccessor->InternalClientRpcForPurchaseCallback(EPurchaseResponse::ErrorShopAccessorIsNull);
 		return false;
 	}
 	const AActor* Actor = InAccessor->GetOwner();
 	if (!Actor)
 	{
-		UE_LOG(LogSfCore, Error, TEXT("ServerPurchase on USfShopBroadcasterComponent class %s could not get accessor actor."), *GetClass()->GetName());
+		UE_LOG(LogSfEconomy, Error, TEXT("ServerPurchase on USfShopBroadcasterComponent class %s could not get accessor actor."), *GetClass()->GetName());
 		InAccessor->InternalClientRpcForPurchaseCallback(EPurchaseResponse::ErrorAccessorGivenHasNoActor);
 		return false;
 	}
@@ -194,7 +194,7 @@ bool USfShopBroadcasterComponent::ServerPurchase(USfShopAccessorComponent* InAcc
 	{
 		if (TargetInventory->OwningFormCore->GetOwner() != Actor)
 		{
-			UE_LOG(LogSfCore, Error, TEXT("ServerPurchase on USfShopBroadcasterComponent class %s target inventory is not on the same actor as the accessor."), *GetClass()->GetName());
+			UE_LOG(LogSfEconomy, Error, TEXT("ServerPurchase on USfShopBroadcasterComponent class %s target inventory is not on the same actor as the accessor."), *GetClass()->GetName());
 			InAccessor->InternalClientRpcForPurchaseCallback(EPurchaseResponse::ErrorVariablesGivenBelongToDifferentActors);
 			return false;
 		}
@@ -203,7 +203,7 @@ bool USfShopBroadcasterComponent::ServerPurchase(USfShopAccessorComponent* InAcc
 	{
 		if (Slotable->OwningInventory->OwningFormCore->GetOwner() != Actor)
 		{
-			UE_LOG(LogSfCore, Error, TEXT("ServerPurchase on USfShopBroadcasterComponent class %s has an offered slotable that is not on the same actor as the accessor."), *GetClass()->GetName());
+			UE_LOG(LogSfEconomy, Error, TEXT("ServerPurchase on USfShopBroadcasterComponent class %s has an offered slotable that is not on the same actor as the accessor."), *GetClass()->GetName());
 			InAccessor->InternalClientRpcForPurchaseCallback(EPurchaseResponse::ErrorVariablesGivenBelongToDifferentActors);
 			return false;
 		}
