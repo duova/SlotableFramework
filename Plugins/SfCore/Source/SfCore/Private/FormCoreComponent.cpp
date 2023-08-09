@@ -41,7 +41,7 @@ UFormStatComponent* UFormCoreComponent::GetFormStat() const
 	return FormStat;
 }
 
-bool UFormCoreComponent::ActivateTrigger(const FGameplayTag Trigger)
+bool UFormCoreComponent::Server_ActivateTrigger(const FGameplayTag Trigger)
 {
 	for (const TPair<FGameplayTag, FTriggerDelegate>& Pair : Triggers)
 	{
@@ -57,7 +57,7 @@ bool UFormCoreComponent::ActivateTrigger(const FGameplayTag Trigger)
 	return false;
 }
 
-bool UFormCoreComponent::BindTrigger(const FGameplayTag Trigger, const FTriggerInputDelegate EventToBind)
+bool UFormCoreComponent::Server_BindTrigger(const FGameplayTag Trigger, const FTriggerInputDelegate EventToBind)
 {
 	for (TPair<FGameplayTag, FTriggerDelegate>& Pair : Triggers)
 	{
@@ -70,7 +70,7 @@ bool UFormCoreComponent::BindTrigger(const FGameplayTag Trigger, const FTriggerI
 	return false;
 }
 
-bool UFormCoreComponent::HasTrigger(const FGameplayTag Trigger)
+bool UFormCoreComponent::Server_HasTrigger(const FGameplayTag Trigger)
 {
 	for (const TPair<FGameplayTag, FTriggerDelegate>& Pair : Triggers)
 	{
@@ -86,11 +86,12 @@ void UFormCoreComponent::BeginPlay()
 {
 	Super::BeginPlay();
 	if (!GetOwner()) return;
-	FormCharacter = Cast<UFormCharacterComponent>(GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()));
+	FormCharacter = Cast<UFormCharacterComponent>(
+		GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()));
 	FormQuery = Cast<UFormQueryComponent>(GetOwner()->FindComponentByClass(UFormQueryComponent::StaticClass()));
 	SfHealth = Cast<USfHealthComponent>(GetOwner()->FindComponentByClass(USfHealthComponent::StaticClass()));
 	FormStat = Cast<UFormStatComponent>(GetOwner()->FindComponentByClass(UFormStatComponent::StaticClass()));
-	
+
 	if (FormCharacter)
 	{
 		FormCharacter->SetupFormCharacter(this);
@@ -105,40 +106,47 @@ void UFormCoreComponent::BeginPlay()
 	{
 		FormQuery->SetupFormQuery(this);
 	}
-	
+
 	//This is used to narrow down the classes that need to be iterated through when serializing card classes with names.
 	if (!CardObjectClassesFetched)
 	{
-		for(TObjectIterator<UClass> It; It; ++It)
+		for (TObjectIterator<UClass> It; It; ++It)
 		{
-			if(It->IsChildOf(UCardObject::StaticClass()) && !It->HasAnyClassFlags(CLASS_Abstract))
+			if (It->IsChildOf(UCardObject::StaticClass()) && !It->HasAnyClassFlags(CLASS_Abstract))
 			{
 				AllCardObjectClassesSortedByName.Add(*It);
 			}
 		}
 		//We sort this in a deterministic order to index items.
-		AllCardObjectClassesSortedByName.Sort([](const UClass& A, const UClass& B) { return A.GetFullName() > B.GetFullName(); });
+		AllCardObjectClassesSortedByName.Sort([](const UClass& A, const UClass& B)
+		{
+			return A.GetFullName() > B.GetFullName();
+		});
 		CardObjectClassesFetched = true;
 	}
 
-	if (GetOwner())
+	if (GetOwner()->HasAuthority())
 	{
-		if (GetOwner()->HasAuthority())
+		Inventories.Reserve(DefaultInventoryClasses.Num());
+		for (TSubclassOf<UInventory> InventoryClass : DefaultInventoryClasses)
 		{
-			for (TSubclassOf<UInventory> InventoryClass : DefaultInventoryClasses)
+			if (!InventoryClass.Get())
 			{
-				Server_AddInventory(InventoryClass);
+				UE_LOG(LogSfCore, Warning, TEXT("FormCoreComponent class %s has an empty inventory TSubclassOf."), *GetClass()->GetName());
+				continue;
 			}
+			Server_AddInventory(InventoryClass);
+		}
 
-			for (const FGameplayTag& TriggerTag : TriggersToUse)
+		Triggers.Reserve(TriggersToUse.Num());
+		for (const FGameplayTag& TriggerTag : TriggersToUse)
+		{
+			if (Triggers.Contains(TriggerTag))
 			{
-				if (Triggers.Contains(TriggerTag))
-				{
-					UE_LOG(LogTemp, Warning, TEXT("Duplicated trigger."));
-					continue;
-				}
-				Triggers.Add(TriggerTag, FTriggerDelegate());
+				UE_LOG(LogSfCore, Warning, TEXT("Duplicated trigger on FormCoreComponent class %s."), *GetClass()->GetName());
+				continue;
 			}
+			Triggers.Add(TriggerTag, FTriggerDelegate());
 		}
 	}
 
@@ -150,7 +158,7 @@ void UFormCoreComponent::BeginDestroy()
 	Super::BeginDestroy();
 	if (!GetOwner()) return;
 	if (!GetOwner()->HasAuthority()) return;
-	for (int32 i = 0; i < Inventories.Num(); i++)
+	for (uint8 i = 0; i < Inventories.Num(); i++)
 	{
 		//We clear index 0 because the list shifts down.
 		Server_RemoveInventoryByIndex(0);
@@ -169,18 +177,13 @@ void UFormCoreComponent::OnRep_Inventories()
 			ClientSubObjectListRegisteredInventories.Add(ReplicatedInventory);
 		}
 	}
-	TArray<UInventory*> ToRemove;
-	for (UInventory* RegisteredInventory : ClientSubObjectListRegisteredInventories)
+	for (auto It = ClientSubObjectListRegisteredInventories.CreateIterator(); It; ++It)
 	{
-		if (!Inventories.Contains(RegisteredInventory) && GetOwner())
+		if (!Inventories.Contains(*It) && GetOwner())
 		{
-			GetOwner()->RemoveReplicatedSubObject(RegisteredInventory);
-			ToRemove.Add(RegisteredInventory);
+			GetOwner()->RemoveReplicatedSubObject(*It);
+			It.RemoveCurrent();
 		}
-	}
-	for (UInventory* InventoryToRemove : ToRemove)
-	{
-		ClientSubObjectListRegisteredInventories.Remove(InventoryToRemove);
 	}
 }
 
@@ -197,12 +200,12 @@ void UFormCoreComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	if (!GetOwner()->HasAuthority()) return;
-	
+
 	for (UInventory* Inventory : Inventories)
 	{
 		Inventory->AuthorityTick(DeltaTime);
 	}
-	
+
 	if (GetOwner()->HasAuthority())
 	{
 		NonCompensatedServerWorldTime = GetWorld()->TimeSeconds;
@@ -211,7 +214,7 @@ void UFormCoreComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	{
 		NonCompensatedServerWorldTime += DeltaTime;
 	}
-	
+
 	if (static_cast<int>(NonCompensatedServerWorldTime) % 2)
 	{
 		//We synchronize every 2 seconds.
@@ -260,16 +263,23 @@ void UFormCoreComponent::Server_SetTeam(const FGameplayTag InTeam)
 	Team = InTeam;
 }
 
-UInventory* UFormCoreComponent::Server_AddInventory(const TSubclassOf<UInventory>& InventoryClass)
+UInventory* UFormCoreComponent::Server_AddInventory(const TSubclassOf<UInventory>& InInventoryClass)
 {
-	if (!InventoryClass || InventoryClass->HasAnyClassFlags(CLASS_Abstract)) return nullptr;
+	if (!InInventoryClass.Get() || InInventoryClass->HasAnyClassFlags(CLASS_Abstract)) return nullptr;
 	if (!GetOwner()) return nullptr;
 	const AActor* Owner = GetOwner();
-	checkf(Owner != nullptr, TEXT("Invalid owner."));
-	checkf(Owner->HasAuthority(), TEXT("Called without authority."));
-	UInventory* InventoryInstance = NewObject<UInventory>(GetOwner(), InventoryClass);
-	checkf(InventoryInstance, TEXT("Failed to create inventory."));
-	Inventories.Emplace(InventoryInstance);
+	if (!Owner->HasAuthority())
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Server_AddInventory called without authority on UFormCoreComponent class %s."), *GetClass()->GetName());
+		return nullptr;
+	}
+	UInventory* InventoryInstance = NewObject<UInventory>(GetOwner(), InInventoryClass);
+	if (!InventoryInstance)
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Failed to create inventory on UFormCoreComponent class %s."), *GetClass()->GetName());
+		return nullptr;
+	}
+	Inventories.Add(InventoryInstance);
 	InventoryInstance->OwningFormCore = this;
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, OwningFormCore, InventoryInstance);
 	GetOwner()->AddReplicatedSubObject(InventoryInstance);
@@ -278,24 +288,31 @@ UInventory* UFormCoreComponent::Server_AddInventory(const TSubclassOf<UInventory
 	return InventoryInstance;
 }
 
-void UFormCoreComponent::Server_RemoveInventoryByIndex(const int32 Index)
+void UFormCoreComponent::Server_RemoveInventoryByIndex(const int32 InIndex)
 {
 	if (!GetOwner()) return;
 	const AActor* Owner = GetOwner();
-	checkf(Owner, TEXT("Invalid Owner."));
-	checkf(Owner->HasAuthority(), TEXT("Called without Authority."));
-	checkf(Index < 0 || Index >= Inventories.Num(), TEXT("Attempted to remove an inventory with an index out of range."));
-	UInventory* Inventory = Inventories[Index];
+	if (!Owner->HasAuthority())
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Server_RemoveInventoryByIndex called without authority on UFormCoreComponent class %s."), *GetClass()->GetName());
+		return;
+	}
+	if (InIndex < 0 || InIndex >= Inventories.Num())
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Attempted to remove an inventory with an index out of range on UFormCoreComponent class %s."), *GetClass()->GetName());
+		return;
+	}
+	UInventory* Inventory = Inventories[InIndex];
 	if (!Inventory)
 	{
-		Inventories.RemoveAt(Index);
+		Inventories.RemoveAt(InIndex);
 		return;
 	}
 	GetOwner()->RemoveReplicatedSubObject(Inventory);
 	Inventory->ServerDeinitialize();
 	//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
 	Inventory->Destroy();
-	Inventories.RemoveAt(Index);
+	Inventories.RemoveAt(InIndex);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, Inventories, this);
 }
 
@@ -303,41 +320,51 @@ bool UFormCoreComponent::Server_RemoveInventory(UInventory* Inventory)
 {
 	//Authority checking done by Server_RemoveInventoryByIndex().
 	if (!Inventory) return false;
-	const int32 Index = Inventories.Find(Inventory);
+	const int16 Index = Inventories.Find(Inventory);
 	if (Index == INDEX_NONE) return false;
 	Server_RemoveInventoryByIndex(Index);
 	return true;
 }
 
-void UFormCoreComponent::ClientSetToFirstPerson()
+void UFormCoreComponent::Client_SetToFirstPerson()
 {
+	InternalClientSetToFirstPerson();
+}
+
+void UFormCoreComponent::Client_SetToThirdPerson()
+{
+	InternalClientSetToThirdPerson();
+}
+
+void UFormCoreComponent::InternalClientSetToFirstPerson()
+{
+	if (GetOwner()->HasAuthority())
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Server tried to call ClientSetToFirstPerson on UFormCoreComponent class %s."),
+		       *GetClass()->GetName());
+		return;
+	}
 	bIsFirstPerson = true;
 	//Refresh actions to use new one. (ie. use effects from the new perspective)
-	for (UInventory* Inventory : Inventories)
+	for (UConstituent* Constituent : ConstituentRegistry)
 	{
-		for (USlotable* Slotable : Inventory->GetSlotables())
-		{
-			for (UConstituent* Constituent : Slotable->GetConstituents())
-			{
-				Constituent->OnRep_LastActionSet();
-			}
-		}
+		Constituent->OnRep_LastActionSet();
 	}
 }
 
-void UFormCoreComponent::ClientSetToThirdPerson()
+void UFormCoreComponent::InternalClientSetToThirdPerson()
 {
+	if (GetOwner()->HasAuthority())
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Server tried to call ClientSetToFirstPerson on UFormCoreComponent class %s."),
+		       *GetClass()->GetName());
+		return;
+	}
 	bIsFirstPerson = false;
 	//Refresh actions to use new one. (ie. use effects from the new perspective)
-	for (UInventory* Inventory : Inventories)
+	for (UConstituent* Constituent : ConstituentRegistry)
 	{
-		for (USlotable* Slotable : Inventory->GetSlotables())
-		{
-			for (UConstituent* Constituent : Slotable->GetConstituents())
-			{
-				Constituent->OnRep_LastActionSet();
-			}
-		}
+		Constituent->OnRep_LastActionSet();
 	}
 }
 
@@ -351,22 +378,22 @@ float UFormCoreComponent::GetNonCompensatedServerWorldTime() const
 	return NonCompensatedServerWorldTime;
 }
 
-float UFormCoreComponent::CalculateFutureServerTimestamp(const float AdditionalTime) const
+float UFormCoreComponent::CalculateFutureServerTimestamp(const float InAdditionalTime) const
 {
-	return NonCompensatedServerWorldTime + AdditionalTime;
+	return NonCompensatedServerWorldTime + InAdditionalTime;
 }
 
-float UFormCoreComponent::CalculateTimeUntilServerTimestamp(const float Timestamp) const
+float UFormCoreComponent::CalculateTimeUntilServerTimestamp(const float InTimestamp) const
 {
-	return NonCompensatedServerWorldTime - Timestamp;
+	return NonCompensatedServerWorldTime - InTimestamp;
 }
 
-float UFormCoreComponent::CalculateTimeSinceServerTimestamp(const float Timestamp) const
+float UFormCoreComponent::CalculateTimeSinceServerTimestamp(const float InTimestamp) const
 {
-	return Timestamp - NonCompensatedServerWorldTime;
+	return InTimestamp - NonCompensatedServerWorldTime;
 }
 
-bool UFormCoreComponent::HasServerTimestampPassed(const float Timestamp) const
+bool UFormCoreComponent::HasServerTimestampPassed(const float InTimestamp) const
 {
-	return CalculateTimeUntilServerTimestamp(Timestamp) <= 0;
+	return CalculateTimeUntilServerTimestamp(InTimestamp) <= 0;
 }

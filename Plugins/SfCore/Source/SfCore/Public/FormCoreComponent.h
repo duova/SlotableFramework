@@ -46,38 +46,41 @@ public:
 	void Server_SetTeam(const FGameplayTag InTeam);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	UInventory* Server_AddInventory(const TSubclassOf<UInventory>& InventoryClass);
+	UInventory* Server_AddInventory(const TSubclassOf<UInventory>& InInventoryClass);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	void Server_RemoveInventoryByIndex(const int32 Index);
+	void Server_RemoveInventoryByIndex(const int32 InIndex);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	bool Server_RemoveInventory(UInventory* Inventory);
+
+	UFUNCTION(BlueprintCallable)
+	void Client_SetToFirstPerson();
+
+	UFUNCTION(BlueprintCallable)
+	void Client_SetToThirdPerson();
 	
-	void ClientSetToFirstPerson();
+	void InternalClientSetToFirstPerson();
 	
-	void ClientSetToThirdPerson();
+	void InternalClientSetToThirdPerson();
 
 	UFUNCTION(BlueprintPure)
 	bool IsFirstPerson();
-	
-	UPROPERTY(Replicated)
-	float NonCompensatedServerWorldTime;
 
 	//Works for client and server.
 	float GetNonCompensatedServerWorldTime() const;
 
 	//Works for client and server.
-	float CalculateFutureServerTimestamp(const float AdditionalTime) const;
+	float CalculateFutureServerTimestamp(const float InAdditionalTime) const;
 
 	//Works for client and server.
-	float CalculateTimeUntilServerTimestamp(const float Timestamp) const;
+	float CalculateTimeUntilServerTimestamp(const float InTimestamp) const;
 
 	//Works for client and server.
-	float CalculateTimeSinceServerTimestamp(const float Timestamp) const;
+	float CalculateTimeSinceServerTimestamp(const float InTimestamp) const;
 
 	//Works for client and server.
-	bool HasServerTimestampPassed(const float Timestamp) const;
+	bool HasServerTimestampPassed(const float InTimestamp) const;
 
 	static const TArray<UClass*>& GetAllCardObjectClassesSortedByName();
 
@@ -91,59 +94,64 @@ public:
 
 	//False if trigger doesn't exist.
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	bool ActivateTrigger(FGameplayTag Trigger);
+	bool Server_ActivateTrigger(FGameplayTag Trigger);
 
 	//False if trigger doesn't exist.
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	bool BindTrigger(FGameplayTag Trigger, FTriggerInputDelegate EventToBind);
+	bool Server_BindTrigger(FGameplayTag Trigger, FTriggerInputDelegate EventToBind);
 
 	UFUNCTION(BlueprintPure, BlueprintAuthorityOnly)
-	bool HasTrigger(FGameplayTag Trigger);
+	bool Server_HasTrigger(FGameplayTag Trigger);
 
 	UPROPERTY()
 	TArray<UConstituent*> ConstituentRegistry;
 
-	UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere, Category = "FormCoreComponent")
 	TArray<FGameplayTag> TriggersToUse;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	int LowFrequencyTicksPerSecond = 10;
+	//Ticks the low frequency tick event on constituents at this rate.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "FormCoreComponent", meta = (ClampMin = 1, ClampMax = 20))
+	int32 LowFrequencyTicksPerSecond = 10;
 
-	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "FormCoreComponent")
 	float WalkSpeedStat;
 
-	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "FormCoreComponent")
 	float SwimSpeedStat;
 
-	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "FormCoreComponent")
 	float FlySpeedStat;
 
-	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "FormCoreComponent")
 	float AccelerationStat;
 
 protected:
 	virtual void BeginPlay() override;
 
 	virtual void BeginDestroy() override;
-	
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+
+	//Inventories to create when this form is spawned.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "FormCoreComponent")
 	TArray<TSubclassOf<UInventory>> DefaultInventoryClasses;
 
 private:
 
+	UPROPERTY(Replicated)
+	float NonCompensatedServerWorldTime;
+	
 	UFUNCTION()
 	void OnRep_Inventories();
 	
-	UPROPERTY(Replicated, VisibleAnywhere, ReplicatedUsing = OnRep_Inventories)
+	UPROPERTY(Replicated, VisibleAnywhere, ReplicatedUsing = OnRep_Inventories, Category = "FormCoreComponent")
 	TArray<UInventory*> Inventories;
 
-	TArray<UInventory*> ClientSubObjectListRegisteredInventories;
+	TSet<UInventory*> ClientSubObjectListRegisteredInventories;
 
-	UPROPERTY(Replicated, VisibleAnywhere)
+	UPROPERTY(Replicated, VisibleAnywhere, Category = "FormCoreComponent")
 	FGameplayTag Team;
 
-	UPROPERTY(VisibleAnywhere)
-	uint8 bIsFirstPerson:1;
+	UPROPERTY(VisibleAnywhere, Category = "FormCoreComponent")
+	bool bIsFirstPerson = false;
 
 	//CardObjectClasses are indexed as they're net referenced very often and is worth using a simplified index for instead
 	//of repeatedly serializing the class reference.
@@ -165,5 +173,5 @@ private:
 	
 	TMap<FGameplayTag, FTriggerDelegate> Triggers;
 	
-	float LowFrequencyTickDeltaTime;
+	float LowFrequencyTickDeltaTime = 0;
 };

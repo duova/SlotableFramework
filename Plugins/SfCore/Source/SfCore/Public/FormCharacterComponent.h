@@ -232,19 +232,19 @@ struct SFCORE_API FNetCardIdentifier
 };
 
 USTRUCT()
-struct SFCORE_API FInventoryCardIdentifiers
+struct SFCORE_API FCardIdentifiersInAnInventory
 {
 	GENERATED_BODY()
 	
 	TArray<FNetCardIdentifier> CardIdentifiers;
 
-	FInventoryCardIdentifiers();
+	FCardIdentifiersInAnInventory();
 
-	explicit FInventoryCardIdentifiers(const TArray<FNetCardIdentifier>& InCardIdentifiers);
+	explicit FCardIdentifiersInAnInventory(const TArray<FNetCardIdentifier>& InCardIdentifiers);
 
-	bool operator==(const FInventoryCardIdentifiers& Other) const;
+	bool operator==(const FCardIdentifiersInAnInventory& Other) const;
 
-	friend FArchive& operator<<(FArchive& Ar, FInventoryCardIdentifiers& InventoryCardIdentifiers)
+	friend FArchive& operator<<(FArchive& Ar, FCardIdentifiersInAnInventory& InventoryCardIdentifiers)
 	{
 		Ar << InventoryCardIdentifiers.CardIdentifiers;
 		return Ar;
@@ -281,7 +281,7 @@ public:
 
 	typedef FSavedMove_Character Super;
 
-	//Movement inputs.
+	//Needs to be implemented by the user if used.
 	uint8 bWantsToSprint:1;
 
 	//Number of input sets to enable.
@@ -296,7 +296,7 @@ public:
 
 	TArray<FIdentifiedActionSet> PendingActionSets;
 
-	TArray<FInventoryCardIdentifiers> InventoryCardIdentifiers;
+	TArray<FCardIdentifiersInAnInventory> InventoryCardIdentifiers;
 
 	virtual void Clear() override;
 	virtual void SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& NewAccel,
@@ -329,7 +329,7 @@ struct FSfNetworkMoveData : FCharacterNetworkMoveData
 
 	TArray<FIdentifiedActionSet> PendingActionSets;
 
-	TArray<FInventoryCardIdentifiers> InventoryCardIdentifiers;
+	TArray<FCardIdentifiersInAnInventory> CardIdentifiersInInventories;
 
 	FSfNetworkMoveData();
 
@@ -421,54 +421,54 @@ public:
 
 	void SetupFormCharacter(UFormCoreComponent* FormCoreComponent);
 
-	float CalculateFuturePredictedTimestamp(const float AdditionalTime) const;
+	float CalculateFuturePredictedTimestamp(const float InAdditionalTime) const;
 
-	float CalculateTimeUntilPredictedTimestamp(const float Timestamp) const;
+	float CalculateTimeUntilPredictedTimestamp(const float InTimestamp) const;
 
-	float CalculateTimeSincePredictedTimestamp(const float Timestamp) const;
+	float CalculateTimeSincePredictedTimestamp(const float InTimestamp) const;
 
-	bool HasPredictedTimestampPassed(const float Timestamp) const;
+	bool HasPredictedTimestampPassed(const float InTimestamp) const;
 
 	void CalculateMovementSpeed();
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "FormCharacterComponent", meta = (ClampMin = 0.f, ClampMax = 999999.f))
 	float BaseWalkSpeed;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "FormCharacterComponent", meta = (ClampMin = 0.f, ClampMax = 999999.f))
 	float BaseSwimSpeed;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "FormCharacterComponent", meta = (ClampMin = 0.f, ClampMax = 999999.f))
 	float BaseFlySpeed;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "FormCharacterComponent", meta = (ClampMin = 0.f, ClampMax = 999999.f))
 	float BaseAcceleration;
 
 	//Defaults to 1. Change for functionality like sprinting. Applied after card speed modifiers.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "FormCharacterComponent", meta = (ClampMin = 0.f, ClampMax = 999999.f))
 	float VariableWalkSpeedMultiplier = 1;
 
 	//Defaults to 1. Applied after card speed modifiers.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "FormCharacterComponent", meta = (ClampMin = 0.f, ClampMax = 999999.f))
 	float VariableSwimSpeedMultiplier = 1;
 
 	//Defaults to 1. Applied after card speed modifiers.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "FormCharacterComponent", meta = (ClampMin = 0.f, ClampMax = 999999.f))
 	float VariableFlySpeedMultiplier = 1;
 
 	//Defaults to 1. Applied after card speed modifiers.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "FormCharacterComponent", meta = (ClampMin = 0.f, ClampMax = 999999.f))
 	float VariableAccelerationMultiplier = 1;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "FormCharacterComponent")
 	bool bWalkSpeedCalculatedByFormCharacter = true;
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "FormCharacterComponent")
 	bool bSwimSpeedCalculatedByFormCharacter;
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "FormCharacterComponent")
 	bool bFlySpeedCalculatedByFormCharacter;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "FormCharacterComponent")
 	bool bAccelerationCalculatedByFormCharacter;
 	
 	//Movement inputs.
@@ -488,20 +488,20 @@ protected:
 	uint8 EnabledInputSets:2;
 
 	//Additional inputs.
-	uint8 PrimaryInputSet;
-	uint8 SecondaryInputSet;
-	uint8 TertiaryInputSet;
+	uint8 PrimaryInputSet = 0;
+	uint8 SecondaryInputSet = 0;
+	uint8 TertiaryInputSet = 0;
 
 	//This is used to determine how the pipeline is supposed to handle the separate sections of correction data to rollback
 	//as little as possible and send as little as possible.
-	uint8 CorrectionConditionFlags; //Only first 4 bits is used, bit field can't be used due to dereferencing.
+	uint8 CorrectionConditionFlags = 0; //Only first 4 bits is used, bit field can't be used due to dereferencing.
 
 	//This is obviously not optimal as we are already sending the client TimeStamp. However, this is the most direct way
 	//of ensuring that time discrepancies will not cause more rollbacks - by having the clock incremented in tandem with
 	//the logic that uses it in PerformMovement. To save bandwidth we only serialize this to the server once every second,
 	//and the server will only issue a correction when necessary.
-	float PredictedNetClock;
-	uint32 NetClockNextInteger;
+	float PredictedNetClock = 0;
+	uint32 NetClockNextInteger = 0;
 	
 	//+/- acceptable range.
 	const float NetClockAcceptableTolerance = 0.01f;
@@ -514,19 +514,19 @@ protected:
 	TArray<FIdentifiedActionSet> PendingActionSets;
 
 	//Server corrects with last action set for all constituents in order.
-	TArray<FActionSet> ActionSetResponse;
+	TArray<FActionSet> ActionSetResponses;
 
 	//The execution graph of the last action is called and then "fast forwarded" by this time to ensure that even if
 	//another execution does not happen during replay, we still have the correct time on the previous execution.
-	TArray<FUint16_Quantize100> TimeSinceLastAction;
+	TArray<FUint16_Quantize100> TimesSinceLastAction;
 
 	//If this is false, we shouldn't use ActionSetResponse.
 	//We copy ActionSetResponse to the constituents and set false in PerformMovement if is true.
 	uint8 bClientActionsWereUpdated:1;
 
 	//Simplified versions of cards used to verify that client cards are correct.
-	TArray<FInventoryCardIdentifiers> InventoryCardIdentifiers;
-	TArray<FInventoryCardIdentifiers> OldInventoryCardIdentifiers;
+	TArray<FCardIdentifiersInAnInventory> CardIdentifiersInInventories;
+	TArray<FCardIdentifiersInAnInventory> OldCardIdentifiersInInventories;
 
 	TArray<FInventoryCards> CardResponse;
 
@@ -536,7 +536,7 @@ protected:
 
 	FOnPostRollback OnPostRollback;
 
-	UPROPERTY(BlueprintReadOnly, EditAnywhere)
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "FormCharacterComponent")
 	TArray<UInputAction*> InputActionRegistry;
 
 	void OnInputDown(const FInputActionInstance& Instance);
@@ -555,12 +555,12 @@ protected:
 	virtual void MoveAutonomous(float ClientTimeStamp, float DeltaTime, uint8 CompressedFlags,
 	                            const FVector& NewAccel) override;
 
-	bool CardHasEquivalentCardIdentifier(const FInventoryCardIdentifiers& CardIdentifierInventory, const FCard& Card);
+	bool CardHasEquivalentCardIdentifier(const FCardIdentifiersInAnInventory& InCardIdentifierInventory, const FCard& InCard);
 
-	bool CardCanBeFoundInInventory(UInventory* Inventory, FNetCardIdentifier CardIdentifier);
+	bool CardCanBeFoundInInventory(UInventory* Inventory, const FNetCardIdentifier InCardIdentifier);
 
 	void HandleInventoryDifferencesAndSetCorrectionFlags(UInventory* Inventory,
-	                                                     const FInventoryCardIdentifiers& CardIdentifierInventory);
+	                                                     const FCardIdentifiersInAnInventory& InCardIdentifierInventory);
 
 	virtual void SfServerCheckClientError();
 
@@ -580,9 +580,9 @@ protected:
 
 	void HandleCardClientSyncTimeout() const;
 
-	static void ApplyInputBitsToInventory(uint32 InputBits, const UInventory* Inventory);
+	static void ApplyInputBitsToInventory(const uint32 InInputBits, const UInventory* InInventory);
 	
-	void RemovePredictedCardWithEndedLifetimes();
+	void RemovePredictedCardWithEndedLifetimes() const;
 
 	//This is where all the logic actually takes place.
 	virtual void UpdateCharacterStateBeforeMovement(float DeltaSeconds) override;
@@ -598,13 +598,13 @@ private:
 	UPROPERTY()
 	UEnhancedInputComponent* EnhancedInputComponent;
 
-	uint8 FindInputIndexInRegistry(const FInputActionInstance& Instance);
+	uint8 FindInputIndexInRegistry(const FInputActionInstance& InInstance);
 
 	//Sets a value on an input set using an index from 0-7.
-	static void SetInputSet(uint8* InputSet, const uint8 Index, const bool bIsTrue);
+	static void SetInputSet(uint8* InputSet, const uint8 InIndex, const bool bInIsTrue);
 
 	//Gets a value from all input sets using the input index from 0-23.
-	static bool GetValueFromInputSets(const uint8 Index, const uint32 InputSetsJoinedBits);
+	static bool GetValueFromInputSets(const uint8 InIndex, const uint32 InInputSetsJoinedBits);
 
 	//Gets the bits of the input sets as one value.
 	uint32 GetInputSetsJoinedBits() const;

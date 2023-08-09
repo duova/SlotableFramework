@@ -236,16 +236,19 @@ void UConstituent::SetFormCore()
 {
 	if (!OwningSlotable)
 	{
-		UE_LOG(LogSfCore, Error, TEXT("Constituent of class %s has no OwningSlotable."), *GetClass()->GetName());
+		UE_LOG(LogSfCore, Error, TEXT("Constituent of class %s has no OwningSlotable, destroying."), *GetClass()->GetName());
+		Destroy();
 	}
 	else if (!OwningSlotable->OwningInventory)
 	{
-		UE_LOG(LogSfCore, Error, TEXT("Constituent of class %s has no OwningInventory."), *GetClass()->GetName());
+		UE_LOG(LogSfCore, Error, TEXT("Constituent of class %s has no OwningInventory, destroying."), *GetClass()->GetName());
+		Destroy();
 	}
 	else
 	{
 		FormCore = OwningSlotable->OwningInventory->OwningFormCore;
-		UE_LOG(LogSfCore, Error, TEXT("Constituent of class %s has no FormCore."), *GetClass()->GetName());
+		UE_LOG(LogSfCore, Error, TEXT("Constituent of class %s has no FormCoreComponent, destroying."), *GetClass()->GetName());
+		Destroy();
 	}
 }
 
@@ -285,6 +288,7 @@ void UConstituent::ExecuteAction(const int32 InActionId, const bool bInIsPredict
 		UE_LOG(LogSfCore, Error,
 		       TEXT("ExecuteAction called with an out of range ActionId of %i on UConstituent class %s"), InActionId,
 		       *GetClass()->GetName());
+		return;
 	}
 	InternalExecuteAction(InActionId, bInIsPredictableContext);
 }
@@ -423,11 +427,13 @@ USfQuery* UConstituent::GetQuery(const TSubclassOf<USfQuery> QueryClass) const
 	{
 		UE_LOG(LogSfCore, Error, TEXT("GetQuery called on a UConstituent of class %s without a FormQueryComponent."),
 		       *GetClass()->GetName());
+		return nullptr;
 	}
 	if (!QueryClass.Get())
 	{
 		UE_LOG(LogSfCore, Error, TEXT("GetQuery called on a UConstituent of class %s with an empty TSubclassOf."),
 		       *GetClass()->GetName());
+		return nullptr;
 	}
 	for (const TPair<USfQuery*, uint16>& Pair : FormCore->GetFormQuery()->ActiveQueryDependentCountPair)
 	{
@@ -488,4 +494,13 @@ void UConstituent::HandleBufferInputTimeout()
 			It.RemoveCurrent();
 		}
 	}
+}
+
+UFormCoreComponent* UConstituent::GetFormCoreComponent() const
+{
+	if (!FormCore)
+	{
+		UE_LOG(LogSfCore, Error, TEXT("UConstituent of class %s does not have FormCoreComponent."), *GetClass()->GetName())
+	}
+	return FormCore;
 }

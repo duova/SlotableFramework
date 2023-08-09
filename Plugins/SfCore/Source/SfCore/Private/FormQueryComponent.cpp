@@ -24,14 +24,19 @@ UFormQueryComponent::UFormQueryComponent()
 	PrimaryComponentTick.bCanEverTick = true;
 }
 
-void UFormQueryComponent::RegisterQueryImpl(const TSubclassOf<USfQuery> QueryClass)
+void UFormQueryComponent::RegisterQueryImpl(const TSubclassOf<USfQuery> InQueryClass)
 {
 	if (!GetOwner()) return;
+	if (!InQueryClass.Get())
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Empty QueryClass passed to RegisterQueryImpl."));
+		return;
+	}
 	//We check if existing query exists.
 	bool bHasQuery = false;
 	for (TPair<USfQuery*, uint16>& Pair : ActiveQueryDependentCountPair)
 	{
-		if (Pair.Key->GetClass() == QueryClass.Get())
+		if (Pair.Key->GetClass() == InQueryClass.Get())
 		{
 			bHasQuery = true;
 			//Increment the number of dependents if it exists.
@@ -42,62 +47,66 @@ void UFormQueryComponent::RegisterQueryImpl(const TSubclassOf<USfQuery> QueryCla
 	if (!bHasQuery)
 	{
 		//Add query with 1 dependent if it doesn't.
-		USfQuery* QueryInstance = NewObject<USfQuery>(GetOwner(), QueryClass);
+		USfQuery* QueryInstance = NewObject<USfQuery>(GetOwner(), InQueryClass);
 		QueryInstance->Initialize();
 		ActiveQueryDependentCountPair.Add(QueryInstance, 1);
 	}
 }
 
-void UFormQueryComponent::RegisterQueryDependencies(const TArray<TSubclassOf<USfQuery>>& Queries)
+void UFormQueryComponent::RegisterQueryDependencies(const TArray<TSubclassOf<USfQuery>>& InQueries)
 {
 	if (!GetOwner()) return;
 	if (!GetOwner()->HasAuthority()) return;
-	for (const TSubclassOf<USfQuery> Query : Queries)
+	for (const TSubclassOf<USfQuery>& Query : InQueries)
 	{
+		if (!Query.Get())
+		{
+			UE_LOG(LogSfCore, Error, TEXT("Empty QueryClass passed to RegisterQueryDependencies."));
+			continue;
+		}
 		RegisterQueryImpl(Query);
 	}
 }
 
-void UFormQueryComponent::UnregisterQueryImpl(const TSubclassOf<USfQuery> QueryClass)
+void UFormQueryComponent::UnregisterQueryImpl(const TSubclassOf<USfQuery> InQueryClass)
 {
-	USfQuery* ToRemove = nullptr;
-	for (TPair<USfQuery*, uint16>& Pair : ActiveQueryDependentCountPair)
+	if (!InQueryClass.Get())
 	{
-		if (Pair.Key->GetClass() == QueryClass.Get())
+		UE_LOG(LogSfCore, Error, TEXT("Empty QueryClass passed to UnregisterQueryImpl."));
+		return;
+	}
+	for (auto It = ActiveQueryDependentCountPair.CreateIterator(); It; ++It)
+	{
+		if (It.Key()->GetClass() == InQueryClass.Get())
 		{
 			//Decrease the number of dependents only if it is more than 1.
-			if (Pair.Value > 1)
+			if (It.Value() > 1)
 			{
-				Pair.Value--;
+				It.Value()--;
 			}
 			else
 			{
-				ToRemove = Pair.Key;
+				It.Key()->Deinitialize();
+				It.RemoveCurrent();
 			}
 			break;
 		}
 	}
-	if (ToRemove)
-	{
-		ToRemove->Deinitialize();
-		ActiveQueryDependentCountPair.Remove(ToRemove);
-	}
 }
 
-void UFormQueryComponent::UnregisterQueryDependencies(const TArray<TSubclassOf<USfQuery>>& Queries)
+void UFormQueryComponent::UnregisterQueryDependencies(const TArray<TSubclassOf<USfQuery>>& InQueries)
 {
 	if (!GetOwner()) return;
 	if (!GetOwner()->HasAuthority()) return;
-	for (const TSubclassOf<USfQuery> QueryClass : Queries)
+	for (const TSubclassOf<USfQuery>& QueryClass : InQueries)
 	{
+		if (!QueryClass.Get())
+		{
+			UE_LOG(LogSfCore, Error, TEXT("Empty QueryClass passed to UnregisterQueryDependencies."));
+			continue;
+		}
 		UnregisterQueryImpl(QueryClass);
 	}
-}
-
-void UFormQueryComponent::BeginPlay()
-{
-	Super::BeginPlay();
-	if (!GetOwner()) return;
 }
 
 void UFormQueryComponent::TickComponent(float DeltaTime, ELevelTick TickType,

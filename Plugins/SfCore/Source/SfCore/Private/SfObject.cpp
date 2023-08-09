@@ -15,7 +15,7 @@ void USfObject::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetim
 	{
 		TArray<FLifetimeProperty> BPLifetimeProps;
 		BPClass->GetLifetimeBlueprintReplicationList(BPLifetimeProps);
-		for (FLifetimeProperty Prop : BPLifetimeProps)
+		for (FLifetimeProperty& Prop : BPLifetimeProps)
 		{
 			Prop.bIsPushBased = true;
 			OutLifetimeProps.AddUnique(Prop);
@@ -30,14 +30,23 @@ bool USfObject::IsSupportedForNetworking() const
 
 int32 USfObject::GetFunctionCallspace(UFunction* Function, FFrame* Stack)
 {
-	checkf(GetOuter() != nullptr, TEXT("SfObject has no outer."));
-	//Use the function callspace of the outer.
+	if (!GetOuter())
+	{
+		UE_LOG(LogSfCore, Error, TEXT("USfObject class %s could not get outer for function callspace."),
+		       *GetClass()->GetName());
+		return 0;
+	}
 	return GetOuter()->GetFunctionCallspace(Function, Stack);
 }
 
 bool USfObject::CallRemoteFunction(UFunction* Function, void* Parms, FOutParmRec* OutParms, FFrame* Stack)
 {
-	checkf(!HasAnyFlags(RF_ClassDefaultObject), TEXT("Attempted to call remote function on CDO."));
+	if (HasAnyFlags(RF_ClassDefaultObject))
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Attempted to call remote function on CDO for USfObject class %s."),
+		       *GetClass()->GetName());
+		return false;
+	}
 	if (!GetOwner()) return false;
 	AActor* Owner = GetOwner();
 	if (UNetDriver* NetDriver = Owner->GetNetDriver())
@@ -54,7 +63,6 @@ void USfObject::Destroy()
 	if (IsValid(this))
 	{
 		if (!GetOwner()) return;
-		checkf(GetOwner()->HasAuthority() == true, TEXT("SfObject does not have authority to destroy itself."));
 		MarkAsGarbage();
 	}
 }
@@ -64,16 +72,14 @@ bool USfObject::IsFormCharacter()
 	if (FormCharacterComponent) return true;
 	if (bDoesNotHaveFormCharacter) return false;
 	if (!GetOwner()) return false;
-	if (UFormCharacterComponent* Component = Cast<UFormCharacterComponent>(GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass())))
+	if (UFormCharacterComponent* Component = Cast<UFormCharacterComponent>(
+		GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass())))
 	{
-		Component = FormCharacterComponent;
+		FormCharacterComponent = Component;
 		bDoesNotHaveFormCharacter = false;
 		return true;
 	}
-	else
-	{
-		bDoesNotHaveFormCharacter = true;
-	}
+	bDoesNotHaveFormCharacter = true;
 	return false;
 }
 
@@ -81,9 +87,9 @@ UFormCharacterComponent* USfObject::GetFormCharacter()
 {
 	if (FormCharacterComponent) return FormCharacterComponent;
 	if (bDoesNotHaveFormCharacter) return nullptr;
-	if (!GetOwner()) return false;
-	UFormCharacterComponent* Component = Cast<UFormCharacterComponent>(GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()));
-	if (Component)
+	if (!GetOwner()) return nullptr;
+	if (UFormCharacterComponent* Component = Cast<UFormCharacterComponent>(
+		GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass())))
 	{
 		FormCharacterComponent = Component;
 		bDoesNotHaveFormCharacter = false;
@@ -95,14 +101,6 @@ UFormCharacterComponent* USfObject::GetFormCharacter()
 	return Cast<UFormCharacterComponent>(GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()));
 }
 
-void USfObject::ErrorIfNoAuthority() const
-{
-	if (!GetOwner()) return;
-	const AActor* Owner = GetOwner();
-	checkf(Owner != nullptr, TEXT("Invalid owner."));
-	checkf(Owner->HasAuthority(), TEXT("Called without authority."));
-}
-
 bool USfObject::HasAuthority() const
 {
 	return GetOwner() && GetOwner()->HasAuthority();
@@ -112,7 +110,7 @@ FUint16_Quantize100::FUint16_Quantize100(): InternalValue(0)
 {
 }
 
-float FUint16_Quantize100::GetFloat()
+float FUint16_Quantize100::GetFloat() const
 {
 	return static_cast<float>(InternalValue) / 100.0;
 }

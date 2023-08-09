@@ -79,9 +79,9 @@ class SFCORE_API UFormQueryComponent : public UActorComponent
 public:
 	UFormQueryComponent();
 
-	void RegisterQueryDependencies(const TArray<TSubclassOf<USfQuery>>& Queries);
+	void RegisterQueryDependencies(const TArray<TSubclassOf<USfQuery>>& InQueries);
 
-	void UnregisterQueryDependencies(const TArray<TSubclassOf<USfQuery>>& Queries);
+	void UnregisterQueryDependencies(const TArray<TSubclassOf<USfQuery>>& InQueries);
 	
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
 							   FActorComponentTickFunction* ThisTickFunction) override;
@@ -89,7 +89,6 @@ public:
 	void SetupFormQuery(UFormCoreComponent* InFormCore);
 
 protected:
-	virtual void BeginPlay() override;
 
 	//Active queries and the number of constituents that depend on it.
 	UPROPERTY()
@@ -100,7 +99,7 @@ protected:
 
 private:
 
-	void RegisterQueryImpl(TSubclassOf<USfQuery> QueryClass);
+	void RegisterQueryImpl(TSubclassOf<USfQuery> InQueryClass);
 
-	void UnregisterQueryImpl(TSubclassOf<USfQuery> QueryClass);
+	void UnregisterQueryImpl(TSubclassOf<USfQuery> InQueryClass);
 };

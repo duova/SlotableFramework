@@ -9,10 +9,19 @@
 
 USlotable::USlotable()
 {
+	bAwaitingClientInit = false;
 	if (!GetOwner()) return;
 	if (HasAuthority())
 	{
-		checkf(InitialConstituentClasses.Num() < 33, TEXT("Only 32 constituents can be in a slotable."));
+		if (InitialConstituentClasses.Num() > 32)
+		{
+			UE_LOG(LogSfCore, Error, TEXT("More than 32 constituents are in USlotable class %s. Removing excess."), *GetClass()->GetName());
+			while (InitialConstituentClasses.Num() > 32)
+			{
+				InitialConstituentClasses.RemoveAt(33, 1, false);
+			}
+			InitialConstituentClasses.Shrink();
+		}
 		//We don't instantly init as on the server we need to make sure the slotable is in an inventory first.
 		Constituents.Reserve(InitialConstituentClasses.Num());
 		for (auto ConstituentClass : InitialConstituentClasses)
@@ -38,17 +47,21 @@ void USlotable::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetim
 	DOREPLIFETIME_WITH_PARAMS_FAST(USlotable, OwningInventory, DefaultParams);
 }
 
-const TArray<UConstituent*>& USlotable::GetConstituents()
+const TArray<UConstituent*>& USlotable::GetConstituents() const
 {
 	return Constituents;
 }
 
-TArray<UConstituent*> USlotable::GetConstituentsOfClass(const TSubclassOf<UConstituent> ConstituentClass)
+TArray<UConstituent*> USlotable::GetConstituentsOfClass(const TSubclassOf<UConstituent>& InConstituentClass)
 {
+	if (!InConstituentClass.Get())
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Called GetConstituentsOfClass with empty TSubclassOf on USlotable class %s."), *GetClass()->GetName());
+	}
 	TArray<UConstituent*> ConstituentsOfClass;
 	for (UConstituent* Constituent : Constituents)
 	{
-		if (Constituent->GetClass() == ConstituentClass)
+		if (Constituent->GetClass() == InConstituentClass)
 		{
 			ConstituentsOfClass.Add(Constituent);
 		}
@@ -103,11 +116,10 @@ void USlotable::BeginDestroy()
 				ServerDeinitializeConstituent(Constituent);
 				//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
 				Constituent->Destroy();
+				Constituents.RemoveAt(0, 1, false);
 			}
-			Constituents.RemoveAt(0);
-			MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, Constituents, this);
-			
 		}
+		MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, Constituents, this);
 	}
 	else
 	{
@@ -145,27 +157,40 @@ void USlotable::OnRep_Constituents()
 			ClientSubObjectListRegisteredConstituents.Add(ReplicatedConstituent);
 		}
 	}
-	TArray<UConstituent*> ToRemove;
-	for (UConstituent* RegisteredConstituent : ClientSubObjectListRegisteredConstituents)
+	for (int16 i = ClientSubObjectListRegisteredConstituents.Num() - 1; i >= 0; i--)
 	{
-		if (!Constituents.Contains(RegisteredConstituent) && GetOwner())
+		if (!Constituents.Contains(ClientSubObjectListRegisteredConstituents[i]) && GetOwner())
 		{
-			GetOwner()->RemoveReplicatedSubObject(RegisteredConstituent);
-			ToRemove.Add(RegisteredConstituent);
+			GetOwner()->RemoveReplicatedSubObject(ClientSubObjectListRegisteredConstituents[i]);
+			ClientSubObjectListRegisteredConstituents.RemoveAt(i, 1, false);
 		}
 	}
-	for (UConstituent* ConstituentToRemove : ToRemove)
-	{
-		ClientSubObjectListRegisteredConstituents.Remove(ConstituentToRemove);
-	}
+	ClientSubObjectListRegisteredConstituents.Shrink();
 }
 
-UConstituent* USlotable::CreateUninitializedConstituent(const TSubclassOf<UConstituent>& ConstituentClass) const
+UConstituent* USlotable::CreateUninitializedConstituent(const TSubclassOf<UConstituent>& InConstituentClass) const
 {
-	ErrorIfNoAuthority();
-	if (!ConstituentClass || ConstituentClass->HasAnyClassFlags(CLASS_Abstract)) return nullptr;
-	UConstituent* ConstituentInstance = NewObject<UConstituent>(GetOwner(), ConstituentClass);
-	checkf(ConstituentInstance, TEXT("Failed to create slotable."));
+	if (!HasAuthority())
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Called CreateUninitializedConstituent on USlotable class %s without authority."),
+			   *GetClass()->GetName());
+		return nullptr;
+	}
+	if (!InConstituentClass.Get())
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Called CreateUninitializedConstituent with empty TSubclassOf on USlotable class %s."), *GetClass()->GetName());
+		return nullptr;
+	}
+	if (InConstituentClass->HasAnyClassFlags(CLASS_Abstract))
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Called CreateUninitializedConstituent with TSubclassOf with Abstract flag on USlotable class %s."), *GetClass()->GetName());
+		return nullptr;
+	}
+	UConstituent* ConstituentInstance = NewObject<UConstituent>(GetOwner(), InConstituentClass);
+	if (!ConstituentInstance)
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Failed to create UConstituent instance on USlotable class %s."), *GetClass()->GetName());
+	}
 	return ConstituentInstance;
 }
 

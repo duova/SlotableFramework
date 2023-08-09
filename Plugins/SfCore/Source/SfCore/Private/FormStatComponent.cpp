@@ -2,6 +2,8 @@
 
 
 #include "FormStatComponent.h"
+
+#include "SfObject.h"
 #include "Net/UnrealNetwork.h"
 
 
@@ -9,7 +11,7 @@ FStat::FStat(): Value(0)
 {
 }
 
-FStat::FStat(const FGameplayTag StatTag, const float Value): StatTag(StatTag), Value(Value)
+FStat::FStat(const FGameplayTag& InStatTag, const float InValue): StatTag(InStatTag), Value(InValue)
 {
 }
 
@@ -47,18 +49,6 @@ UFormStatComponent::UFormStatComponent()
 	PrimaryComponentTick.bCanEverTick = false;
 	CurrentStats.OwningFormStat = this;
 	SetIsReplicatedByDefault(true);
-	for (const FStat& BaseStat : BaseStats)
-	{
-		auto Duplicate = [BaseStat](const FStat& CheckedStat)
-		{
-			return CheckedStat.StatTag == BaseStat.StatTag && CheckedStat != BaseStat;
-		};
-		checkf(BaseStats.FindByPredicate(Duplicate) != nullptr,
-		       TEXT("Each StatTag must be unique in BaseStats."));
-	}
-	//We set current stats to base stats and replicate since we delta serialize off it.
-	CurrentStats.Items = BaseStats;
-	CurrentStats.MarkArrayDirty();
 }
 
 void UFormStatComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -67,12 +57,12 @@ void UFormStatComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	DOREPLIFETIME(UFormStatComponent, CurrentStats);
 }
 
-bool UFormStatComponent::CalculateStat(const FGameplayTag& StatTag)
+bool UFormStatComponent::CalculateStat(const FGameplayTag& InStatTag)
 {
-	const FStat* BaseStat = BaseStats.FindByPredicate([StatTag](const FStat& Stat){ return Stat.StatTag == StatTag;});
-	FStat* CurrentStat = CurrentStats.Items.FindByPredicate([StatTag](const FStat& Stat)
+	const FStat* BaseStat = BaseStats.FindByPredicate([InStatTag](const FStat& Stat){ return Stat.StatTag == InStatTag;});
+	FStat* CurrentStat = CurrentStats.Items.FindByPredicate([InStatTag](const FStat& Stat)
 	{
-		return Stat.StatTag == StatTag;
+		return Stat.StatTag == InStatTag;
 	});
 	//We don't need to calculate if stat doesn't exist in base or current stats.
 	if (!BaseStat || !CurrentStat) return false;
@@ -81,7 +71,7 @@ bool UFormStatComponent::CalculateStat(const FGameplayTag& StatTag)
 	float Value = BaseStat->Value;
 	for (const FStat& AdditiveStat : AdditiveStatModifiers)
 	{
-		if (AdditiveStat.StatTag == StatTag)
+		if (AdditiveStat.StatTag == InStatTag)
 		{
 			//We clamp to a max value as beyond that we lose precision.
 			Value = FMath::Clamp(Value + AdditiveStat.Value, 0, MaxValue);
@@ -90,7 +80,7 @@ bool UFormStatComponent::CalculateStat(const FGameplayTag& StatTag)
 	float ToMultiply = 1;
 	for (const FStat& AdditiveMultiplicativeStat : AdditiveMultiplicativeStatModifiers)
 	{
-		if (AdditiveMultiplicativeStat.StatTag == StatTag)
+		if (AdditiveMultiplicativeStat.StatTag == InStatTag)
 		{
 			ToMultiply = FMath::Clamp(ToMultiply + AdditiveMultiplicativeStat.Value, 0, MaxValue);
 		}
@@ -98,14 +88,14 @@ bool UFormStatComponent::CalculateStat(const FGameplayTag& StatTag)
 	Value = FMath::Clamp(Value * ToMultiply, 0, MaxValue);
 	for (const FStat& TrueMultiplicativeStat : TrueMultiplicativeStatModifiers)
 	{
-		if (TrueMultiplicativeStat.StatTag == StatTag)
+		if (TrueMultiplicativeStat.StatTag == InStatTag)
 		{
 			Value = FMath::Clamp(Value * TrueMultiplicativeStat.Value, 0, MaxValue);
 		}
 	}
 	for (const FStat& FlatAdditiveStat : FlatAdditiveStatModifiers)
 	{
-		if (FlatAdditiveStat.StatTag == StatTag)
+		if (FlatAdditiveStat.StatTag == InStatTag)
 		{
 			Value = FMath::Clamp(Value + FlatAdditiveStat.Value, 0, MaxValue);
 		}
@@ -115,104 +105,128 @@ bool UFormStatComponent::CalculateStat(const FGameplayTag& StatTag)
 	return true;
 }
 
-const FStat& UFormStatComponent::Server_AddStatModifier(const FGameplayTag StatTag, const EStatModifierType Type,
-	const float Value)
+const FStat& UFormStatComponent::Server_AddStatModifier(const FGameplayTag InStatTag, const EStatModifierType InType,
+	const float InValue)
 {
 	const FStat* StatInstance = nullptr;
-	switch (Type)
+	switch (InType)
 	{
 	case Additive:
-		StatInstance = &AdditiveStatModifiers[AdditiveStatModifiers.Emplace(StatTag, Value)];
+		StatInstance = &AdditiveStatModifiers[AdditiveStatModifiers.Emplace(InStatTag, InValue)];
 		break;
 	case AdditiveMultiplicative:
-		StatInstance = &AdditiveMultiplicativeStatModifiers[AdditiveMultiplicativeStatModifiers.Emplace(StatTag, Value)];
+		StatInstance = &AdditiveMultiplicativeStatModifiers[AdditiveMultiplicativeStatModifiers.Emplace(InStatTag, InValue)];
 		break;
 	case TrueMultiplicative:
-		StatInstance = &TrueMultiplicativeStatModifiers[TrueMultiplicativeStatModifiers.Emplace(StatTag, Value)];
+		StatInstance = &TrueMultiplicativeStatModifiers[TrueMultiplicativeStatModifiers.Emplace(InStatTag, InValue)];
 		break;
 	case FlatAdditive:
-		StatInstance = &FlatAdditiveStatModifiers[FlatAdditiveStatModifiers.Emplace(StatTag, Value)];
+		StatInstance = &FlatAdditiveStatModifiers[FlatAdditiveStatModifiers.Emplace(InStatTag, InValue)];
 		break;
 	default:
-		UE_LOG(LogTemp, Fatal, TEXT("Server_AddStatModifier was called with an invalid EStatModifierType."));
+		UE_LOG(LogTemp, Error, TEXT("Server_AddStatModifier was called with an invalid EStatModifierType."));
+		break;
 	}
 
 	//This updates the relevant stat and sends updates to clients.
-	CalculateStat(StatTag);
-	checkf(StatInstance, TEXT("StatInstance is a nullptr."));
-
+	CalculateStat(InStatTag);
+	checkf(StatInstance, TEXT("StatInstance could not be created."));
+	
 	//The stat instance is returned so it can be removed.
 	return *StatInstance;
 }
 
-TArray<FStat> UFormStatComponent::Server_AddStatModifierBatch(const TArray<FStat> Stats, const EStatModifierType Type)
+TArray<FStat> UFormStatComponent::Server_AddStatModifierBatch(const TArray<FStat> InStats, const EStatModifierType InType)
 {
 	TArray<FStat> ReturnStats;
-	switch (Type)
+	switch (InType)
 	{
 	case Additive:
-		AdditiveStatModifiers.Reserve(Stats.Num());
+		AdditiveStatModifiers.Reserve(InStats.Num());
 		break;
 	case AdditiveMultiplicative:
-		AdditiveMultiplicativeStatModifiers.Reserve(Stats.Num());
+		AdditiveMultiplicativeStatModifiers.Reserve(InStats.Num());
 		break;
 	case TrueMultiplicative:
-		TrueMultiplicativeStatModifiers.Reserve(Stats.Num());
+		TrueMultiplicativeStatModifiers.Reserve(InStats.Num());
 		break;
 	case FlatAdditive:
-		FlatAdditiveStatModifiers.Reserve(Stats.Num());
+		FlatAdditiveStatModifiers.Reserve(InStats.Num());
 		break;
 	}
-	ReturnStats.Reserve(Stats.Num());
-	for (const FStat& Stat : Stats)
+	ReturnStats.Reserve(InStats.Num());
+	for (const FStat& Stat : InStats)
 	{
-		ReturnStats.Add(Server_AddStatModifier(Stat.StatTag, Type, Stat.Value));
+		ReturnStats.Add(Server_AddStatModifier(Stat.StatTag, InType, Stat.Value));
 	}
 
 	//The stat instance is returned so it can be removed.
 	return ReturnStats;
 }
 
-bool UFormStatComponent::Server_RemoveStatModifier(const FStat& Modifier, const EStatModifierType Type)
+bool UFormStatComponent::Server_RemoveStatModifier(const FStat& InModifier, const EStatModifierType InType)
 {
 	bool bRemoved = false;
-	switch (Type)
+	switch (InType)
 	{
 	case Additive:
-		bRemoved = AdditiveStatModifiers.RemoveSingle(Modifier) != 0;
+		bRemoved = AdditiveStatModifiers.RemoveSingle(InModifier) != 0;
 		break;
 	case AdditiveMultiplicative:
-		bRemoved = AdditiveMultiplicativeStatModifiers.RemoveSingle(Modifier) != 0;
+		bRemoved = AdditiveMultiplicativeStatModifiers.RemoveSingle(InModifier) != 0;
 		break;
 	case TrueMultiplicative:
-		bRemoved = TrueMultiplicativeStatModifiers.RemoveSingle(Modifier) != 0;
+		bRemoved = TrueMultiplicativeStatModifiers.RemoveSingle(InModifier) != 0;
 		break;
 	case FlatAdditive:
-		bRemoved = FlatAdditiveStatModifiers.RemoveSingle(Modifier) != 0;
+		bRemoved = FlatAdditiveStatModifiers.RemoveSingle(InModifier) != 0;
 		break;
 	default:
 		return false;
 	}
 	
 	//This updates the relevant stat.
-	CalculateStat(Modifier.StatTag);
+	CalculateStat(InModifier.StatTag);
 	return bRemoved;
 }
 
-bool UFormStatComponent::Server_RemoveStatModifierBatch(const TArray<FStat>& Modifiers, const EStatModifierType Type)
+bool UFormStatComponent::Server_RemoveStatModifierBatch(TArray<FStat> InModifiers, const EStatModifierType InType)
 {
-	//TODO: Optimize batch removal.
 	bool bRemovedSomething = false;
-	for (const FStat& Modifier : Modifiers)
+	TArray<FStat>* StatModifierArray = nullptr;
+	switch (InType)
 	{
-		bRemovedSomething |= Server_RemoveStatModifier(Modifier, Type);
+	case Additive:
+		StatModifierArray = &AdditiveStatModifiers;
+		break;
+	case AdditiveMultiplicative:
+		StatModifierArray = &AdditiveMultiplicativeStatModifiers;
+		break;
+	case TrueMultiplicative:
+		StatModifierArray = &TrueMultiplicativeStatModifiers;
+		break;
+	case FlatAdditive:
+		StatModifierArray = &FlatAdditiveStatModifiers;
+		break;
+	default:
+		return false;
 	}
+	for (int16 i = StatModifierArray->Num(); i >= 0; i--)
+	{
+		const FStat& StatModifier = (*StatModifierArray)[i];
+		const int16 InModifierIndex = InModifiers.Find(StatModifier);
+		if (InModifierIndex == INDEX_NONE) continue;
+		InModifiers.RemoveAtSwap(InModifierIndex, 1, false);
+		StatModifierArray->RemoveAt(i, 1, false);
+		bRemovedSomething = true;
+		CalculateStat(StatModifier.StatTag);
+	}
+	StatModifierArray->Shrink();
 	return bRemovedSomething;
 }
 
-TArray<FStat> UFormStatComponent::GetCurrentStats()
+TArray<FStat>& UFormStatComponent::GetCurrentStats()
 {
-	//Returning read only copy for BP.
 	return CurrentStats.Items;
 }
 
@@ -230,4 +244,14 @@ void UFormStatComponent::BeginPlay()
 {
 	Super::BeginPlay();
 	if (!GetOwner()) return;
+	if (TArrayCheckDuplicate(BaseStats, [](const FStat& CheckedStatA, const FStat& CheckedStatB)
+	{
+		return CheckedStatA.StatTag == CheckedStatB.StatTag;
+	}))
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Found duplicated StatTag in BaseStats."));
+	}
+	//We set current stats to base stats and replicate since we delta serialize off it.
+	CurrentStats.Items = BaseStats;
+	CurrentStats.MarkArrayDirty();
 }

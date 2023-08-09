@@ -37,7 +37,7 @@ void USfCurrencyComponent::BeginPlay()
 	Super::BeginPlay();
 	if (TArrayCheckDuplicate(HeldCurrencyValues, [](const FCurrencyValuePair& A, const FCurrencyValuePair& B){return A.Currency == B.Currency;}))
 	{
-		UE_LOG(LogTemp, Error, TEXT("Currencies duplicated."));
+		UE_LOG(LogTemp, Error, TEXT("Currencies tags duplicated on SfCurrencyComponent class %s. Only one will be used."), *GetClass()->GetName());
 	}
 }
 
@@ -50,28 +50,28 @@ void USfCurrencyComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 	DOREPLIFETIME_WITH_PARAMS_FAST(USfCurrencyComponent, HeldCurrencyValues, DefaultParams);
 }
 
-bool USfCurrencyComponent::Server_HasCurrency(const FGameplayTag Currency) const
+bool USfCurrencyComponent::Server_HasCurrency(const FGameplayTag InCurrency) const
 {
-	return HeldCurrencyValues.FindByPredicate([Currency](const FCurrencyValuePair Pair){ return Pair.Currency == Currency; }) == nullptr;
+	return HeldCurrencyValues.FindByPredicate([InCurrency](const FCurrencyValuePair Pair){ return Pair.Currency == InCurrency; }) == nullptr;
 }
 
-int32 USfCurrencyComponent::Server_GetCurrencyValue(const FGameplayTag Currency) const
+int32 USfCurrencyComponent::Server_GetCurrencyValue(const FGameplayTag InCurrency) const
 {
 	for (const FCurrencyValuePair& Pair : HeldCurrencyValues)
 	{
-		if (Pair.Currency != Currency) continue;
+		if (Pair.Currency != InCurrency) continue;
 		return Pair.Value;
 	}
 	return 0;
 }
 
-bool USfCurrencyComponent::Server_AddCurrency(const FGameplayTag Currency, const int32 Value)
+bool USfCurrencyComponent::Server_AddCurrency(const FGameplayTag InCurrency, const int32 InValue)
 {
-	if (Value < 0) return false;
+	if (InValue < 0) return false;
 	for (FCurrencyValuePair& Pair : HeldCurrencyValues)
 	{
-		if (Pair.Currency != Currency) continue;
-		const uint32 Result = Pair.Value + Value;
+		if (Pair.Currency != InCurrency) continue;
+		const uint32 Result = Pair.Value + InValue;
 		if (Result > USfObject::Int32MaxValue) return false;
 		Pair.Value = Result;
 		MARK_PROPERTY_DIRTY_FROM_NAME(USfCurrencyComponent, HeldCurrencyValues, this);
@@ -80,13 +80,13 @@ bool USfCurrencyComponent::Server_AddCurrency(const FGameplayTag Currency, const
 	return false;
 }
 
-bool USfCurrencyComponent::Server_DeductCurrency(const FGameplayTag Currency, const int32 Value)
+bool USfCurrencyComponent::Server_DeductCurrency(const FGameplayTag InCurrency, const int32 InValue)
 {
-	if (Value < 0) return false;
+	if (InValue < 0) return false;
 	for (FCurrencyValuePair& Pair : HeldCurrencyValues)
 	{
-		if (Pair.Currency != Currency) continue;
-		const int32 Result = Pair.Value - Value;
+		if (Pair.Currency != InCurrency) continue;
+		const int32 Result = Pair.Value - InValue;
 		Pair.Value = FMath::Clamp(Result, 0, Pair.Value);
 		MARK_PROPERTY_DIRTY_FROM_NAME(USfCurrencyComponent, HeldCurrencyValues, this);
 		return true;
@@ -94,13 +94,13 @@ bool USfCurrencyComponent::Server_DeductCurrency(const FGameplayTag Currency, co
 	return false;
 }
 
-bool USfCurrencyComponent::Server_SetCurrency(const FGameplayTag Currency, const int32 Value)
+bool USfCurrencyComponent::Server_SetCurrency(const FGameplayTag InCurrency, const int32 InValue)
 {
-	if (Value < 0) return false;
+	if (InValue < 0) return false;
 	for (FCurrencyValuePair& Pair : HeldCurrencyValues)
 	{
-		if (Pair.Currency != Currency) continue;
-		Pair.Value = Value;
+		if (Pair.Currency != InCurrency) continue;
+		Pair.Value = InValue;
 		MARK_PROPERTY_DIRTY_FROM_NAME(USfCurrencyComponent, HeldCurrencyValues, this);
 		return true;
 	}

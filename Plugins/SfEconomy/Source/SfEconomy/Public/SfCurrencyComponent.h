@@ -13,10 +13,10 @@ struct SFECONOMY_API FCurrencyValuePair
 {
 	GENERATED_BODY()
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere)
 	FGameplayTag Currency;
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, meta = (ClampMin = 0))
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere)
 	int32 Value;
 
 	FCurrencyValuePair();
@@ -42,25 +42,25 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UFUNCTION(BlueprintPure, BlueprintAuthorityOnly)
-	bool Server_HasCurrency(const FGameplayTag Currency) const;
+	bool Server_HasCurrency(const FGameplayTag InCurrency) const;
 
 	//Returns 0 if currency doesn't exist.
 	UFUNCTION(BlueprintPure, BlueprintAuthorityOnly)
-	int32 Server_GetCurrencyValue(const FGameplayTag Currency) const;
+	int32 Server_GetCurrencyValue(const FGameplayTag InCurrency) const;
 
 	//Returns false if currency doesn't exist. Adds to a max value of 2,147,483,647, operation will be rejected if not possible or negative value provided.
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	bool Server_AddCurrency(const FGameplayTag Currency, const int32 Value);
+	bool Server_AddCurrency(const FGameplayTag InCurrency, const int32 InValue);
 
 	//Returns false if currency doesn't exist. Deducts to a min value of 0. Operation is rejected if value is negative.
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	bool Server_DeductCurrency(const FGameplayTag Currency, const int32 Value);
+	bool Server_DeductCurrency(const FGameplayTag InCurrency, const int32 InValue);
 
 	//Returns false if currency doesn't exist. Value must be between 0 and 2,147,483,647 or the operation will be rejected.
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	bool Server_SetCurrency(const FGameplayTag Currency, const int32 Value);
+	bool Server_SetCurrency(const FGameplayTag InCurrency, const int32 InValue);
 
 private:
-	UPROPERTY(Replicated)
+	UPROPERTY(Replicated, EditAnywhere)
 	TArray<FCurrencyValuePair> HeldCurrencyValues;
 };

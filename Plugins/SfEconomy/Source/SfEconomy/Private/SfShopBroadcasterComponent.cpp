@@ -26,7 +26,7 @@ void USfShopBroadcasterComponent::BeginPlay()
 		return A.ShopOffer == B.ShopOffer;
 	}))
 	{
-		UE_LOG(LogTemp, Error, TEXT("Shop offers duplicated."));
+		UE_LOG(LogSfCore, Error, TEXT("Shop offers duplicated on SfShopBroadcasterComponent class %s."), *GetClass()->GetName());
 	}
 }
 
@@ -73,18 +73,15 @@ bool USfShopBroadcasterComponent::Server_RemoveShopOffer(const UShopOffer* InSho
 bool USfShopBroadcasterComponent::ServerRemoveShopOffer(const UShopOffer* InShopOffer)
 {
 	if (!InShopOffer) return false;
-	const FShopOfferWithAmount* ToRemove = ShopOffers.FindByPredicate(
-		[InShopOffer](const FShopOfferWithAmount& CheckedOffer)
+	for (uint16 i = 0; i < ShopOffers.Num(); i++)
+	{
+		if (ShopOffers[i].ShopOffer == InShopOffer)
 		{
-			if (CheckedOffer.ShopOffer == InShopOffer)
-			{
-				return true;
-			}
-			return false;
-		});
-	if (!ToRemove) return false;
-	ShopOffers.Remove(*ToRemove);
-	return true;
+			ShopOffers.RemoveAt(i);
+			return true;
+		}
+	}
+	return false;
 }
 
 bool USfShopBroadcasterComponent::Server_SetShopOfferAmount(const UShopOffer* InShopOffer, const int32 InAmount)
@@ -96,28 +93,27 @@ bool USfShopBroadcasterComponent::ServerSetShopOfferAmount(const UShopOffer* InS
 {
 	if (!InShopOffer) return false;
 	if (InAmount < 0) return false;
-	FShopOfferWithAmount* ToChange = ShopOffers.FindByPredicate([InShopOffer](const FShopOfferWithAmount& CheckedOffer)
+	for (uint16 i = 0; i < ShopOffers.Num(); i++)
 	{
-		if (CheckedOffer.ShopOffer == InShopOffer)
+		if (ShopOffers[i].ShopOffer == InShopOffer)
 		{
+			if (InAmount == 0)
+			{
+				ShopOffers.RemoveAt(i);
+				return true;
+			}
+			ShopOffers[i].Amount = InAmount;
 			return true;
 		}
-		return false;
-	});
-	if (!ToChange) return false;
-	ToChange->Amount = InAmount;
-	if (InAmount == 0)
-	{
-		ShopOffers.Remove(*ToChange);
 	}
-	return true;
+	return false;
 }
 
 bool USfShopBroadcasterComponent::Server_Purchase(USfShopAccessorComponent* InAccessor, const UShopOffer* InShopOffer,
-                                                  const TArray<USlotable*>& OfferedSlotables, const int32 InAmount,
+                                                  const TArray<USlotable*>& InOfferedSlotables, const int32 InAmount,
                                                   UInventory* TargetInventory)
 {
-	return ServerPurchase(InAccessor, InShopOffer, OfferedSlotables, InAmount, TargetInventory);
+	return ServerPurchase(InAccessor, InShopOffer, InOfferedSlotables, InAmount, TargetInventory);
 }
 
 void USfShopBroadcasterComponent::FindMatchingSlotables(const TArray<USlotable*>& InOfferedSlotables,
@@ -129,8 +125,9 @@ void USfShopBroadcasterComponent::FindMatchingSlotables(const TArray<USlotable*>
 	{
 		if (Slotable->GetClass() != InClassAndConditions.SlotableClass.Get()) continue;
 		bool bSlotableMeetsConditions = true;
-		for (const TSubclassOf<USlotableCondition> Condition : InClassAndConditions.Conditions)
+		for (const TSubclassOf<USlotableCondition>& Condition : InClassAndConditions.Conditions)
 		{
+			if (!Condition.Get()) continue;
 			bool bResult = false;
 			Condition.GetDefaultObject()->Check(Slotable, bResult);
 			bSlotableMeetsConditions &= bResult;
@@ -146,10 +143,14 @@ void USfShopBroadcasterComponent::FindMatchingSlotables(const TArray<USlotable*>
 }
 
 bool USfShopBroadcasterComponent::ServerPurchase(USfShopAccessorComponent* InAccessor, const UShopOffer* InShopOffer,
-                                                 const TArray<USlotable*>& OfferedSlotables, const int32 InAmount,
+                                                 const TArray<USlotable*>& InOfferedSlotables, const int32 InAmount,
                                                  UInventory* TargetInventory)
 {
-	if (!GetOwner()->HasAuthority()) return false;
+	if (!GetOwner()->HasAuthority())
+	{
+		UE_LOG(LogSfCore, Error, TEXT("ServerPurchase called without authority on USfShopBroadcasterComponent class %s."), *GetClass()->GetName());
+		return false;
+	}
 
 	if (!TargetInventory)
 	{
@@ -159,7 +160,7 @@ bool USfShopBroadcasterComponent::ServerPurchase(USfShopAccessorComponent* InAcc
 		}
 		if (!TargetInventory)
 		{
-			UE_LOG(LogTemp, Error, TEXT("Server sided purchase could not locate a suitable inventory."))
+			UE_LOG(LogSfCore, Error, TEXT("ServerPurchase on USfShopBroadcasterComponent class %s could not locate a suitable inventory."), *GetClass()->GetName());
 			InAccessor->InternalClientRpcForPurchaseCallback(EPurchaseResponse::ErrorNoSuitableInventoryToReceiveSlotables);
 			return false;
 		}
@@ -178,14 +179,14 @@ bool USfShopBroadcasterComponent::ServerPurchase(USfShopAccessorComponent* InAcc
 	//Verify that all inventories and all slotables come from the actor.
 	if (!InAccessor)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Tried to perform a purchase on server with a null accessor."));
+		UE_LOG(LogSfCore, Error, TEXT("ServerPurchase on USfShopBroadcasterComponent class %s called with a null accessor."), *GetClass()->GetName());
 		InAccessor->InternalClientRpcForPurchaseCallback(EPurchaseResponse::ErrorShopAccessorIsNull);
 		return false;
 	}
 	const AActor* Actor = InAccessor->GetOwner();
 	if (!Actor)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Could not get the actor of the accessor during server sided purchase."));
+		UE_LOG(LogSfCore, Error, TEXT("ServerPurchase on USfShopBroadcasterComponent class %s could not get accessor actor."), *GetClass()->GetName());
 		InAccessor->InternalClientRpcForPurchaseCallback(EPurchaseResponse::ErrorAccessorGivenHasNoActor);
 		return false;
 	}
@@ -193,18 +194,16 @@ bool USfShopBroadcasterComponent::ServerPurchase(USfShopAccessorComponent* InAcc
 	{
 		if (TargetInventory->OwningFormCore->GetOwner() != Actor)
 		{
-			UE_LOG(LogTemp, Error,
-			       TEXT("Target inventory for server sided purchase is not on the same actor as the accessor."));
+			UE_LOG(LogSfCore, Error, TEXT("ServerPurchase on USfShopBroadcasterComponent class %s target inventory is not on the same actor as the accessor."), *GetClass()->GetName());
 			InAccessor->InternalClientRpcForPurchaseCallback(EPurchaseResponse::ErrorVariablesGivenBelongToDifferentActors);
 			return false;
 		}
 	}
-	for (const USlotable* Slotable : OfferedSlotables)
+	for (const USlotable* Slotable : InOfferedSlotables)
 	{
 		if (Slotable->OwningInventory->OwningFormCore->GetOwner() != Actor)
 		{
-			UE_LOG(LogTemp, Error,
-			       TEXT("Offered slotable for server sided purchase is not on the same actor as the accessor."));
+			UE_LOG(LogSfCore, Error, TEXT("ServerPurchase on USfShopBroadcasterComponent class %s has an offered slotable that is not on the same actor as the accessor."), *GetClass()->GetName());
 			InAccessor->InternalClientRpcForPurchaseCallback(EPurchaseResponse::ErrorVariablesGivenBelongToDifferentActors);
 			return false;
 		}
@@ -243,7 +242,7 @@ bool USfShopBroadcasterComponent::ServerPurchase(USfShopAccessorComponent* InAcc
 	TArray<USlotable*> SlotablesToTrade;
 	for (const FSlotableClassAndConditions& ClassAndConditions : InShopOffer->SlotableRequests)
 	{
-		FindMatchingSlotables(OfferedSlotables, SlotablesToTrade, ClassAndConditions, InAmount);
+		FindMatchingSlotables(InOfferedSlotables, SlotablesToTrade, ClassAndConditions, InAmount);
 	}
 	if (SlotablesToTrade.Num() != InShopOffer->SlotableRequests.Num() * InAmount)
 	{

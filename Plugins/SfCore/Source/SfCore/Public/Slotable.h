@@ -27,14 +27,14 @@ public:
 	
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	UPROPERTY(ReplicatedUsing = OnRep_OwningInventory, Replicated, BlueprintReadOnly, VisibleAnywhere)
+	UPROPERTY(ReplicatedUsing = OnRep_OwningInventory, Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "Slotable")
 	class UInventory* OwningInventory;
 	
 	UFUNCTION(BlueprintPure)
-	const TArray<UConstituent*>& GetConstituents();
+	const TArray<UConstituent*>& GetConstituents() const;
 	
 	UFUNCTION(BlueprintPure)
-	TArray<UConstituent*> GetConstituentsOfClass(const TSubclassOf<UConstituent> ConstituentClass);
+	TArray<UConstituent*> GetConstituentsOfClass(const TSubclassOf<UConstituent>& InConstituentClass);
 
 	void ClientInitialize();
 
@@ -58,7 +58,7 @@ public:
 
 	void AssignConstituentInstanceId(UConstituent* Constituent);
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Slotable")
 	TArray<TSubclassOf<UConstituent>> InitialConstituentClasses;
 
 protected:
@@ -80,12 +80,12 @@ private:
 	UFUNCTION()
 	void OnRep_Constituents();
 	
-	UPROPERTY(Replicated, VisibleAnywhere, ReplicatedUsing = OnRep_Constituents)
+	UPROPERTY(Replicated, VisibleAnywhere, ReplicatedUsing = OnRep_Constituents, Category = "Slotable")
 	TArray<UConstituent*> Constituents;
 
 	TArray<UConstituent*> ClientSubObjectListRegisteredConstituents;
 
-	UConstituent* CreateUninitializedConstituent(const TSubclassOf<UConstituent>& ConstituentClass) const;
+	UConstituent* CreateUninitializedConstituent(const TSubclassOf<UConstituent>& InConstituentClass) const;
 
 	uint8 bAwaitingClientInit:1;
 

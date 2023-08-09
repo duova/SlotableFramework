@@ -145,16 +145,16 @@ public:
 	
 	//Leaving TargetInventory as null will put the slotables into the first inventory that is of the default inventory class.
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, meta = (AutoCreateRefTerm = "OfferedSlotables"))
-	bool Server_Purchase(USfShopAccessorComponent* InAccessor, const UShopOffer* InShopOffer, const TArray<USlotable*>& OfferedSlotables, const int32 InAmount = 1, UInventory* TargetInventory = nullptr);
+	bool Server_Purchase(USfShopAccessorComponent* InAccessor, const UShopOffer* InShopOffer, const TArray<USlotable*>& InOfferedSlotables, const int32 InAmount = 1, UInventory* TargetInventory = nullptr);
 
-	bool ServerPurchase(USfShopAccessorComponent* InAccessor, const UShopOffer* InShopOffer, const TArray<USlotable*>& OfferedSlotables = TArray<USlotable*>(), const int32 InAmount = 1, UInventory* TargetInventory = nullptr);
+	bool ServerPurchase(USfShopAccessorComponent* InAccessor, const UShopOffer* InShopOffer, const TArray<USlotable*>& InOfferedSlotables = TArray<USlotable*>(), const int32 InAmount = 1, UInventory* TargetInventory = nullptr);
 
 	static void FindMatchingSlotables(const TArray<USlotable*>& InOfferedSlotables, TArray<USlotable*>& OutSlotablesToTrade, const FSlotableClassAndConditions& InClassAndConditions, const int32 InAmount);
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "SfShopBroadcasterComponent")
 	bool bRemoveSlotsWhenTakingSlotables = false;
 
 private:
-	UPROPERTY(EditAnywhere, Replicated)
+	UPROPERTY(EditAnywhere, Replicated, Category = "SfShopBroadcasterComponent")
 	TArray<FShopOfferWithAmount> ShopOffers;
 };

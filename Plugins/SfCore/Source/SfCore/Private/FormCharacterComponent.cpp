@@ -38,16 +38,16 @@ bool FNetCardIdentifier::operator==(const FNetCardIdentifier& Other) const
 	return ClassIndex == Other.ClassIndex && OwnerConstituentInstanceId == Other.OwnerConstituentInstanceId;
 }
 
-FInventoryCardIdentifiers::FInventoryCardIdentifiers()
+FCardIdentifiersInAnInventory::FCardIdentifiersInAnInventory()
 {
 }
 
-FInventoryCardIdentifiers::FInventoryCardIdentifiers(const TArray<FNetCardIdentifier>& InCardIdentifiers)
+FCardIdentifiersInAnInventory::FCardIdentifiersInAnInventory(const TArray<FNetCardIdentifier>& InCardIdentifiers)
 {
 	CardIdentifiers = InCardIdentifiers;
 }
 
-bool FInventoryCardIdentifiers::operator==(const FInventoryCardIdentifiers& Other) const
+bool FCardIdentifiersInAnInventory::operator==(const FCardIdentifiersInAnInventory& Other) const
 {
 	return Other.CardIdentifiers == CardIdentifiers;
 }
@@ -113,7 +113,7 @@ void FSavedMove_Sf::SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& 
 
 	PredictedNetClock = CharacterComponent->PredictedNetClock;
 	PendingActionSets = CharacterComponent->PendingActionSets;
-	InventoryCardIdentifiers = CharacterComponent->InventoryCardIdentifiers;
+	InventoryCardIdentifiers = CharacterComponent->CardIdentifiersInInventories;
 }
 
 void FSavedMove_Sf::PrepMoveFor(ACharacter* C)
@@ -139,7 +139,7 @@ void FSavedMove_Sf::PrepMoveFor(ACharacter* C)
 
 	CharacterComponent->PredictedNetClock = PredictedNetClock;
 	CharacterComponent->PendingActionSets = PendingActionSets;
-	CharacterComponent->InventoryCardIdentifiers = InventoryCardIdentifiers;
+	CharacterComponent->CardIdentifiersInInventories = InventoryCardIdentifiers;
 }
 
 uint8 FSavedMove_Sf::GetCompressedFlags() const
@@ -229,20 +229,20 @@ bool FSfNetworkMoveData::Serialize(UCharacterMovementComponent& CharacterMovemen
 	}
 
 	//Conditionally serialize InventoryCardIdentifiers if they have been changed.
-	bool bDoSerializeCardIdentifiers = bIsSaving && InventoryCardIdentifiers != CharacterComponent->
-		OldInventoryCardIdentifiers;
+	bool bDoSerializeCardIdentifiers = bIsSaving && CardIdentifiersInInventories != CharacterComponent->
+		OldCardIdentifiersInInventories;
 	Ar.SerializeBits(&bDoSerializeCardIdentifiers, 1);
 	if (bDoSerializeCardIdentifiers)
 	{
-		Ar << InventoryCardIdentifiers;
+		Ar << CardIdentifiersInInventories;
 		//We set update OldInventoryCardIdentifiers on both the server and client.
 		//The client version is what we use to check if we have attempted to send our latest changes already.
 		//The server version is what is used if the client indicates they have no updates.
-		CharacterComponent->OldInventoryCardIdentifiers = InventoryCardIdentifiers;
+		CharacterComponent->OldCardIdentifiersInInventories = CardIdentifiersInInventories;
 	}
 	else if (!bIsSaving)
 	{
-		InventoryCardIdentifiers = CharacterComponent->OldInventoryCardIdentifiers;
+		CardIdentifiersInInventories = CharacterComponent->OldCardIdentifiersInInventories;
 	}
 
 	if (MoveType == ENetworkMoveType::NewMove)
@@ -279,7 +279,7 @@ void FSfNetworkMoveData::ClientFillNetworkMoveData(const FSavedMove_Character& C
 
 	PredictedNetClock = SavedMove->PredictedNetClock;
 	PendingActionSets = SavedMove->PendingActionSets;
-	InventoryCardIdentifiers = SavedMove->InventoryCardIdentifiers;
+	CardIdentifiersInInventories = SavedMove->InventoryCardIdentifiers;
 }
 
 FSfNetworkMoveDataContainer::FSfNetworkMoveDataContainer()
@@ -301,8 +301,8 @@ void FSfMoveResponseDataContainer::ServerFillResponseData(const UCharacterMoveme
 	const UFormCharacterComponent* CharacterComponent = Cast<UFormCharacterComponent>(&CharacterMovement);
 
 	PredictedNetClock = CharacterComponent->PredictedNetClock;
-	ActionSetResponse = CharacterComponent->ActionSetResponse;
-	TimeSinceLastAction = CharacterComponent->TimeSinceLastAction;
+	ActionSetResponse = CharacterComponent->ActionSetResponses;
+	TimeSinceLastAction = CharacterComponent->TimesSinceLastAction;
 	CardResponse = CharacterComponent->CardResponse;
 }
 
@@ -316,16 +316,16 @@ void FSfMoveResponseDataContainer::SerializeCardResponse(FArchive& Ar, UFormChar
 	{
 		CharacterComponent->bClientCardsWereUpdated = true;
 		CharacterComponent->bMovementSpeedNeedsRecalculation = true;
-		CharacterComponent->OldInventoryCardIdentifiers.Empty();
-		for (FInventoryCards InventoryCards : CardResponse)
+		CharacterComponent->OldCardIdentifiersInInventories.Empty();
+		for (FInventoryCards& InventoryCard : CardResponse)
 		{
 			//Place new element
-			const uint16 i = CharacterComponent->OldInventoryCardIdentifiers.Emplace();
+			const uint16 i = CharacterComponent->OldCardIdentifiersInInventories.Emplace();
 			//Reserve and add elements to the element.
-			CharacterComponent->OldInventoryCardIdentifiers[i].CardIdentifiers.Reserve(InventoryCards.Cards.Num());
-			for (FCard Card : InventoryCards.Cards)
+			CharacterComponent->OldCardIdentifiersInInventories[i].CardIdentifiers.Reserve(InventoryCard.Cards.Num());
+			for (FCard& Card : InventoryCard.Cards)
 			{
-				CharacterComponent->OldInventoryCardIdentifiers[i].CardIdentifiers.Emplace(
+				CharacterComponent->OldCardIdentifiersInInventories[i].CardIdentifiers.Emplace(
 					Card.ClassIndex, Card.OwnerConstituentInstanceId);
 			}
 		}
@@ -391,8 +391,8 @@ bool FSfMoveResponseDataContainer::Serialize(UCharacterMovementComponent& Charac
 			& Repredict_ActionSetsAndCards) != 0;
 		if (bDoSerializeStates)
 		{
-			Ar << CharacterComponent->ActionSetResponse;
-			Ar << CharacterComponent->TimeSinceLastAction;
+			Ar << CharacterComponent->ActionSetResponses;
+			Ar << CharacterComponent->TimesSinceLastAction;
 			if (!bIsSaving)
 			{
 				CharacterComponent->bClientActionsWereUpdated = true;
@@ -450,6 +450,12 @@ UFormCharacterComponent::UFormCharacterComponent()
 	if (!GetOwner()) return;
 	SetNetworkMoveDataContainer(SfNetworkMoveDataContainer);
 	SetMoveResponseDataContainer(SfMoveResponseDataContainer);
+	//Initialize variables.
+	bWantsToSprint = false;
+	bMovementSpeedNeedsRecalculation = true;
+	EnabledInputSets = 0;
+	bClientActionsWereUpdated = false;
+	bClientCardsWereUpdated = false;
 }
 
 bool UFormCharacterComponent::ShouldUsePackedMovementRPCs() const
@@ -485,8 +491,8 @@ void UFormCharacterComponent::ClientAdjustPosition_Implementation(float TimeStam
 	                                           OptionalRotation);
 
 	PredictedNetClock = SfMoveResponseDataContainer.PredictedNetClock;
-	ActionSetResponse = SfMoveResponseDataContainer.ActionSetResponse;
-	TimeSinceLastAction = SfMoveResponseDataContainer.TimeSinceLastAction;
+	ActionSetResponses = SfMoveResponseDataContainer.ActionSetResponse;
+	TimesSinceLastAction = SfMoveResponseDataContainer.TimeSinceLastAction;
 	CardResponse = SfMoveResponseDataContainer.CardResponse;
 }
 
@@ -505,7 +511,12 @@ void UFormCharacterComponent::SetupFormCharacter(UFormCoreComponent* FormCoreCom
 	FormCore = FormCoreComponent;
 
 	//Sanity check to ensure only 24 slotable inputs are available.
-	checkf(InputActionRegistry.Num() > 24, TEXT("Only 24 input actions can be registered."));
+	if (InputActionRegistry.Num() > 23)
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Only 24 input actions can be registered in UFormCharacterComponent class %s, removing additional ones."), *GetClass()->GetName());
+		const uint16 CountToRemove = InputActionRegistry.Num() - 24;
+		InputActionRegistry.RemoveAt(24, CountToRemove);
+	}
 
 	//Enable input sets depending on how many are necessary.
 	if (InputActionRegistry.Num() < 8)
@@ -536,38 +547,39 @@ void UFormCharacterComponent::SetupFormCharacter(UFormCoreComponent* FormCoreCom
 	}
 }
 
-float UFormCharacterComponent::CalculateFuturePredictedTimestamp(const float AdditionalTime) const
+float UFormCharacterComponent::CalculateFuturePredictedTimestamp(const float InAdditionalTime) const
 {
-	const float FutureTime = PredictedNetClock + AdditionalTime;
+	//Read implementation of CalculateTimeUntilPredictedTimestamp for explanation of how this works.
+	const float FutureTime = PredictedNetClock + InAdditionalTime;
 	if (FutureTime < 40000.0) return FutureTime;
 	return FutureTime - 40000.0;
 }
 
-float UFormCharacterComponent::CalculateTimeUntilPredictedTimestamp(const float Timestamp) const
+float UFormCharacterComponent::CalculateTimeUntilPredictedTimestamp(const float InTimestamp) const
 {
 	//We treat the PredictedNetClock variable as a loop, and we assume if a point in the cycle is closer going forward, then
 	//it is ahead in time and vice versa if it is closer going backwards.
-	const float TimeToFirstTimestamp = PredictedNetClock > Timestamp ? Timestamp : PredictedNetClock;
-	const float TimeBetween = FMath::Abs(PredictedNetClock - Timestamp);
-	const float TimeAfterSecondTimestamp = PredictedNetClock > Timestamp
+	const float TimeToFirstTimestamp = PredictedNetClock > InTimestamp ? InTimestamp : PredictedNetClock;
+	const float TimeBetween = FMath::Abs(PredictedNetClock - InTimestamp);
+	const float TimeAfterSecondTimestamp = PredictedNetClock > InTimestamp
 		                                       ? 40000.0 - PredictedNetClock
-		                                       : Timestamp - PredictedNetClock;
+		                                       : InTimestamp - PredictedNetClock;
 	const float TimeExterior = TimeToFirstTimestamp + TimeAfterSecondTimestamp;
 	if (TimeExterior > TimeBetween)
 	{
-		return PredictedNetClock > Timestamp ? -TimeBetween : TimeBetween;
+		return PredictedNetClock > InTimestamp ? -TimeBetween : TimeBetween;
 	}
-	return PredictedNetClock > Timestamp ? TimeExterior : -TimeExterior;
+	return PredictedNetClock > InTimestamp ? TimeExterior : -TimeExterior;
 }
 
-float UFormCharacterComponent::CalculateTimeSincePredictedTimestamp(const float Timestamp) const
+float UFormCharacterComponent::CalculateTimeSincePredictedTimestamp(const float InTimestamp) const
 {
-	return -CalculateTimeUntilPredictedTimestamp(Timestamp);
+	return -CalculateTimeUntilPredictedTimestamp(InTimestamp);
 }
 
-bool UFormCharacterComponent::HasPredictedTimestampPassed(const float Timestamp) const
+bool UFormCharacterComponent::HasPredictedTimestampPassed(const float InTimestamp) const
 {
-	return CalculateTimeUntilPredictedTimestamp(Timestamp) <= 0;
+	return CalculateTimeUntilPredictedTimestamp(InTimestamp) <= 0;
 }
 
 void UFormCharacterComponent::OnInputDown(const FInputActionInstance& Instance)
@@ -612,6 +624,11 @@ void UFormCharacterComponent::BeginPlay()
 {
 	Super::BeginPlay();
 	if (!GetOwner()) return;
+	if (!GetOwner()->FindComponentByClass(UFormCoreComponent::StaticClass()))
+	{
+		UE_LOG(LogSfCore, Error, TEXT("FormCharacterComponent is not on an ACharacter with a FormCoreComponent, destroying ACharacter."));
+		GetOwner()->Destroy();
+	}
 }
 
 void UFormCharacterComponent::UpdateFromCompressedFlags(uint8 Flags)
@@ -649,27 +666,28 @@ void UFormCharacterComponent::MoveAutonomous(float ClientTimeStamp, float DeltaT
 	Super::MoveAutonomous(ClientTimeStamp, DeltaTime, CompressedFlags, NewAccel);
 }
 
-bool UFormCharacterComponent::CardHasEquivalentCardIdentifier(const FInventoryCardIdentifiers& CardIdentifierInventory,
-                                                              const FCard& Card)
+bool UFormCharacterComponent::CardHasEquivalentCardIdentifier(const FCardIdentifiersInAnInventory& InCardIdentifierInventory,
+                                                              const FCard& InCard)
 {
 	bool bFoundCardIdentifier = false;
-	for (const FNetCardIdentifier CardIdentifier : CardIdentifierInventory.CardIdentifiers)
+	for (const FNetCardIdentifier& CardIdentifier : InCardIdentifierInventory.CardIdentifiers)
 	{
-		if (CardIdentifier.ClassIndex == Card.ClassIndex && CardIdentifier.OwnerConstituentInstanceId == Card.
+		if (CardIdentifier.ClassIndex == InCard.ClassIndex && CardIdentifier.OwnerConstituentInstanceId == InCard.
 			OwnerConstituentInstanceId)
 		{
 			bFoundCardIdentifier = true;
+			break;
 		}
 	}
 	return bFoundCardIdentifier;
 }
 
-bool UFormCharacterComponent::CardCanBeFoundInInventory(UInventory* Inventory, const FNetCardIdentifier CardIdentifier)
+bool UFormCharacterComponent::CardCanBeFoundInInventory(UInventory* Inventory, const FNetCardIdentifier InCardIdentifier)
 {
 	bool bFoundCard = false;
-	for (const FCard Card : Inventory->Cards)
+	for (const FCard& Card : Inventory->Cards)
 	{
-		if (CardIdentifier.ClassIndex == Card.ClassIndex && CardIdentifier.OwnerConstituentInstanceId == Card.
+		if (InCardIdentifier.ClassIndex == Card.ClassIndex && InCardIdentifier.OwnerConstituentInstanceId == Card.
 			OwnerConstituentInstanceId)
 		{
 			bFoundCard = true;
@@ -680,26 +698,26 @@ bool UFormCharacterComponent::CardCanBeFoundInInventory(UInventory* Inventory, c
 }
 
 void UFormCharacterComponent::HandleInventoryDifferencesAndSetCorrectionFlags(
-	UInventory* Inventory, const FInventoryCardIdentifiers& CardIdentifierInventory)
+	UInventory* Inventory, const FCardIdentifiersInAnInventory& InCardIdentifierInventory)
 {
-	TArray<FCard> ToDestroy;
-	for (FCard Card : Inventory->Cards)
+	TArray<FCard>& ServerCards = Inventory->Cards;
+	for (int16 i = ServerCards.Num() - 1; i >= 0; i--)
 	{
-		if (CardHasEquivalentCardIdentifier(CardIdentifierInventory, Card))
+		if (CardHasEquivalentCardIdentifier(InCardIdentifierInventory, ServerCards[i]))
 		{
 			//If the client has been updated with a server initiated card addition, we can start correcting that card.
-			if (Card.bIsNotCorrected)
+			if (ServerCards[i].bIsNotCorrected)
 			{
-				Card.bIsNotCorrected = false;
+				ServerCards[i].bIsNotCorrected = false;
 			}
 		}
 		else
 		{
-			if (Card.bIsDisabledForDestroy)
+			if (ServerCards[i].bIsDisabledForDestroy)
 			{
 				//If the card is awaiting client sync to be destroyed, we destroy once the client acks that the card is
 				//destroyed.
-				ToDestroy.Add(Card);
+				ServerCards.RemoveAt(i, 1, false);
 			}
 			else
 			{
@@ -708,12 +726,10 @@ void UFormCharacterComponent::HandleInventoryDifferencesAndSetCorrectionFlags(
 			}
 		}
 	}
-	for (FCard Card : ToDestroy)
-	{
-		Inventory->Cards.Remove(Card);
-	}
+	ServerCards.Shrink();
+
 	//Check if any card identifier is missing the equivalent card on the server. If so correct.
-	for (const FNetCardIdentifier CardIdentifier : CardIdentifierInventory.CardIdentifiers)
+	for (const FNetCardIdentifier& CardIdentifier : InCardIdentifierInventory.CardIdentifiers)
 	{
 		if (!CardCanBeFoundInInventory(Inventory, CardIdentifier))
 		{
@@ -742,17 +758,19 @@ void UFormCharacterComponent::SfServerCheckClientError()
 		CorrectionConditionFlags |= Repredict_ActionSetsAndCards;
 	}
 
-	//We check if any server initiated card changes have synchronized in the latest client move data.
+	//If there is a difference in the number of inventories, ie when the server added or removed an inventory and the
+	//client hasn't synced up yet, we don't check cards since we can't with a index mismatch.
 	const TArray<UInventory*> Inventories = FormCore->GetInventories();
-	const TArray<FInventoryCardIdentifiers>& CardIdentifierInventories = MoveData->InventoryCardIdentifiers;
-	const uint8 ShorterInventoryLength = Inventories.Num() > CardIdentifierInventories.Num()
-		                                     ? CardIdentifierInventories.Num()
-		                                     : Inventories.Num();
-	//We iterate through the equivalent inventories and handle the differences, setting correction flags if necessary.
-	for (uint8 InventoryIndex = 0; InventoryIndex < ShorterInventoryLength; InventoryIndex++)
+	const TArray<FCardIdentifiersInAnInventory>& ClientCardIdentifiersInInventories = MoveData->CardIdentifiersInInventories;
+	if (ClientCardIdentifiersInInventories.Num() != Inventories.Num())
+	{
+		return;
+	}
+	
+	for (uint8 InventoryIndex = 0; InventoryIndex < Inventories.Num(); InventoryIndex++)
 	{
 		HandleInventoryDifferencesAndSetCorrectionFlags(Inventories[InventoryIndex],
-		                                                InventoryCardIdentifiers[InventoryIndex]);
+		                                                ClientCardIdentifiersInInventories[InventoryIndex]);
 	}
 }
 
@@ -790,15 +808,16 @@ bool UFormCharacterComponent::ClientUpdatePositionAfterServerUpdate()
 
 void UFormCharacterComponent::CorrectActionSets()
 {
+	//Constituent registry can't be used since this has to be in a deterministic order.
 	uint16 i = 0;
-	for (UInventory* Inventory : FormCore->GetInventories())
+	for (const UInventory* Inventory : FormCore->GetInventories())
 	{
-		for (USlotable* Slotable : Inventory->GetSlotables())
+		for (const USlotable* Slotable : Inventory->GetSlotables())
 		{
 			for (UConstituent* Constituent : Slotable->GetConstituents())
 			{
-				Constituent->PredictedLastActionSet = ActionSetResponse[i];
-				Constituent->TimeSincePredictedLastActionSet = TimeSinceLastAction[i];
+				Constituent->PredictedLastActionSet = ActionSetResponses[i];
+				Constituent->TimeSincePredictedLastActionSet = TimesSinceLastAction[i];
 				i++;
 			}
 		}
@@ -807,25 +826,29 @@ void UFormCharacterComponent::CorrectActionSets()
 
 void UFormCharacterComponent::CorrectCards()
 {
-	uint16 i = 0;
-	for (UInventory* Inventory : FormCore->GetInventories())
+	const TArray<UInventory*>& Inventories = FormCore->GetInventories();
+	for (uint16 i = 0; i < Inventories.Num(); i++)
 	{
-		Inventory->Cards = CardResponse[i].Cards;
-		Inventory->ClientCheckAndUpdateCardObjects();
-		i++;
+		Inventories[i]->Cards = CardResponse[i].Cards;
+		Inventories[i]->ClientCheckAndUpdateCardObjects();
 	}
 }
 
 void UFormCharacterComponent::PackActionSets()
 {
-	for (UInventory* Inventory : FormCore->GetInventories())
+	ActionSetResponses.Empty();
+	TimesSinceLastAction.Empty();
+	ActionSetResponses.Reserve(ActionSetResponses.Num() + FormCore->ConstituentRegistry.Num());
+	TimesSinceLastAction.Reserve(TimesSinceLastAction.Num() + FormCore->ConstituentRegistry.Num());
+	//Constituent registry can't be used since this has to be in a deterministic order.
+	for (const UInventory* Inventory : FormCore->GetInventories())
 	{
-		for (USlotable* Slotable : Inventory->GetSlotables())
+		for (const USlotable* Slotable : Inventory->GetSlotables())
 		{
-			for (UConstituent* Constituent : Slotable->GetConstituents())
+			for (const UConstituent* Constituent : Slotable->GetConstituents())
 			{
-				ActionSetResponse.Add(Constituent->PredictedLastActionSet);
-				TimeSinceLastAction.Add(Constituent->TimeSincePredictedLastActionSet);
+				ActionSetResponses.Add(Constituent->PredictedLastActionSet);
+				TimesSinceLastAction.Add(Constituent->TimeSincePredictedLastActionSet);
 			}
 		}
 	}
@@ -833,34 +856,34 @@ void UFormCharacterComponent::PackActionSets()
 
 void UFormCharacterComponent::PackCards()
 {
+	CardResponse.Empty();
+	CardResponse.Reserve(FormCore->GetInventories().Num());
 	for (const UInventory* Inventory : FormCore->GetInventories())
 	{
 		FInventoryCards InventoryCards = FInventoryCards(Inventory->Cards);
-		TArray<FCard> ToDestroy;
-		for (const FCard Card : InventoryCards.Cards)
+		TArray<FCard>& InventoryCardsArray = InventoryCards.Cards;
+		for (int16 i = InventoryCardsArray.Num() - 1; i >= 0; i--)
 		{
 			//We remove the cards that are disabled for destroy as we don't want those syncing to the client.
-			if (Card.bIsDisabledForDestroy)
+			if (InventoryCardsArray[i].bIsDisabledForDestroy)
 			{
-				ToDestroy.Add(Card);
+				InventoryCardsArray.RemoveAt(i, 1, false);
 			}
 		}
-		for (FCard Card : ToDestroy)
-		{
-			InventoryCards.Cards.Remove(Card);
-		}
+		InventoryCardsArray.Shrink();
 		CardResponse.Add(InventoryCards);
 	}
 }
 
 void UFormCharacterComponent::PackInventoryCardIdentifiers()
 {
+	CardIdentifiersInInventories.Empty();
 	for (UInventory* Inventory : FormCore->GetInventories())
 	{
-		const uint8 i = InventoryCardIdentifiers.Add(FInventoryCardIdentifiers());
+		const uint8 i = CardIdentifiersInInventories.Emplace();
 		for (FCard Card : Inventory->Cards)
 		{
-			InventoryCardIdentifiers[i].CardIdentifiers.Emplace(
+			CardIdentifiersInInventories[i].CardIdentifiers.Emplace(
 				Card.ClassIndex, Card.OwnerConstituentInstanceId);
 		}
 	}
@@ -872,41 +895,38 @@ void UFormCharacterComponent::HandleCardClientSyncTimeout() const
 	if (!GetOwner()->HasAuthority()) return;
 	for (UInventory* Inventory : FormCore->GetInventories())
 	{
-		TArray<FCard> ToRemove;
-		for (FCard Card : Inventory->Cards)
+		TArray<FCard>& Cards = Inventory->Cards;
+		for (int16 i = Cards.Num() - 1; i >= 0; i--)
 		{
-			if (Card.bIsNotCorrected && FormCore->HasServerTimestampPassed(Card.ServerAwaitClientSyncTimeoutTimestamp))
+			if (Cards[i].bIsNotCorrected && FormCore->HasServerTimestampPassed(Cards[i].ServerAwaitClientSyncTimeoutTimestamp))
 			{
 				//We set bIsNotCorrected to false so these cards get checked against the client ones and essentially
 				//force a correction to get the client to sync up.
-				Card.bIsNotCorrected = false;
+				Cards[i].bIsNotCorrected = false;
 			}
-			if (Card.bIsDisabledForDestroy && FormCore->HasServerTimestampPassed(
-				Card.ServerAwaitClientSyncTimeoutTimestamp))
+			if (Cards[i].bIsDisabledForDestroy && FormCore->HasServerTimestampPassed(
+				Cards[i].ServerAwaitClientSyncTimeoutTimestamp))
 			{
 				//We remove these cards which also forces a correction to get the client to sync up.
-				ToRemove.Add(Card);
+				Cards.RemoveAt(i, 1, false);
 			}
 		}
-		for (FCard Card : ToRemove)
-		{
-			Inventory->Cards.Remove(Card);
-		}
+		Cards.Shrink();
 	}
 }
 
-void UFormCharacterComponent::ApplyInputBitsToInventory(const uint32 InputBits, const UInventory* Inventory)
+void UFormCharacterComponent::ApplyInputBitsToInventory(const uint32 InInputBits, const UInventory* InInventory)
 {
-	TArray<int8> BoundInputIndices = Inventory->OrderedInputBindingIndices;
+	const TArray<int8>& BoundInputIndices = InInventory->OrderedInputBindingIndices;
 	for (uint8 i = 0; i < BoundInputIndices.Num(); i++)
 	{
 		//Check if input is actually bound.
 		if (BoundInputIndices[i] == INDEX_NONE) continue;
-		const bool bInputValue = GetValueFromInputSets(BoundInputIndices[i], InputBits);
+		const bool bInputValue = GetValueFromInputSets(BoundInputIndices[i], InInputBits);
 		//We don't want to do anything if the value isn't actually updated.
-		if (Inventory->OrderedLastInputState[i] == bInputValue) continue;
-		if (Inventory->Slotables.Num() < i || Inventory->Slotables[i] == nullptr) continue;
-		for (UConstituent* Constituent : Inventory->Slotables[i]->GetConstituents())
+		if (InInventory->OrderedLastInputState[i] == bInputValue) continue;
+		if (InInventory->Slotables.Num() < i || InInventory->Slotables[i] == nullptr) continue;
+		for (UConstituent* Constituent : InInventory->Slotables[i]->GetConstituents())
 		{
 			if (!Constituent->bEnableInputsAndPrediction) continue;
 			if (bInputValue)
@@ -921,22 +941,19 @@ void UFormCharacterComponent::ApplyInputBitsToInventory(const uint32 InputBits, 
 	}
 }
 
-void UFormCharacterComponent::RemovePredictedCardWithEndedLifetimes()
+void UFormCharacterComponent::RemovePredictedCardWithEndedLifetimes() const
 {
 	for (UInventory* Inventory : FormCore->GetInventories())
 	{
-		TArray<FCard> ToRemove;
-		for (const FCard& Card : Inventory->Cards)
+		TArray<FCard>& Cards = Inventory->Cards;
+		for (int16 i = Cards.Num() - 1; i >= 0; i--)
 		{
-			if (Card.bUsingPredictedTimestamp && CalculateTimeUntilPredictedTimestamp(Card.LifetimeEndTimestamp) < 0)
+			if (Cards[i].bUsingPredictedTimestamp && CalculateTimeUntilPredictedTimestamp(Cards[i].LifetimeEndTimestamp) < 0)
 			{
-				ToRemove.Emplace(Card);
+				Cards.RemoveAt(i, 1, false);
 			}
 		}
-		for (const FCard& CardToRemove : ToRemove)
-		{
-			Inventory->Predicted_RemoveOwnedCard(CardToRemove.Class, CardToRemove.OwnerConstituentInstanceId);
-		}
+		Cards.Shrink();
 	}
 }
 
@@ -1108,11 +1125,11 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 	}
 }
 
-uint8 UFormCharacterComponent::FindInputIndexInRegistry(const FInputActionInstance& Instance)
+uint8 UFormCharacterComponent::FindInputIndexInRegistry(const FInputActionInstance& InInstance)
 {
 	for (uint8 i = 0; i < InputActionRegistry.Num(); i++)
 	{
-		if (Instance.GetSourceAction() == InputActionRegistry[i])
+		if (InInstance.GetSourceAction() == InputActionRegistry[i])
 		{
 			return i;
 		}
@@ -1120,11 +1137,15 @@ uint8 UFormCharacterComponent::FindInputIndexInRegistry(const FInputActionInstan
 	return INDEX_NONE;
 }
 
-void UFormCharacterComponent::SetInputSet(uint8* InputSet, const uint8 Index, const bool bIsTrue)
+void UFormCharacterComponent::SetInputSet(uint8* InputSet, const uint8 InIndex, const bool bInIsTrue)
 {
-	checkf(Index < 8, TEXT("Index for input set may not be larger than 7."));
-	const uint8 BitModifier = 1 << Index;
-	if (bIsTrue)
+	if (InIndex > 7)
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Index for input set may not be larger than 7."));
+		return;
+	}
+	const uint8 BitModifier = 1 << InIndex;
+	if (bInIsTrue)
 	{
 		*InputSet |= BitModifier;
 	}
@@ -1134,11 +1155,15 @@ void UFormCharacterComponent::SetInputSet(uint8* InputSet, const uint8 Index, co
 	}
 }
 
-bool UFormCharacterComponent::GetValueFromInputSets(const uint8 Index, const uint32 InputSetsJoinedBits)
+bool UFormCharacterComponent::GetValueFromInputSets(const uint8 InIndex, const uint32 InInputSetsJoinedBits)
 {
-	checkf(Index < 24, TEXT("Index for input search may not be larger than 23."));
-	const uint32 BitMask = 1 << Index;
-	return (InputSetsJoinedBits & BitMask) != 0;
+	if (InIndex > 23)
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Index for input search may not be larger than 23."));
+		return false;
+	}
+	const uint32 BitMask = 1 << InIndex;
+	return (InInputSetsJoinedBits & BitMask) != 0;
 }
 
 uint32 UFormCharacterComponent::GetInputSetsJoinedBits() const

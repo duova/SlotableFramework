@@ -16,15 +16,15 @@ struct SFCORE_API FStat : public FFastArraySerializerItem
 {
 	GENERATED_BODY()
 
-	UPROPERTY()
+	UPROPERTY(EditAnywhere)
 	FGameplayTag StatTag;
 
-	UPROPERTY()
+	UPROPERTY(EditAnywhere, meta = (ClampMin = 0, ClampMax = 999999))
 	float Value;
 	
 	FStat();
 
-	FStat(FGameplayTag StatTag, const float Value);
+	FStat(const FGameplayTag& InStatTag, const float InValue);
 
 	bool operator==(const FStat& Other) const;
 	
@@ -104,28 +104,28 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	virtual bool CalculateStat(const FGameplayTag& StatTag);
+	virtual bool CalculateStat(const FGameplayTag& InStatTag);
 
 	//The user should clean up stat modifiers after use.
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	virtual const FStat& Server_AddStatModifier(const FGameplayTag StatTag, const EStatModifierType Type, const float Value);
+	virtual const FStat& Server_AddStatModifier(const FGameplayTag InStatTag, const EStatModifierType InType, const float InValue);
 
 	//The user should clean up stat modifiers after use.
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	virtual TArray<FStat> Server_AddStatModifierBatch(const TArray<FStat> Stats, const EStatModifierType Type);
+	virtual TArray<FStat> Server_AddStatModifierBatch(const TArray<FStat> InStats, const EStatModifierType InType);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	virtual bool Server_RemoveStatModifier(const FStat& Modifier, const EStatModifierType Type);
+	virtual bool Server_RemoveStatModifier(const FStat& InModifier, const EStatModifierType InType);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	virtual bool Server_RemoveStatModifierBatch(const TArray<FStat>& Modifiers, const EStatModifierType Type);
+	virtual bool Server_RemoveStatModifierBatch(TArray<FStat> InModifiers, const EStatModifierType InType);
 
 	//Add BP functions to update UI when stats change.
 	UPROPERTY(BlueprintAssignable)
 	FCurrentStatChangeDelegate OnClientStatsChange;
 	
 	UFUNCTION(BlueprintPure)
-	virtual TArray<FStat> GetCurrentStats();
+	virtual TArray<FStat>& GetCurrentStats();
 
 	UFUNCTION(BlueprintPure)
 	virtual float GetStat(const FGameplayTag StatTag);

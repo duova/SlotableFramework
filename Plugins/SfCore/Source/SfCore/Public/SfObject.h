@@ -45,20 +45,7 @@ public:
 	
 	bool IsFormCharacter();
 
-	template<class T>
-	static bool TArrayCompareOrderless(const TArray<T>& A, const TArray<T>& B);
-
-	//Key is the element signature, value is a set of pointers to each element of the group.
-	template<class T>
-	static TMap<T, TSet<T*>> TArrayGroupEquivalentElements(const TArray<T>& Array);
-	
-	template<class T, class F>
-	static bool TArrayCheckDuplicate(const TArray<T>& Array, F&& Predicate);
-
 	inline static constexpr int32 Int32MaxValue = 2147483647;
-
-protected:
-	void ErrorIfNoAuthority() const;
 
 private:
 	UPROPERTY()
@@ -89,10 +76,23 @@ bool TArrayCompareOrderless(const TArray<T>& A, const TArray<T>& B)
 }
 
 template <class T>
-TMap<T, TSet<T*>> TArrayGroupEquivalentElements(const TArray<T>& Array)
+void TArrayGroupEquivalentProcessElement(T& Element, TMap<T, TSet<T*>>& OutSignatureGroupPairs)
+{
+	//Find the signature and add, otherwise create a new signature.
+	for (TPair<T, TSet<T*>> Pair : OutSignatureGroupPairs)
+	{
+		if (Pair.Key != Element) continue;
+		Pair.Value.Add(&Element);
+		return;
+	}
+	OutSignatureGroupPairs.Add(Element, { &Element });
+}
+
+template <class T>
+TMap<T, TSet<T*>> TArrayGroupEquivalentElements(TArray<T>& Array)
 {
 	TMap<T, TSet<T*>> SignatureGroupPairs;
-	for (T Element : Array)
+	for (T& Element : Array)
 	{
 		TArrayGroupEquivalentProcessElement(Element, SignatureGroupPairs);
 	}
@@ -115,19 +115,6 @@ bool TArrayCheckDuplicate(const TArray<T>& Array, F&& Predicate)
 	return false;
 }
 
-template <class T>
-void TArrayGroupEquivalentProcessElement(const T Element, TMap<T, TSet<T*>>& SignatureGroupPairs)
-{
-	//Find the signature and add, otherwise create a new signature.
-	for (TPair<T, TSet<T*>> Pair : SignatureGroupPairs)
-	{
-		if (Pair.Key != Element) continue;
-		Pair.Value.Add(&Element);
-		return;
-	}
-	SignatureGroupPairs.Add(Element, { &Element });
-}
-
 USTRUCT()
 struct SFCORE_API FUint16_Quantize100
 {
@@ -138,7 +125,7 @@ struct SFCORE_API FUint16_Quantize100
 	
 	FUint16_Quantize100();
 
-	float GetFloat();
+	float GetFloat() const;
 
 	void SetFloat(float Value);
 

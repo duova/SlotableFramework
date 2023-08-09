@@ -13,6 +13,8 @@ USfShopAccessorComponent::USfShopAccessorComponent()
 	PrimaryComponentTick.bCanEverTick = false;
 	bReplicateUsingRegisteredSubObjectList = true;
 	SetIsReplicatedByDefault(true);
+	bAttemptedCurrencyComponentCaching = false;
+	bAttemptedFormCoreCaching = false;
 }
 
 void USfShopAccessorComponent::BeginPlay()
@@ -22,14 +24,14 @@ void USfShopAccessorComponent::BeginPlay()
 }
 
 void USfShopAccessorComponent::Client_Purchase(USfShopBroadcasterComponent* Shop, const UShopOffer* InShopOffer,
-	const int32 InAmount, const TArray<USlotable*>& OfferedSlotables)
+	const int32 InAmount, const TArray<USlotable*>& InOfferedSlotables)
 {
-	ClientPurchase(Shop, InShopOffer, InAmount, OfferedSlotables);
+	ClientPurchase(Shop, InShopOffer, InAmount, InOfferedSlotables);
 }
 
-void USfShopAccessorComponent::InternalClientRpcForPurchaseCallback_Implementation(const EPurchaseResponse Response)
+void USfShopAccessorComponent::InternalClientRpcForPurchaseCallback_Implementation(const EPurchaseResponse InResponse)
 {
-	Client_PurchaseCallback(Response);
+	Client_PurchaseCallback(InResponse);
 }
 
 USfCurrencyComponent* USfShopAccessorComponent::GetCurrencyComponent()
@@ -49,7 +51,7 @@ UFormCoreComponent* USfShopAccessorComponent::GetFormCore()
 }
 
 void USfShopAccessorComponent::ClientPurchase_Implementation(USfShopBroadcasterComponent* Shop, const UShopOffer* InShopOffer,
-                                                              const int32 InAmount, const TArray<USlotable*>& OfferedSlotables)
+                                                              const int32 InAmount, const TArray<USlotable*>& InOfferedSlotables)
 {
-	Shop->ServerPurchase(this, InShopOffer, OfferedSlotables, InAmount);
+	Shop->ServerPurchase(this, InShopOffer, InOfferedSlotables, InAmount);
 }

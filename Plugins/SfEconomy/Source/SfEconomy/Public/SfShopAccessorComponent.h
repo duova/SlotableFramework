@@ -26,7 +26,7 @@ enum class EPurchaseResponse : uint8
 	ErrorNoSuitableInventoryToReceiveSlotables,
 	ErrorShopAccessorIsNull,
 	ErrorAccessorGivenHasNoActor,
-	ErrorVariablesGivenBelongToDifferentActors,
+	ErrorVariablesGivenBelongToDifferentActors
 };
 
 //A component that is used to access shops. The event Client_PurchaseCallback must be implemented to be used.
@@ -45,17 +45,17 @@ public:
 	//Call to attempt to make a purchase at a certain shop. PurchaseCallback will be called as a response with a enum
 	//that represents the approximate result.
 	UFUNCTION(BlueprintCallable, meta = (AutoCreateRefTerm = "OfferedSlotables"))
-	void Client_Purchase(USfShopBroadcasterComponent* Shop, const UShopOffer* InShopOffer, const int32 InAmount, const TArray<USlotable*>& OfferedSlotables);
+	void Client_Purchase(USfShopBroadcasterComponent* Shop, const UShopOffer* InShopOffer, const int32 InAmount, const TArray<USlotable*>& InOfferedSlotables);
 
 	UFUNCTION(Server, Reliable)
-	void ClientPurchase(USfShopBroadcasterComponent* Shop, const UShopOffer* InShopOffer, const int32 InAmount, const TArray<USlotable*>& OfferedSlotables = TArray<USlotable*>());
+	void ClientPurchase(USfShopBroadcasterComponent* Shop, const UShopOffer* InShopOffer, const int32 InAmount, const TArray<USlotable*>& InOfferedSlotables = TArray<USlotable*>());
 
 	UFUNCTION(Client, Reliable)
-	void InternalClientRpcForPurchaseCallback(const EPurchaseResponse Response);
+	void InternalClientRpcForPurchaseCallback(const EPurchaseResponse InResponse);
 
 	//Called as a response whenever a purchase is attempted by the client.
 	UFUNCTION(BlueprintImplementableEvent)
-	void Client_PurchaseCallback(const EPurchaseResponse Response);
+	void Client_PurchaseCallback(const EPurchaseResponse InResponse);
 
 	USfCurrencyComponent* GetCurrencyComponent();
 

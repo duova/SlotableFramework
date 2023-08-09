@@ -15,8 +15,8 @@ class UCardObject;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAddSlotable, USlotable*, Slotable);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRemoveSlotable, USlotable*, Slotable);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAddCard, FCard&, Card);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRemoveCard, FCard&, Card);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnAddCard, FCard&, Card, bool, bIsPredictableContext);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnRemoveCard, FCard&, Card, bool, bIsPredictableContext);
 
 /**
  * Inventories of slotables.
@@ -41,85 +41,85 @@ public:
 	UFUNCTION(BlueprintPure)
 	const TArray<USlotable*>& GetSlotables() const;
 
-	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)
-	class UFormCoreComponent* OwningFormCore;
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "Inventory")
+	UFormCoreComponent* OwningFormCore;
 
 	UFUNCTION(BlueprintPure)
-	TArray<USlotable*> GetSlotablesOfType(const TSubclassOf<USlotable>& SlotableClass) const;
+	TArray<USlotable*> GetSlotablesOfClass(const TSubclassOf<USlotable>& InSlotableClass) const;
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	USlotable* Server_AddSlotable(const TSubclassOf<USlotable>& SlotableClass, UConstituent* Origin);
+	USlotable* Server_AddSlotable(const TSubclassOf<USlotable>& InSlotableClass, UConstituent* Origin);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	bool Server_RemoveSlotable(USlotable* Slotable, const bool bRemoveSlot);
+	bool Server_RemoveSlotable(USlotable* Slotable, const bool bInRemoveSlot);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	void Server_RemoveSlotableByIndex(const int32 Index, const bool bRemoveSlot);
+	void Server_RemoveSlotableByIndex(const int32 InIndex, const bool bInRemoveSlot);
 	
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	USlotable* Server_SetSlotable(const TSubclassOf<USlotable>& SlotableClass, const int32 Index, const bool bSlotMustBeNullOrEmpty, UConstituent* Origin);
+	USlotable* Server_SetSlotable(const TSubclassOf<USlotable>& InSlotableClass, const int32 InIndex, const bool bInSlotMustBeNullOrEmpty, UConstituent* Origin);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	USlotable* Server_InsertSlotable(const TSubclassOf<USlotable>& SlotableClass, const int32 Index, UConstituent* Origin);
+	USlotable* Server_InsertSlotable(const TSubclassOf<USlotable>& InSlotableClass, const int32 InIndex, UConstituent* Origin);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	bool Server_SwapSlotables(USlotable* SlotableA, USlotable* SlotableB);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	void Server_SwapSlotablesByIndex(const int32 IndexA, const int32 IndexB);
+	void Server_SwapSlotablesByIndex(const int32 InIndexA, const int32 InIndexB);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	void Server_TradeSlotablesBetweenInventories(USlotable* SlotableA, USlotable* SlotableB);
 
-	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	bool Server_AddSharedCard(const TSubclassOf<UCardObject>& CardClass, float CustomLifetime = 0);
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, meta = (AutoCreateRefTerm = "InCustomLifetime"))
+	bool Server_AddSharedCard(const TSubclassOf<UCardObject>& InCardClass, const float InCustomLifetime = 0);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	bool Server_RemoveSharedCard(const TSubclassOf<UCardObject>& CardClass);
+	bool Server_RemoveSharedCard(const TSubclassOf<UCardObject>& InCardClass);
+
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, meta = (AutoCreateRefTerm = "InCustomLifetime"))
+	bool Server_AddOwnedCard(const TSubclassOf<UCardObject>& InCardClass, const int32 InInOwnerConstituentInstanceId, const float InCustomLifetime = 0);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	bool Server_AddOwnedCard(const TSubclassOf<UCardObject>& CardClass, const uint8 InOwnerConstituentInstanceId, float CustomLifetime = 0);
+	bool Server_RemoveOwnedCard(const TSubclassOf<UCardObject>& InCardClass, const int32 InOwnerConstituentInstanceId);
 
-	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	bool Server_RemoveOwnedCard(const TSubclassOf<UCardObject>& CardClass, const uint8 InOwnerConstituentInstanceId);
+	UFUNCTION(BlueprintCallable, meta = (AutoCreateRefTerm = "InCustomLifetime"))
+	bool Predicted_AddSharedCard(const TSubclassOf<UCardObject>& InCardClass, const float InCustomLifetime = 0);
 
 	UFUNCTION(BlueprintCallable)
-	bool Predicted_AddSharedCard(const TSubclassOf<UCardObject>& CardClass, float CustomLifetime = 0);
-
-	UFUNCTION(BlueprintCallable)
-	bool Predicted_RemoveSharedCard(const TSubclassOf<UCardObject>& CardClass);
+	bool Predicted_RemoveSharedCard(const TSubclassOf<UCardObject>& InCardClass);
 	
-	void UpdateAndRunBufferedInputs(UConstituent* Constituent);
+	void UpdateAndRunBufferedInputs(UConstituent* Constituent) const;
 
-	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	bool Predicted_AddOwnedCard(const TSubclassOf<UCardObject>& CardClass, const uint8 InOwnerConstituentInstanceId, float CustomLifetime = 0);
+	UFUNCTION(BlueprintCallable, meta = (AutoCreateRefTerm = "InCustomLifetime"))
+	bool Predicted_AddOwnedCard(const TSubclassOf<UCardObject>& InCardClass, const int32 InOwnerConstituentInstanceId, const float InCustomLifetime = 0);
 
-	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
-	bool Predicted_RemoveOwnedCard(const TSubclassOf<UCardObject>& CardClass, const uint8 InOwnerConstituentInstanceId);
-
-	UFUNCTION(BlueprintPure)
-	bool HasSlotable(const TSubclassOf<USlotable>& SlotableClass);
+	UFUNCTION(BlueprintCallable)
+	bool Predicted_RemoveOwnedCard(const TSubclassOf<UCardObject>& InCardClass, const int32 InOwnerConstituentInstanceId);
 
 	UFUNCTION(BlueprintPure)
-	uint8 SlotableCount(const TSubclassOf<USlotable>& SlotableClass);
+	bool HasSlotableOfClass(const TSubclassOf<USlotable>& InSlotableClass);
 
 	UFUNCTION(BlueprintPure)
-	bool HasSharedCard(const TSubclassOf<UCardObject>& CardClass) const;
+	int32 SlotableCount(const TSubclassOf<USlotable>& InSlotableClass);
 
 	UFUNCTION(BlueprintPure)
-	bool HasOwnedCard(const TSubclassOf<UCardObject>& CardClass, const uint8 InOwnerConstituentInstanceId) const;
+	bool HasSharedCard(const TSubclassOf<UCardObject>& InCardClass) const;
+
+	UFUNCTION(BlueprintPure)
+	bool HasOwnedCard(const TSubclassOf<UCardObject>& InCardClass, const int32 InOwnerConstituentInstanceId) const;
 
 	//Will return 0 if could not find or infinite lifetime.
 	UFUNCTION(BlueprintPure)
-	float GetSharedCardLifetime(const TSubclassOf<UCardObject>& CardClass);
+	float GetSharedCardLifetime(const TSubclassOf<UCardObject>& InCardClass);
 
 	//Will return 0 if could not find or infinite lifetime.
 	UFUNCTION(BlueprintPure)
-	float GetOwnedCardLifetime(const TSubclassOf<UCardObject>& CardClass, const uint8 InOwnerConstituentInstanceId);
+	float GetOwnedCardLifetime(const TSubclassOf<UCardObject>& InCardClass, const int32 InOwnerConstituentInstanceId);
 
 	//Only on client.
 	UFUNCTION(BlueprintPure)
-	TArray<UCardObject*> GetCardObjects(const TSubclassOf<UCardObject>& CardClass);
+	const TArray<UCardObject*>& Client_GetCardObjects() const;
 
 	UFUNCTION(BlueprintCallable)
 	int32 GetRemainingCapacity() const;
@@ -148,11 +148,11 @@ public:
 
 	void ReassignAllConstituentInstanceIds();
 
-	void RemoveCardsOfOwner(const uint8 OwnerConstituentInstanceId);
+	void RemoveCardsOfOwner(const int32 InOwnerConstituentInstanceId);
 
 	bool IsDynamicLength() const;
 
-	TArray<const FCard*> GetCardsOfClass(const TSubclassOf<UCardObject> Class) const;
+	TArray<const FCard*> GetCardsOfClass(const TSubclassOf<UCardObject> InClass) const;
 
 	UPROPERTY(BlueprintAssignable)
 	FOnAddSlotable Server_OnAddSlotable;
@@ -161,47 +161,46 @@ public:
 	FOnRemoveSlotable Server_OnRemoveSlotable;
 
 	UPROPERTY(BlueprintAssignable)
-	FOnAddCard Server_OnAddCard;
+	FOnAddCard OnAddCard;
 
 	UPROPERTY(BlueprintAssignable)
-	FOnRemoveCard Server_OnRemoveCard;
+	FOnRemoveCard OnRemoveCard;
 
 protected:
 
 	virtual void BeginDestroy() override;
 
 	//These must be registered with the FormCharacterComponent first.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory")
 	TArray<UInputAction*> OrderedInputBindings;
-	
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+
+	//Initially spawned slotables.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory")
 	TArray<TSubclassOf<USlotable>> InitialOrderedSlotableClasses;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	//Initially spawned cards with infinite lifetime.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory")
 	TArray<TSubclassOf<UCardObject>> InitialSharedCardClassesInfiniteLifetime;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	//Class that is used to fill empty inventory slots.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory")
 	TSubclassOf<USlotable> EmptySlotableClass;
 
 	//Whether slotables can be added.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	uint8 bIsDynamic:1;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory")
+	bool bIsDynamic;
 
 	//Whether the slotables in the inventory can be changed.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	uint8 bIsChangeLocked:1;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory")
+	bool bIsChangeLocked;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	uint8 Capacity = uint8();
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = 1, ClampMax = 127), Category = "Inventory")
+	int32 Capacity = int32();
 
-	/**
-	 * Called after a slotable is added to an inventory.
-	 */
+	//Called after a slotable is added to an inventory.
 	void InitializeSlotable(USlotable* Slotable, UConstituent* Origin);
-
-	/**
-	 * Called before a slotable is removed from an inventory.
-	 */
+	
+	//Called before a slotable is removed from an inventory.
 	void DeinitializeSlotable(USlotable* Slotable);
 
 private:
@@ -209,7 +208,7 @@ private:
 	UFUNCTION()
 	void OnRep_Slotables();
 	
-	UPROPERTY(Replicated, VisibleAnywhere, ReplicatedUsing = OnRep_Slotables)
+	UPROPERTY(Replicated, VisibleAnywhere, ReplicatedUsing = OnRep_Slotables, Category = "Inventory")
 	TArray<USlotable*> Slotables;
 
 	TArray<USlotable*> ClientSubObjectListRegisteredSlotables;
@@ -222,22 +221,22 @@ private:
 	UPROPERTY(Replicated)
 	TArray<FCard> Cards;
 
-	UPROPERTY(VisibleAnywhere)
+	UPROPERTY(VisibleAnywhere, Category = "Inventory")
 	TArray<UCardObject*> ClientCardObjects;
 	
-	USlotable* CreateUninitializedSlotable(const TSubclassOf<USlotable>& SlotableClass) const;
+	USlotable* CreateUninitializedSlotable(const TSubclassOf<USlotable>& InSlotableClass) const;
 
-	UCardObject* CreateUninitializedCardObject(const TSubclassOf<UCardObject>& CardClass) const;
+	UCardObject* CreateUninitializedCardObject(const TSubclassOf<UCardObject>& InCardClass) const;
 
 	void ClientCheckAndUpdateCardObjects();
 
-	uint8 LastAssignedConstituentId;
+	uint8 LastAssignedConstituentId = 0;
 
-	uint8 ConstituentCount;
+	uint8 ConstituentCount = 0;
 
 	uint8 bIsOnFormCharacter:1;
 
 	uint8 bInitialized:1;
 
-	float GetCardLifetime(const TSubclassOf<UCardObject>& CardClass, int32 InOwnerConstituentInstanceId);
+	float GetCardLifetime(const TSubclassOf<UCardObject>& InCardClass, const int32 InOwnerConstituentInstanceId);
 };

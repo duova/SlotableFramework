@@ -207,30 +207,30 @@ public:
 
 	//Executes an action, which acts as an identifier for certain event graphs. See UConstituent description for details.
 	//ActionId can only be between 1-63 inclusive.
-	UFUNCTION(BlueprintCallable)
+	UFUNCTION(BlueprintCallable, meta = (AutoCreateRefTerm = "bInIsPredictableContext"))
 	void ExecuteAction(const int32 InActionId, const bool bInIsPredictableContext);
 
-	void InternalExecuteAction(const uint8 InActionId, const bool bInIsPredictableContext);
+	void InternalExecuteAction(const uint8 InActionId, const bool bInIsPredictableContext = false);
 
 	//Called when an action is executed on the server.
-	UFUNCTION(BlueprintImplementableEvent)
+	UFUNCTION(BlueprintImplementableEvent, BlueprintInternalUseOnly)
 	void Server_OnExecute(const int32 InActionId);
 
 	//Called when an action is executed on the server and client predictively.
 	//Only use functions marked Predicted_.
 	//bIsFirstPerson is only valid on the client.
-	UFUNCTION(BlueprintImplementableEvent)
+	UFUNCTION(BlueprintImplementableEvent, BlueprintInternalUseOnly)
 	void Predicted_OnExecute(const int32 InActionId, const bool bInIsReplaying, const bool bIsFirstPerson,
 	                         const bool bIsServer);
 
 	//TimeSinceLastActionSet does not increment past 655 seconds.
 
 	//Called when an action is executed on the autonomous client.
-	UFUNCTION(BlueprintImplementableEvent)
+	UFUNCTION(BlueprintImplementableEvent, BlueprintInternalUseOnly)
 	void Autonomous_OnExecute(const int32 InActionId, const float InTimeSinceExecution, const bool bIsFirstPerson);
 
 	//Called when an action is executed on the simulated client.
-	UFUNCTION(BlueprintImplementableEvent)
+	UFUNCTION(BlueprintImplementableEvent, BlueprintInternalUseOnly)
 	void Simulated_OnExecute(const int32 InActionId, const float InTimeSinceExecution, const bool bIsFirstPerson);
 
 	//Input down for the input registered to the UConstituent in UFormCharacterComponent.
@@ -247,7 +247,7 @@ public:
 
 	static bool IsIdWithinRange(const uint8 InId);
 
-	UFUNCTION(BlueprintGetter)
+	UFUNCTION(BlueprintPure)
 	int32 GetInstanceId() const;
 
 	//Trace originating UConstituent until nullptr and then find the UFormCoreComponent.
@@ -289,6 +289,9 @@ public:
 		                         TSubclassOf<UCardObject>>());
 
 	void HandleBufferInputTimeout();
+
+	UFUNCTION(BlueprintPure)
+	UFormCoreComponent* GetFormCoreComponent() const;
 
 	//Unique identifier within each inventory.
 	UPROPERTY(Replicated)
