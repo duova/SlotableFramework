@@ -7,6 +7,7 @@
 #include "Components/ActorComponent.h"
 #include "FormCoreComponent.generated.h"
 
+class UFormResourceComponent;
 class UFormStatComponent;
 class USfHealthComponent;
 class UFormQueryComponent;
@@ -89,6 +90,8 @@ public:
 	USfHealthComponent* GetHealth() const;
 
 	UFormStatComponent* GetFormStat() const;
+
+	UFormResourceComponent* GetFormResource() const;
 	
 	void SetMovementStatsDirty() const;
 
@@ -112,6 +115,8 @@ public:
 	//Ticks the low frequency tick event on constituents at this rate.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "FormCoreComponent", meta = (ClampMin = 1, ClampMax = 20))
 	int32 LowFrequencyTicksPerSecond = 10;
+
+	float CalculatedTimeBetweenLowFrequencyTicks = 0;
 
 	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "FormCoreComponent")
 	float WalkSpeedStat;
@@ -170,6 +175,9 @@ private:
 
 	UPROPERTY()
 	UFormStatComponent* FormStat;
+
+	UPROPERTY()
+	UFormResourceComponent* FormResource;
 	
 	TMap<FGameplayTag, FTriggerDelegate> Triggers;
 	

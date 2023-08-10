@@ -9,6 +9,7 @@
 #include "SfHealthComponent.generated.h"
 
 
+class UFormStatComponent;
 class USfHealthComponent;
 class UFormCoreComponent;
 class UConstituent;
@@ -114,6 +115,9 @@ public:
 
 	virtual void BeginPlay() override;
 
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
+							   FActorComponentTickFunction* ThisTickFunction) override;
+
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	//Arrays in these functions are intentionally left as copy value as in BP the user is expected to create processor class
@@ -145,6 +149,8 @@ public:
 
 	void SetupSfHealth(UFormCoreComponent* InFormCore);
 	
+	void SecondarySetupSfHealth();
+	
 	virtual const FHealthChangeData& AddHealthChangeDataAndCompress(const float InValue, const float OutValue, UConstituent* Source,
 									   const TArray<TSubclassOf<UHealthChangeProcessor>>& InProcessors,
 									   const float InTimeoutTimestamp);
@@ -162,6 +168,21 @@ protected:
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "SfHealthComponent")
 	FGameplayTag MaxHealthStatTag;
 
+	//Stat to use for constant health regeneration if stats are available.
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "SfHealthComponent")
+	FGameplayTag HealthRegenerationPerSecond;
+
+	//Stat to use for constant health degeneration if stats are available.
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "SfHealthComponent")
+	FGameplayTag HealthDegenerationPerSecond;
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "SfHealthComponent", meta = (ClampMin = 0, ClampMax = 10))
+	int32 HealthConstantUpdatesPerSecond = 2;
+
+	float CalculatedTimeBetweenHealthUpdates = 0;
+
+	float HealthUpdateTimer = 0;
+
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, meta = (ClampMin = 0.1, ClampMax = 999999), Category = "SfHealthComponent")
 	float MaxHealthOverride;
 
@@ -177,6 +198,9 @@ protected:
 	
 	UPROPERTY()
 	UFormCoreComponent* FormCore;
+
+	UPROPERTY()
+	UFormStatComponent* FormStat;
 
 private:
 	inline static TArray<UClass*> AllHealthChangeProcessorClassesSortedByName = TArray<UClass*>();

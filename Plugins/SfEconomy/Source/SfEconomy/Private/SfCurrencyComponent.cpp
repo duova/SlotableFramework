@@ -20,8 +20,7 @@ bool FCurrencyValuePair::operator==(const FCurrencyValuePair& Other) const
 
 bool FCurrencyValuePair::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
 {
-	bOutSuccess = true;
-	Ar << Currency;
+	Currency.NetSerialize_Packed(Ar, Map, bOutSuccess);
 	Ar << Value;
 	return bOutSuccess;
 }

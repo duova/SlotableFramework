@@ -195,7 +195,7 @@ protected:
 	bool bIsChangeLocked;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = 1, ClampMax = 127), Category = "Inventory")
-	int32 Capacity = int32();
+	int32 Capacity;
 
 	//Called after a slotable is added to an inventory.
 	void InitializeSlotable(USlotable* Slotable, UConstituent* Origin);

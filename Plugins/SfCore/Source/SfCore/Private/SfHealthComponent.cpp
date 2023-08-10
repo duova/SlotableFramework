@@ -85,7 +85,7 @@ void UDeathHandler::InternalClientOnDeathRPC_Implementation(USfHealthComponent* 
 USfHealthComponent::USfHealthComponent()
 {
 	if (!GetOwner()) return;
-	PrimaryComponentTick.bCanEverTick = false;
+	PrimaryComponentTick.bCanEverTick = true;
 	bReplicateUsingRegisteredSubObjectList = true;
 	SetIsReplicatedByDefault(true);
 }
@@ -130,6 +130,23 @@ void USfHealthComponent::BeginPlay()
 	//or overwrite Health with the correct value. We make sure we don't overwrite FormCore's max health value since that is
 	//always correct.
 	Health = GetMaxHealth();
+	CalculatedTimeBetweenHealthUpdates = 1 / HealthConstantUpdatesPerSecond;
+}
+
+void USfHealthComponent::TickComponent(float DeltaTime, ELevelTick TickType,
+	FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	//Apply consistent health changes.
+	if (!FormStat) return;
+	HealthUpdateTimer += DeltaTime;
+	if (HealthUpdateTimer > CalculatedTimeBetweenHealthUpdates)
+	{
+		HealthUpdateTimer -= CalculatedTimeBetweenHealthUpdates;
+		const float HealthChange = FormCore->GetFormStat()->GetStat(HealthRegenerationPerSecond) - FormCore->
+			GetFormStat()->GetStat(HealthDegenerationPerSecond);
+		ApplyHealthChange(HealthChange * CalculatedTimeBetweenHealthUpdates, nullptr, TArray<TSubclassOf<UHealthChangeProcessor>>());
+	}
 }
 
 void USfHealthComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -216,6 +233,12 @@ void USfHealthComponent::SetupSfHealth(UFormCoreComponent* InFormCore)
 {
 	FormCore = InFormCore;
 	Health = GetMaxHealth();
+}
+
+void USfHealthComponent::SecondarySetupSfHealth()
+{
+	if (!FormCore) return;
+	FormStat = FormCore->GetFormStat();
 }
 
 const FHealthChangeData& USfHealthComponent::AddHealthChangeDataAndCompress(

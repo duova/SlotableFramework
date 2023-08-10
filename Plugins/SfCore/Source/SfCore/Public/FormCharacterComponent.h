@@ -7,6 +7,7 @@
 #include "Constituent.h"
 #include "Card.h"
 #include "EnhancedInputComponent.h"
+#include "FormResourceComponent.h"
 #include "FormCharacterComponent.generated.h"
 
 /* ***************************************************************
@@ -162,15 +163,6 @@
  * Movement speed must be predicted as it is a movement variable and will make the CMC issue corrections every time
  * it is changed if not. As such, every card is simply given a +/- multiplicative/additive movement speed modifier,
  * which is applied by the card change functions to the CMC movement speed variable automatically.
- *
- * TODO: Delay should be available on all nodes to ensure post relevancy accuracy.
- * Delay
- * 
- * Most Predicted_ nodes have a delay float that will delay the execution of the node by the given time. This is to
- * allow for delaying functionality by allowing the Predicted_ implementation to know about the delay, so it can account
- * for it during playback. For example, if the state changed 100ms before playback finished, then a FX node will start
- * the expected effects 100ms late. However, this would not work if the effect was in fact delayed by a non-prediction
- * safe timer node, altering the starting time.
  */
 
 class UInventory;
@@ -296,7 +288,9 @@ public:
 
 	TArray<FIdentifiedActionSet> PendingActionSets;
 
-	TArray<FCardIdentifiersInAnInventory> InventoryCardIdentifiers;
+	TArray<FCardIdentifiersInAnInventory> CardIdentifiersInInventories;
+
+	TArray<FResource> Resources;
 
 	virtual void Clear() override;
 	virtual void SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& NewAccel,
@@ -331,6 +325,8 @@ struct FSfNetworkMoveData : FCharacterNetworkMoveData
 
 	TArray<FCardIdentifiersInAnInventory> CardIdentifiersInInventories;
 
+	TArray<FResource> Resources;
+
 	FSfNetworkMoveData();
 
 	virtual bool Serialize(UCharacterMovementComponent& CharacterMovement, FArchive& Ar, UPackageMap* PackageMap,
@@ -343,10 +339,10 @@ enum ECorrectionConditionFlags : uint8
 {
 	Repredict_Movement = 0x01,
 	Repredict_NetClock = 0x02,
-	//We must repredict both to repredict one because they are reliant on each other.
-	Repredict_ActionSetsAndCards = 0x04,
+	//We must repredict all three to repredict one because they are reliant on each other.
+	Repredict_ActionSetsCardsResources = 0x04,
 	//This overrides the update flag as if we rollback we guarantee that we send server state anyway.
-	Update_Cards = 0x08 //If update we only want to respond with changes and not rollback cards specifically.
+	Update_Cards = 0x08, //If update we only want to respond with changes and not rollback cards specifically.
 };
 
 struct FSfNetworkMoveDataContainer : FCharacterNetworkMoveDataContainer
@@ -367,6 +363,8 @@ struct FSfMoveResponseDataContainer : FCharacterMoveResponseDataContainer
 	TArray<FUint16_Quantize100> TimeSinceLastAction;
 
 	TArray<FInventoryCards> CardResponse;
+
+	TArray<FResource> ResourcesResponse;
 
 	FSfMoveResponseDataContainer();
 
@@ -420,6 +418,8 @@ public:
 	bool IsReplaying() const;
 
 	void SetupFormCharacter(UFormCoreComponent* FormCoreComponent);
+
+	void SecondarySetupFormCharacter();
 
 	float CalculateFuturePredictedTimestamp(const float InAdditionalTime) const;
 
@@ -494,7 +494,7 @@ protected:
 
 	//This is used to determine how the pipeline is supposed to handle the separate sections of correction data to rollback
 	//as little as possible and send as little as possible.
-	uint8 CorrectionConditionFlags = 0; //Only first 4 bits is used, bit field can't be used due to dereferencing.
+	uint8 CorrectionConditionFlags = 0; //Only first 5 bits is used, bit field can't be used due to dereferencing.
 
 	//This is obviously not optimal as we are already sending the client TimeStamp. However, this is the most direct way
 	//of ensuring that time discrepancies will not cause more rollbacks - by having the clock incremented in tandem with
@@ -534,6 +534,15 @@ protected:
 	//We copy CardResponse to the inventory and set false in PerformMovement if is true.
 	uint8 bClientCardsWereUpdated:1;
 
+	TArray<FResource> ClientSentResources;
+	TArray<FResource> OldClientSentResources;
+
+	TArray<FResource> ResourcesResponse;
+
+	//If this is false, we shouldn't use ResourcesResponse.
+	//We copy ResourcesResponse to the FormResource and set false in PerformMovement if is true.
+	uint8 bClientResourcesWereUpdated:1;
+
 	FOnPostRollback OnPostRollback;
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "FormCharacterComponent")
@@ -562,6 +571,8 @@ protected:
 	void HandleInventoryDifferencesAndSetCorrectionFlags(UInventory* Inventory,
 	                                                     const FCardIdentifiersInAnInventory& InCardIdentifierInventory);
 
+	void HandleResourcesDifferencesAndSetCorrectionFlags(const UFormResourceComponent* FormResourceComponent, const TArray<FResource>& InResources);
+
 	virtual void SfServerCheckClientError();
 
 	virtual void UpdateFromAdditionInputs();
@@ -571,10 +582,14 @@ protected:
 	void CorrectActionSets();
 
 	void CorrectCards();
+	
+	void CorrectResources() const;
 
 	void PackActionSets();
 
 	void PackCards();
+	
+	void PackResources();
 
 	void PackInventoryCardIdentifiers();
 
@@ -608,4 +623,16 @@ private:
 
 	//Gets the bits of the input sets as one value.
 	uint32 GetInputSetsJoinedBits() const;
+
+	bool bReferencesGathered = false;
+
+	float TimeBetweenResourceUpdate = 0;
+
+	uint8 ResourceUpdatesPerSecond = 0;
+
+	UPROPERTY()
+	UFormResourceComponent* FormResource;
+
+	UPROPERTY()
+	UFormStatComponent* FormStat;
 };

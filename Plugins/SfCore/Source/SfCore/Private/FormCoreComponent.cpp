@@ -10,6 +10,7 @@
 #include "FormCharacterComponent.h"
 #include "SfHealthComponent.h"
 #include "FormQueryComponent.h"
+#include "FormResourceComponent.h"
 #include "FormStatComponent.h"
 #include "Net/UnrealNetwork.h"
 
@@ -39,6 +40,11 @@ USfHealthComponent* UFormCoreComponent::GetHealth() const
 UFormStatComponent* UFormCoreComponent::GetFormStat() const
 {
 	return FormStat;
+}
+
+UFormResourceComponent* UFormCoreComponent::GetFormResource() const
+{
+	return FormResource;
 }
 
 bool UFormCoreComponent::Server_ActivateTrigger(const FGameplayTag Trigger)
@@ -91,6 +97,7 @@ void UFormCoreComponent::BeginPlay()
 	FormQuery = Cast<UFormQueryComponent>(GetOwner()->FindComponentByClass(UFormQueryComponent::StaticClass()));
 	SfHealth = Cast<USfHealthComponent>(GetOwner()->FindComponentByClass(USfHealthComponent::StaticClass()));
 	FormStat = Cast<UFormStatComponent>(GetOwner()->FindComponentByClass(UFormStatComponent::StaticClass()));
+	FormResource = Cast<UFormResourceComponent>(GetOwner()->FindComponentByClass(UFormResourceComponent::StaticClass()));
 
 	if (FormCharacter)
 	{
@@ -105,6 +112,26 @@ void UFormCoreComponent::BeginPlay()
 	if (FormQuery)
 	{
 		FormQuery->SetupFormQuery(this);
+	}
+
+	if (FormResource)
+	{
+		FormResource->SetupFormResource(this);
+	}
+
+	if (SfHealth)
+	{
+		SfHealth->SecondarySetupSfHealth();
+	}
+
+	if (FormCharacter)
+	{
+		FormCharacter->SecondarySetupFormCharacter();
+	}
+	
+	if (FormResource)
+	{
+		FormResource->SecondarySetupFormResource();
 	}
 
 	//This is used to narrow down the classes that need to be iterated through when serializing card classes with names.
@@ -151,6 +178,7 @@ void UFormCoreComponent::BeginPlay()
 	}
 
 	FormCharacter->CalculateMovementSpeed();
+	CalculatedTimeBetweenLowFrequencyTicks = 1.0 / LowFrequencyTicksPerSecond;
 }
 
 void UFormCoreComponent::BeginDestroy()
@@ -223,13 +251,13 @@ void UFormCoreComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 
 	if (!GetOwner()->HasAuthority()) return;
 	LowFrequencyTickDeltaTime += DeltaTime;
-	if (LowFrequencyTickDeltaTime >= 1.0 / LowFrequencyTicksPerSecond)
+	if (LowFrequencyTickDeltaTime > CalculatedTimeBetweenLowFrequencyTicks)
 	{
 		for (UConstituent* Constituent : ConstituentRegistry)
 		{
 			Constituent->Server_LowFrequencyTick(LowFrequencyTickDeltaTime);
 		}
-		LowFrequencyTickDeltaTime = 0;
+		LowFrequencyTickDeltaTime -= CalculatedTimeBetweenLowFrequencyTicks;
 	}
 }
 

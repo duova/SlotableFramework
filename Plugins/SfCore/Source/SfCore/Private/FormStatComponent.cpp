@@ -244,12 +244,19 @@ void UFormStatComponent::BeginPlay()
 {
 	Super::BeginPlay();
 	if (!GetOwner()) return;
+	for (const FStat& Stat : BaseStats)
+	{
+		if (!Stat.StatTag.IsValid())
+		{
+			UE_LOG(LogSfCore, Error, TEXT("Found invalid StatTag in BaseStats in UFormStatComponent."));
+		}
+	}
 	if (TArrayCheckDuplicate(BaseStats, [](const FStat& CheckedStatA, const FStat& CheckedStatB)
 	{
 		return CheckedStatA.StatTag == CheckedStatB.StatTag;
 	}))
 	{
-		UE_LOG(LogSfCore, Error, TEXT("Found duplicated StatTag in BaseStats."));
+		UE_LOG(LogSfCore, Error, TEXT("Found duplicated StatTag in BaseStats in UFormStatComponent."));
 	}
 	//We set current stats to base stats and replicate since we delta serialize off it.
 	CurrentStats.Items = BaseStats;
