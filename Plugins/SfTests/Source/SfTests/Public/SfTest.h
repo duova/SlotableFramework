@@ -7,24 +7,28 @@
 #include "UObject/Object.h"
 #include "SfTest.generated.h"
 
+DECLARE_DYNAMIC_DELEGATE(FTestProcedureDelegate);
+
 USTRUCT()
 struct FTestProcedure
 {
 	GENERATED_BODY()
 
-	float (*ProcedureFunction)();
+	FTestProcedureDelegate ProcedureDelegate;
 
 	ENetRole NetRole;
 
+	float PostProcedureWaitForSeconds;
+
 	FTestProcedure();
 
-	FTestProcedure(float (*InProcedureFunction)(), const ENetRole InNetRole);
+	FTestProcedure(const FTestProcedureDelegate& InProcedureDelegate, const ENetRole InNetRole, const float InPostProcedureWaitForSeconds);
 };
 
 /**
  * Base class for a test that will be found by the test runner and executed assuming conditions are matched.
  */
-UCLASS()
+UCLASS(Blueprintable)
 class SFTESTS_API USfTest : public USfObject
 {
 	GENERATED_BODY()
@@ -36,25 +40,37 @@ public:
 	USfTest();
 	
 	//Number of clients the session should have for this test to be valid. Child class should write this value in the
-	//constructor. Runs for any number of clients if set to 0.
-	uint8 NumClientsRequired = 0;
+	//constructor. Runs for any number of clients if set to -1.
+	UPROPERTY(EditAnywhere, meta = (ClampMin = -1))
+	int32 NumClientsRequired = -1;
 
 	//The test runner will not find this test if it is disabled. Child class should write this value in the
 	//constructor.
+	UPROPERTY(EditAnywhere)
 	bool TestDisabled = false;
 	
 	void ServerExecute();
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
-	
-	virtual void OnServerInit();
+
+	//Route through player controller to allow for server rpc calls.
+	virtual int32 GetFunctionCallspace(UFunction* Function, FFrame* Stack) override;
+
+	//Route through player controller to allow for server rpc calls.
+	virtual bool CallRemoteFunction(UFunction* Function, void* Parms, FOutParmRec* OutParms, FFrame* Stack) override;
 
 	//Use AddProcedure to add procedures in order.
 	virtual void RegisterProcedures();
 
-	//Procedures are function pointers that are executed in order, on the specified net role, and return the to wait
-	//in seconds before executing the next procedure.
-	virtual void AddProcedure(float (*InProcedureFunction)(), ENetRole InNetRole);
+	//Use AddProcedure to add procedures in order.
+	UFUNCTION(BlueprintImplementableEvent)
+	void BlueprintRegisterProcedures();
+
+	//Procedures are delegates that are executed in order, on the specified net role.
+	UFUNCTION(BlueprintCallable)
+	virtual void AddProcedure(const FTestProcedureDelegate& InProcedureDelegate, const ENetRole InNetRole, const float InPostProcedureWaitForSeconds);
+	
+	virtual void OnServerInit();
 
 	//Clean up and revert world back to original state on deinit.
 	virtual void OnServerDeinit();
@@ -64,6 +80,23 @@ public:
 	virtual void OnClientDeinit();
 
 	virtual void Tick(const float DeltaTime);
+
+	UFUNCTION(BlueprintCallable)
+	void GenericAssert(const bool bInSuccess, const FString& SuccessText, const FString& FailText);
+
+	UFUNCTION(BlueprintCallable)
+	void AssertBool(const bool RuntimeValue, const bool ExpectedValue, const FString& Name);
+
+	UFUNCTION(BlueprintCallable)
+	void AssertInt(const int32 RuntimeValue, const int32 ExpectedValueMinInclusive, const int32 ExpectedValueMaxInclusive, const FString& Name);
+
+	UFUNCTION(BlueprintCallable)
+	void AssertFloat(const float RuntimeValue, const float ExpectedValueMinInclusive, const float ExpectedValueMaxInclusive, const FString& Name);
+
+	UFUNCTION(BlueprintCallable)
+	void Log(const FString& Message);
+
+	bool TestCanPass = true;
 
 private:
 	TArray<FTestProcedure> Procedures;
@@ -86,10 +119,10 @@ private:
 	void ClientExecute();
 
 	UFUNCTION(Server, Reliable)
-	void ClientBeginProcedureCallback();
+	void ServerClientBeginProcedureCallback();
 
 	UFUNCTION(Server, Reliable)
-	void ClientFinishProcedureCallback();
+	void ServerClientFinishProcedureCallback();
 
 	UFUNCTION()
 	void OnRep_CurrentProcedureIndex();

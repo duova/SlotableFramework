@@ -102,13 +102,15 @@ void USfHealthComponent::BeginPlay()
 	//Assign all health change processors an ID for net serialization.
 	if (!HealthChangeProcessorClassesFetched)
 	{
-		for (TObjectIterator<UClass> It; It; ++It)
+		AllHealthChangeProcessorClassesSortedByName = GetSubclassesOf(UHealthChangeProcessor::StaticClass());
+		for (int64 i = AllHealthChangeProcessorClassesSortedByName.Num() - 1; i >= 0; i--)
 		{
-			if (It->IsChildOf(UHealthChangeProcessor::StaticClass()) && !It->HasAnyClassFlags(CLASS_Abstract))
+			if (AllHealthChangeProcessorClassesSortedByName[i]->HasAnyClassFlags(CLASS_Abstract) || AllHealthChangeProcessorClassesSortedByName[i] == UHealthChangeProcessor::StaticClass())
 			{
-				AllHealthChangeProcessorClassesSortedByName.Add(*It);
+				AllHealthChangeProcessorClassesSortedByName.RemoveAt(i, 1, false);
 			}
 		}
+		AllHealthChangeProcessorClassesSortedByName.Shrink();
 		//We sort this in a deterministic order to index items.
 		AllHealthChangeProcessorClassesSortedByName.Sort([](const UClass& A, const UClass& B)
 		{

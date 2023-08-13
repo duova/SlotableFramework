@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
 #include "SfCoreClasses.h"
+#include "AssetRegistry/AssetRegistryModule.h"
 #include "SfObject.generated.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogSfCore, Log, All);
@@ -113,6 +114,66 @@ bool TArrayCheckDuplicate(const TArray<T>& Array, F&& Predicate)
 		}
 	}
 	return false;
+}
+
+//Note that this will load all derived blueprint classes into memory.
+inline TArray<UClass*> GetSubclassesOf(const TSubclassOf<UObject> ParentClass)
+{
+	TArray<UClass*> Subclasses;
+
+	//---Get native classes.---
+	
+	GetDerivedClasses(ParentClass, Subclasses, true);
+
+	//Remove blueprint classes.
+	for (int64 i = Subclasses.Num() - 1; i >= 0; i--)
+	{
+		if (!Subclasses[i]->IsNative()) Subclasses.RemoveAt(i, 1, false);
+	}
+	Subclasses.Shrink();
+
+	//---Get blueprint classes.---
+
+	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(FName("AssetRegistry"));
+	IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
+	TArray<FString> ContentPaths;
+	ContentPaths.Add(TEXT("/Game/Blueprints"));
+	AssetRegistry.ScanPathsSynchronous(ContentPaths);
+
+	FTopLevelAssetPath BaseClassPath = ParentClass->GetClassPathName();
+
+	//Get paths to derived classes.
+	TSet< FTopLevelAssetPath > DerivedPaths;
+	TArray< FTopLevelAssetPath > BasePaths;
+	BasePaths.Add(BaseClassPath);
+	TSet< FTopLevelAssetPath > Excluded;
+	AssetRegistry.GetDerivedClassNames(BasePaths, Excluded, DerivedPaths);
+
+	FARFilter Filter;
+	const FTopLevelAssetPath BPPath(UBlueprint::StaticClass()->GetClassPathName());
+	Filter.ClassPaths.Add(BPPath);
+	Filter.bRecursiveClasses = true;
+
+	TArray< FAssetData > AssetList;
+	AssetRegistry.GetAssets(Filter, AssetList);
+
+	//Get classes from asset list.
+	for (FAssetData& Asset : AssetList)
+	{
+		FAssetDataTagMapSharedView::FFindTagResult GeneratedClassPathPtr = Asset.TagsAndValues.FindTag("GeneratedClass");
+		if (GeneratedClassPathPtr.IsSet())
+		{
+			const FString ClassObjectPath = FPackageName::ExportTextPathToObjectPath(GeneratedClassPathPtr.GetValue());
+			const FTopLevelAssetPath ClassPath = FTopLevelAssetPath(ClassObjectPath);
+
+			if (!DerivedPaths.Contains(ClassPath)) continue;
+
+			FString Name = Asset.GetObjectPathString() + TEXT("_C");
+			Subclasses.Add(LoadObject<UClass>(nullptr, *Name));
+		}
+	}
+
+	return Subclasses;
 }
 
 USTRUCT()

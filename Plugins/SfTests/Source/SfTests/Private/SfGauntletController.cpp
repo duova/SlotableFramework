@@ -43,7 +43,14 @@ void USfGauntletController::OnPostMapChange(UWorld* World)
 	}
 }
 
-void USfGauntletController::SfEndSession()
+void USfGauntletController::SfEndSession(const bool bPassed)
 {
-	EndTest(0);
+	if (bPassed)
+	{
+		EndTest(0);
+	}
+	else
+	{
+		EndTest(-1);
+	}
 }

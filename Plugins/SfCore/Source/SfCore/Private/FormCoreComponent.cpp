@@ -137,13 +137,15 @@ void UFormCoreComponent::BeginPlay()
 	//This is used to narrow down the classes that need to be iterated through when serializing card classes with names.
 	if (!CardObjectClassesFetched)
 	{
-		for (TObjectIterator<UClass> It; It; ++It)
+		AllCardObjectClassesSortedByName = GetSubclassesOf(UCardObject::StaticClass());
+		for (int64 i = AllCardObjectClassesSortedByName.Num() - 1; i >= 0; i--)
 		{
-			if (It->IsChildOf(UCardObject::StaticClass()) && !It->HasAnyClassFlags(CLASS_Abstract))
+			if (AllCardObjectClassesSortedByName[i]->HasAnyClassFlags(CLASS_Abstract) || AllCardObjectClassesSortedByName[i] == UCardObject::StaticClass())
 			{
-				AllCardObjectClassesSortedByName.Add(*It);
+				AllCardObjectClassesSortedByName.RemoveAt(i, 1, false);
 			}
 		}
+		AllCardObjectClassesSortedByName.Shrink();
 		//We sort this in a deterministic order to index items.
 		AllCardObjectClassesSortedByName.Sort([](const UClass& A, const UClass& B)
 		{

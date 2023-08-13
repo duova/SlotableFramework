@@ -21,5 +21,5 @@ public:
 	UPROPERTY()
 	ASfTestRunner* ServerTestRunner;
 
-	static void SfEndSession();
+	static void SfEndSession(const bool bPassed);
 };

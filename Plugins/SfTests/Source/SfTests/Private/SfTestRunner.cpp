@@ -6,6 +6,7 @@
 #include "GauntletModule.h"
 #include "SfGauntletController.h"
 #include "SfTest.h"
+#include "GameFramework/GameModeBase.h"
 #include "Net/UnrealNetwork.h"
 
 ASfTestRunner::ASfTestRunner()
@@ -22,6 +23,7 @@ void ASfTestRunner::BeginPlay()
 	if (GetLocalRole() == ROLE_Authority)
 	{
 		UE_LOG(LogGauntlet, Display, TEXT("Test runner spawned as Authority."));
+		UE_LOG(LogGauntlet, Display, TEXT("Awaiting connections."));
 	}
 	if (GetLocalRole() == ROLE_AutonomousProxy)
 	{
@@ -31,8 +33,6 @@ void ASfTestRunner::BeginPlay()
 	{
 		UE_LOG(LogGauntlet, Display, TEXT("Test runner spawned as SimulatedProxy."));
 	}
-
-	UE_LOG(LogGauntlet, Display, TEXT("Awaiting connections."));
 }
 
 void ASfTestRunner::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -50,8 +50,12 @@ void ASfTestRunner::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	CurrentTest->Tick(DeltaTime);
-
+	if (!HasAuthority() && CurrentTest)
+	{
+		CurrentTest->ClientTick(DeltaTime);
+		CurrentTest->Tick(DeltaTime);
+	}
+	
 	//Only run rest of tick on server.
 	if (!HasAuthority()) return;
 
@@ -62,7 +66,6 @@ void ASfTestRunner::Tick(float DeltaTime)
 	if (CurrentTest)
 	{
 		CurrentTest->ServerTick(DeltaTime);
-		CurrentTest->ClientTick(DeltaTime);
 	}
 
 	//Perform setup.
@@ -72,18 +75,30 @@ void ASfTestRunner::Tick(float DeltaTime)
 		if (TimeSinceStart <= ConnectionWaitInSeconds) return;
 
 		//Index valid tests based on test configuration.
-		NumClients = GetWorld()->PlayerNum;
-		for (TObjectIterator<UClass> It; It; ++It)
+		NumClients = GetWorld()->GetAuthGameMode()->GetNumPlayers();
+		UE_LOG(LogGauntlet, Display, TEXT("Number of players in the world is: %d."), NumClients);
+
+		//Always set one client to autonomous so we can differentiate one client to spawn autonomous actors for.
+		if (NumClients != 0)
 		{
-			if (!It->IsChildOf(USfTest::StaticClass())) continue;
-			if (*It == USfTest::StaticClass()) continue;
-			const USfTest* TestCDO = static_cast<USfTest*>((*It)->GetDefaultObject());
-			if (TestCDO->NumClientsRequired != NumClients) return;
-			if (TestCDO->TestDisabled == true) return;
-			ServerIndexedTestsToRun.Add(*It);
+			APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
+			PlayerController->Possess(this);
+		}
+		
+		TArray<UClass*> TestClasses = GetSubclassesOf(USfTest::StaticClass());
+		
+		for (UClass* Class : TestClasses)
+		{
+			UE_LOG(LogGauntlet, Display, TEXT("Found class %s."), *Class->GetName());
+			if (!Class->IsChildOf(USfTest::StaticClass())) continue;
+			if (Class == USfTest::StaticClass()) continue;
+			const USfTest* TestCDO = static_cast<USfTest*>(Class->GetDefaultObject());
+			if (TestCDO->NumClientsRequired != NumClients && TestCDO->NumClientsRequired != -1) continue;
+			if (TestCDO->TestDisabled == true) continue;
+			ServerIndexedTestsToRun.Add(Class);
 		}
 		ServerSetupPerformed = true;
-		UE_LOG(LogGauntlet, Display, TEXT("SfTestRunner identified %i tests to run."), ServerIndexedTestsToRun.Num());
+		UE_LOG(LogGauntlet, Display, TEXT("SfTestRunner identified %d tests to run."), ServerIndexedTestsToRun.Num());
 	}
 
 	//Post setup.
@@ -95,7 +110,7 @@ void ASfTestRunner::Tick(float DeltaTime)
 			//End session if no more tests are available.
 			if (NextTestIndex >= ServerIndexedTestsToRun.Num())
 			{
-				ServerSfGauntletController->SfEndSession();
+				ServerSfGauntletController->SfEndSession(bIsPassing);
 				return;
 			}
 
@@ -121,7 +136,7 @@ bool ASfTestRunner::StartTest(const TSubclassOf<USfTest> TestClass)
 	return true;
 }
 
-void ASfTestRunner::EndTest()
+void ASfTestRunner::EndTest(const bool bPassed)
 {
 	if (!CurrentTest) return;
 	CurrentTest->OnServerDeinit();
@@ -129,4 +144,25 @@ void ASfTestRunner::EndTest()
 	RemoveReplicatedSubObject(CurrentTest);
 	UE_LOG(LogGauntlet, Display, TEXT("%s test ended."), *CurrentTest->GetClass()->GetName());
 	CurrentTest = nullptr;
+	if (!bPassed)
+	{
+		bIsPassing = false;
+	}
+}
+
+FString ASfTestRunner::GetNetRoleAsString(const ENetRole NetRole)
+{
+	if (NetRole == ROLE_Authority)
+	{
+		return FString("Authority");
+	}
+	if (NetRole == ROLE_AutonomousProxy)
+	{
+		return FString("AutonomousProxy");
+	}
+	if (NetRole == ROLE_SimulatedProxy)
+	{
+		return FString("SimulatedProxy");
+	}
+	return FString();
 }

@@ -4,20 +4,20 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "FormActor.generated.h"
+#include "FormPawn.generated.h"
 
 class UFormCoreComponent;
 /**
- * AActor with a FormCoreComponent.
- * Default actor for all forms that cannot move organically and are not player controlled.
+ * APawn with a FormCoreComponent.
+ * Default pawn for all forms that cannot move organically and are not player controlled.
  */
 UCLASS(Blueprintable)
-class SFCORE_API AFormActor : public AActor
+class SFCORE_API AFormPawn : public APawn
 {
 	GENERATED_BODY()
 
 public:
-	AFormActor();
+	AFormPawn();
 
 	UPROPERTY(BlueprintReadOnly, VisibleAnywhere)
 	UFormCoreComponent* FormCore;
