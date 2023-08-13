@@ -13,10 +13,10 @@ class USlotable;
 class UConstituent;
 class UCardObject;
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAddSlotable, USlotable*, Slotable);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRemoveSlotable, USlotable*, Slotable);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnAddCard, FCard&, Card, bool, bIsPredictableContext);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnRemoveCard, FCard&, Card, bool, bIsPredictableContext);
+DECLARE_DYNAMIC_DELEGATE_OneParam(FOnAddSlotable, USlotable*, Slotable);
+DECLARE_DYNAMIC_DELEGATE_OneParam(FOnRemoveSlotable, USlotable*, Slotable);
+DECLARE_DYNAMIC_DELEGATE_TwoParams(FOnAddCard, FCard&, Card, const bool, bIsPredictableContext);
+DECLARE_DYNAMIC_DELEGATE_TwoParams(FOnRemoveCard, FCard&, Card, const bool, bIsPredictableContext);
 
 /**
  * Inventories of slotables.
@@ -152,19 +152,35 @@ public:
 
 	bool IsDynamicLength() const;
 
-	TArray<const FCard*> GetCardsOfClass(const TSubclassOf<UCardObject> InClass) const;
+	TArray<const FCard*> GetCardsOfClass(const TSubclassOf<UCardObject>& InClass) const;
 
-	UPROPERTY(BlueprintAssignable)
-	FOnAddSlotable Server_OnAddSlotable;
+	//Bind an event that is called when a slotable of a certain class is added.
+	//Use the USlotable base class to trigger for any class.
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
+	void Server_BindOnAddSlotable(const TSubclassOf<USlotable>& InSlotableClass, const FOnAddSlotable& EventToBind);
 
-	UPROPERTY(BlueprintAssignable)
-	FOnRemoveSlotable Server_OnRemoveSlotable;
+	//Bind an event that is called when a slotable of a certain class is removed.
+	//Use the USlotable base class to trigger for any class.
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
+	void Server_BindOnRemoveSlotable(const TSubclassOf<USlotable>& InSlotableClass, const FOnRemoveSlotable& EventToBind);
 
-	UPROPERTY(BlueprintAssignable)
-	FOnAddCard OnAddCard;
+	//Bind an event that is called when a card of a certain class is added.
+	//Use the UCardObject base class to trigger for any class.
+	UFUNCTION(BlueprintCallable)
+	void BindOnAddCard(const TSubclassOf<UCardObject>& InCardClass, const FOnAddCard& EventToBind);
 
-	UPROPERTY(BlueprintAssignable)
-	FOnRemoveCard OnRemoveCard;
+	//Bind an event that is called when a card of a certain class is removed.
+	//Use the UCardObject base class to trigger for any class.
+	UFUNCTION(BlueprintCallable)
+	void BindOnRemoveCard(const TSubclassOf<UCardObject>& InCardClass, const FOnRemoveCard& EventToBind);
+
+	void CallBindedOnAddSlotableDelegates(USlotable* Slotable);
+
+	void CallBindedOnRemoveSlotableDelegates(USlotable* Slotable);
+
+	void CallBindedOnAddCardDelegates(FCard& Card, const bool bInIsPredictableContext);
+
+	void CallBindedOnRemoveCardDelegates(FCard& Card, const bool bInIsPredictableContext);
 
 protected:
 
@@ -239,4 +255,12 @@ private:
 	uint8 bInitialized:1;
 
 	float GetCardLifetime(const TSubclassOf<UCardObject>& InCardClass, const int32 InOwnerConstituentInstanceId);
+
+	TMap<TSubclassOf<USlotable>, TSet<FOnAddSlotable>> BindedOnAddSlotableDelegates;
+
+	TMap<TSubclassOf<USlotable>, TSet<FOnRemoveSlotable>> BindedOnRemoveSlotableDelegates;
+
+	TMap<TSubclassOf<UCardObject>, TSet<FOnAddCard>> BindedOnAddCardDelegates;
+
+	TMap<TSubclassOf<UCardObject>, TSet<FOnRemoveCard>> BindedOnRemoveCardDelegates;
 };

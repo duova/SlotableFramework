@@ -365,7 +365,7 @@ USlotable* UInventory::Server_AddSlotable(const TSubclassOf<USlotable>& InSlotab
 	if (ConstituentCount > 254 - InSlotableClass.GetDefaultObject()->InitialConstituentClasses.Num())
 	{
 		UE_LOG(LogTemp, Error,
-		       TEXT("Called Server_AddSlotable on UInventory class %s with max constituent count of 254 reached."));
+		       TEXT("Called Server_AddSlotable on UInventory class %s with max constituent count of 254 reached."), *GetClass()->GetName());
 		return nullptr;
 	}
 	USlotable* SlotableInstance = CreateUninitializedSlotable(InSlotableClass);
@@ -374,7 +374,7 @@ USlotable* UInventory::Server_AddSlotable(const TSubclassOf<USlotable>& InSlotab
 	InitializeSlotable(SlotableInstance, Origin);
 	ConstituentCount += SlotableInstance->GetConstituents().Num();
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
-	Server_OnAddSlotable.Broadcast(SlotableInstance);
+	CallBindedOnAddSlotableDelegates(SlotableInstance);
 	return SlotableInstance;
 }
 
@@ -427,7 +427,7 @@ void UInventory::Server_RemoveSlotableByIndex(const int32 InIndex, const bool bI
 		}
 		if (USlotable* Slotable = Slotables[InIndex])
 		{
-			Server_OnRemoveSlotable.Broadcast(Slotable);
+			CallBindedOnRemoveSlotableDelegates(Slotable);
 			ConstituentCount -= Slotable->GetConstituents().Num();
 			DeinitializeSlotable(Slotable);
 			//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
@@ -439,7 +439,7 @@ void UInventory::Server_RemoveSlotableByIndex(const int32 InIndex, const bool bI
 	{
 		if (USlotable* Slotable = Slotables[InIndex])
 		{
-			Server_OnRemoveSlotable.Broadcast(Slotable);
+			CallBindedOnRemoveSlotableDelegates(Slotable);
 		}
 		Server_SetSlotable(EmptySlotableClass, InIndex, false, nullptr);
 	}
@@ -482,7 +482,7 @@ USlotable* UInventory::Server_SetSlotable(const TSubclassOf<USlotable>& InSlotab
 				return nullptr;
 			}
 		}
-		Server_OnRemoveSlotable.Broadcast(CurrentSlotable);
+		CallBindedOnRemoveSlotableDelegates(CurrentSlotable);
 		DeinitializeSlotable(CurrentSlotable);
 		//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
 		CurrentSlotable->Destroy();
@@ -491,7 +491,7 @@ USlotable* UInventory::Server_SetSlotable(const TSubclassOf<USlotable>& InSlotab
 	Slotables[InIndex] = SlotableInstance;
 	InitializeSlotable(SlotableInstance, Origin);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
-	Server_OnAddSlotable.Broadcast(SlotableInstance);
+	CallBindedOnAddSlotableDelegates(SlotableInstance);
 	return SlotableInstance;
 }
 
@@ -530,7 +530,7 @@ USlotable* UInventory::Server_InsertSlotable(const TSubclassOf<USlotable>& InSlo
 	InitializeSlotable(SlotableInstance, Origin);
 	ConstituentCount += SlotableInstance->GetConstituents().Num();
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
-	Server_OnAddSlotable.Broadcast(SlotableInstance);
+	CallBindedOnAddSlotableDelegates(SlotableInstance);
 	return SlotableInstance;
 }
 
@@ -642,8 +642,8 @@ void UInventory::Server_TradeSlotablesBetweenInventories(USlotable* SlotableA, U
 		       *GetClass()->GetName());
 		return;
 	}
-	InventoryA->Server_OnRemoveSlotable.Broadcast(SlotableA);
-	InventoryB->Server_OnRemoveSlotable.Broadcast(SlotableB);
+	InventoryA->CallBindedOnRemoveSlotableDelegates(SlotableA);
+	InventoryB->CallBindedOnRemoveSlotableDelegates(SlotableB);
 	DeinitializeSlotable(SlotableA);
 	DeinitializeSlotable(SlotableB);
 	InventoryA->Slotables[IndexA] = DuplicateObject(SlotableB, SlotableA->GetTypedOuter<AActor>());
@@ -655,8 +655,8 @@ void UInventory::Server_TradeSlotablesBetweenInventories(USlotable* SlotableA, U
 	InitializeSlotable(InventoryB->Slotables[IndexB], OriginA);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, InventoryA);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, InventoryB);
-	InventoryA->Server_OnAddSlotable.Broadcast(InventoryA->Slotables[IndexA]);
-	InventoryB->Server_OnAddSlotable.Broadcast(InventoryB->Slotables[IndexB]);
+	InventoryA->CallBindedOnAddSlotableDelegates(InventoryA->Slotables[IndexA]);
+	InventoryB->CallBindedOnAddSlotableDelegates(InventoryB->Slotables[IndexB]);
 }
 
 bool UInventory::Server_AddSharedCard(const TSubclassOf<UCardObject>& InCardClass, const float InCustomLifetime)
@@ -728,7 +728,7 @@ bool UInventory::Server_AddOwnedCard(const TSubclassOf<UCardObject>& InCardClass
 		GetFormCharacter()->MarkCardsDirty();
 	}
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
-	OnAddCard.Broadcast(CardAdded, false);
+	CallBindedOnAddCardDelegates(CardAdded, false);
 	return true;
 }
 
@@ -741,7 +741,6 @@ bool UInventory::Server_RemoveOwnedCard(const TSubclassOf<UCardObject>& InCardCl
 		       *GetClass()->GetName());
 		return false;
 	}
-	int16 IndexToDestroy = INDEX_NONE;
 	for (FCard& Card : Cards)
 	{
 		if (Card.Class == InCardClass && Card.OwnerConstituentInstanceId == InOwnerConstituentInstanceId)
@@ -757,7 +756,7 @@ bool UInventory::Server_RemoveOwnedCard(const TSubclassOf<UCardObject>& InCardCl
 				return true;
 			}
 			//Otherwise remove it instantly.
-			OnRemoveCard.Broadcast(Card, false);
+			CallBindedOnRemoveCardDelegates(Card, false);
 			Cards.Remove(Card);
 			MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
 			return true;
@@ -829,7 +828,7 @@ bool UInventory::Predicted_AddOwnedCard(const TSubclassOf<UCardObject>& InCardCl
 		Cards.Emplace(InCardClass, FCard::ECardType::UseDefaultLifetimePredictedTimestamp, InOwnerConstituentInstanceId,
 		              GetFormCharacter());
 	}
-	OnAddCard.Broadcast(Cards.Last(), true);
+	CallBindedOnAddCardDelegates(Cards.Last(), true);
 	//We don't need to set correction pausing variables since we can start correcting instantly as this is predicted.
 	if (HasAuthority())
 	{
@@ -873,7 +872,7 @@ bool UInventory::Predicted_RemoveOwnedCard(const TSubclassOf<UCardObject>& InCar
 		if (Card.Class == InCardClass && Card.OwnerConstituentInstanceId == InOwnerConstituentInstanceId)
 		{
 			//We always instantly destroy as we should be able to sync instantly.
-			OnRemoveCard.Broadcast(Card, true);
+			CallBindedOnRemoveCardDelegates(Card, true);
 			Cards.Remove(Card);
 			if (HasAuthority())
 			{
@@ -1063,7 +1062,7 @@ bool UInventory::IsDynamicLength() const
 	return bIsDynamic;
 }
 
-TArray<const FCard*> UInventory::GetCardsOfClass(const TSubclassOf<UCardObject> InClass) const
+TArray<const FCard*> UInventory::GetCardsOfClass(const TSubclassOf<UCardObject>& InClass) const
 {
 	TArray<const FCard*> Result;
 	for (const FCard& Card : Cards)
@@ -1074,6 +1073,180 @@ TArray<const FCard*> UInventory::GetCardsOfClass(const TSubclassOf<UCardObject> 
 		}
 	}
 	return Result;
+}
+
+void UInventory::Server_BindOnAddSlotable(const TSubclassOf<USlotable>& InSlotableClass,
+	const FOnAddSlotable& EventToBind)
+{
+	if (!InSlotableClass.Get())
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Server_BindOnAddSlotable called with empty TSubclassOf in UInventory class %s."), *GetClass()->GetName());
+		return;
+	}
+	//Add to existing pair if possible, otherwise add pair.
+	for (TPair<TSubclassOf<USlotable>, TSet<FOnAddSlotable>>& Pair : BindedOnAddSlotableDelegates)
+	{
+		if (Pair.Key == InSlotableClass)
+		{
+			Pair.Value.Add(EventToBind);
+			return;
+		}
+	}
+	BindedOnAddSlotableDelegates.Emplace(InSlotableClass, TSet{ EventToBind });
+}
+
+void UInventory::Server_BindOnRemoveSlotable(const TSubclassOf<USlotable>& InSlotableClass,
+	const FOnRemoveSlotable& EventToBind)
+{
+	if (!InSlotableClass.Get())
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Server_BindOnRemoveSlotable called with empty TSubclassOf in UInventory class %s."), *GetClass()->GetName());
+		return;
+	}
+	//Add to existing pair if possible, otherwise add pair.
+	for (TPair<TSubclassOf<USlotable>, TSet<FOnRemoveSlotable>>& Pair : BindedOnRemoveSlotableDelegates)
+	{
+		if (Pair.Key == InSlotableClass)
+		{
+			Pair.Value.Add(EventToBind);
+			return;
+		}
+	}
+	BindedOnRemoveSlotableDelegates.Emplace(InSlotableClass, TSet{ EventToBind });
+}
+
+void UInventory::BindOnAddCard(const TSubclassOf<UCardObject>& InCardClass, const FOnAddCard& EventToBind)
+{
+	if (!InCardClass.Get())
+	{
+		UE_LOG(LogSfCore, Error, TEXT("BindOnAddCard called with empty TSubclassOf in UInventory class %s."), *GetClass()->GetName());
+		return;
+	}
+	//Add to existing pair if possible, otherwise add pair.
+	for (TPair<TSubclassOf<UCardObject>, TSet<FOnAddCard>>& Pair : BindedOnAddCardDelegates)
+	{
+		if (Pair.Key == InCardClass)
+		{
+			Pair.Value.Add(EventToBind);
+			return;
+		}
+	}
+	BindedOnAddCardDelegates.Emplace(InCardClass, TSet{ EventToBind });
+}
+
+void UInventory::BindOnRemoveCard(const TSubclassOf<UCardObject>& InCardClass, const FOnRemoveCard& EventToBind)
+{
+	if (!InCardClass.Get())
+	{
+		UE_LOG(LogSfCore, Error, TEXT("BindOnRemoveCard called with empty TSubclassOf in UInventory class %s."), *GetClass()->GetName());
+		return;
+	}
+	//Add to existing pair if possible, otherwise add pair.
+	for (TPair<TSubclassOf<UCardObject>, TSet<FOnRemoveCard>>& Pair : BindedOnRemoveCardDelegates)
+	{
+		if (Pair.Key == InCardClass)
+		{
+			Pair.Value.Add(EventToBind);
+			return;
+		}
+	}
+	BindedOnRemoveCardDelegates.Emplace(InCardClass, TSet{ EventToBind });
+}
+
+void UInventory::CallBindedOnAddSlotableDelegates(USlotable* Slotable)
+{
+	for (TPair<TSubclassOf<USlotable>, TSet<FOnAddSlotable>>& Pair : BindedOnAddSlotableDelegates)
+	{
+		//Always call if it is USlotable.
+		if (Pair.Key.Get() == USlotable::StaticClass())
+		{
+			for (FOnAddSlotable& Delegate : Pair.Value)
+			{
+				Delegate.ExecuteIfBound(Slotable);
+			}
+			continue;
+		}
+		//Otherwise call if it is the class of the added slotable.
+		if (Pair.Key == Slotable->GetClass())
+		{
+			for (FOnAddSlotable& Delegate : Pair.Value)
+			{
+				Delegate.ExecuteIfBound(Slotable);
+			}
+		}
+	}
+}
+
+void UInventory::CallBindedOnRemoveSlotableDelegates(USlotable* Slotable)
+{
+	for (TPair<TSubclassOf<USlotable>, TSet<FOnRemoveSlotable>>& Pair : BindedOnRemoveSlotableDelegates)
+	{
+		//Always call if it is USlotable.
+		if (Pair.Key.Get() == USlotable::StaticClass())
+		{
+			for (FOnRemoveSlotable& Delegate : Pair.Value)
+			{
+				Delegate.ExecuteIfBound(Slotable);
+			}
+			continue;
+		}
+		//Otherwise call if it is the class of the removed slotable.
+		if (Pair.Key == Slotable->GetClass())
+		{
+			for (FOnRemoveSlotable& Delegate : Pair.Value)
+			{
+				Delegate.ExecuteIfBound(Slotable);
+			}
+		}
+	}
+}
+
+void UInventory::CallBindedOnAddCardDelegates(FCard& Card, const bool bInIsPredictableContext)
+{
+	for (TPair<TSubclassOf<UCardObject>, TSet<FOnAddCard>>& Pair : BindedOnAddCardDelegates)
+	{
+		//Always call if it is UCardObject.
+		if (Pair.Key.Get() == UCardObject::StaticClass())
+		{
+			for (FOnAddCard& Delegate : Pair.Value)
+			{
+				Delegate.ExecuteIfBound(Card, bInIsPredictableContext);
+			}
+			continue;
+		}
+		//Otherwise call if it is the class of the added card.
+		if (Pair.Key == Card.Class)
+		{
+			for (FOnAddCard& Delegate : Pair.Value)
+			{
+				Delegate.ExecuteIfBound(Card, bInIsPredictableContext);
+			}
+		}
+	}
+}
+
+void UInventory::CallBindedOnRemoveCardDelegates(FCard& Card, const bool bInIsPredictableContext)
+{
+	for (TPair<TSubclassOf<UCardObject>, TSet<FOnRemoveCard>>& Pair : BindedOnRemoveCardDelegates)
+	{
+		//Always call if it is UCardObject.
+		if (Pair.Key.Get() == UCardObject::StaticClass())
+		{
+			for (FOnRemoveCard& Delegate : Pair.Value)
+			{
+				Delegate.ExecuteIfBound(Card, bInIsPredictableContext);
+			}
+			continue;
+		}
+		//Otherwise call if it is the class of the removed card.
+		if (Pair.Key == Card.Class)
+		{
+			for (FOnRemoveCard& Delegate : Pair.Value)
+			{
+				Delegate.ExecuteIfBound(Card, bInIsPredictableContext);
+			}
+		}
+	}
 }
 
 //Must be called after the slotable has been placed in an inventory.

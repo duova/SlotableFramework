@@ -173,10 +173,10 @@ void USfTest::ExecuteClientProcedureIfCorrectNetRole()
 	{
 		ServerClientBeginProcedureCallback();
 		Procedures[CurrentProcedureIndex].ProcedureDelegate.Execute();
-		//Limit min time until procedure end to 0.2 to ensure all client are able to perform the begin procedure callback
+		//Limit min time until procedure end to 0.1 to ensure all client are able to perform the begin procedure callback
 		//before any client calls the finish callback. This is to prevent the server from continuing to the next procedure
 		//before all clients are finished.
-		LocalTimeUntilProcedureEnd = FMath::Max(Procedures[CurrentProcedureIndex].PostProcedureWaitForSeconds, 0.5);
+		LocalTimeUntilProcedureEnd = FMath::Max(Procedures[CurrentProcedureIndex].PostProcedureWaitForSeconds, 0.1);
 		bLocalPendingEndProcedure = true;
 	}
 }
@@ -244,7 +244,7 @@ void USfTest::ServerClientFinishProcedureCallback_Implementation()
 	ClientsRunningCurrentProcedure--;
 	if (ClientsRunningCurrentProcedure != 0) return;
 	//To prevent a situation where a client calls the begin and end callback in a simultaneous way such that the server believes
-	//only one client exists and skips to the next procedure, the min time of a client procedure is 0.5 seconds.
+	//only one client exists and skips to the next procedure, the min time of a client procedure is 0.1 seconds.
 	//Start next procedure.
 	CurrentProcedureIndex++;
 	if (CurrentProcedureIndex >= Procedures.Num())
