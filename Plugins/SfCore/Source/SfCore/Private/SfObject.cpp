@@ -83,6 +83,12 @@ bool USfObject::IsFormCharacter()
 	return false;
 }
 
+AActor* USfObject::SpawnActorInOwnerWorld(const TSubclassOf<AActor>& InClass, const FVector& Location, const FRotator& Rotation)
+{
+	if (!GetOwner()) return nullptr;
+	return GetOwner()->GetWorld()->SpawnActor<AActor>(InClass, Location, Rotation);
+}
+
 UFormCharacterComponent* USfObject::GetFormCharacter()
 {
 	if (FormCharacterComponent) return FormCharacterComponent;

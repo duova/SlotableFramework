@@ -110,19 +110,19 @@ private:
 	uint8 ClientsRunningCurrentProcedure = 0;
 
 	UFUNCTION(NetMulticast, Reliable)
-	void InternalOnClientInit();
+	void NetMulticastInternalOnClientInit();
 
 	UFUNCTION(NetMulticast, Reliable)
-	void InternalOnClientDeinit();
+	void NetMulticastInternalOnClientDeinit();
 
 	UFUNCTION(NetMulticast, Reliable)
-	void ClientExecute();
+	void NetMulticastClientExecute();
 
 	UFUNCTION(Server, Reliable)
 	void ServerClientBeginProcedureCallback();
 
 	UFUNCTION(Server, Reliable)
-	void ServerClientFinishProcedureCallback();
+	void ServerClientFinishProcedureCallback(const bool bPassed);
 
 	UFUNCTION()
 	void OnRep_CurrentProcedureIndex();

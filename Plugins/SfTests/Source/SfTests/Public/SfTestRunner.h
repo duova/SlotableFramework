@@ -39,21 +39,28 @@ public:
 
 	bool bIsPassing = true;
 
+	UFUNCTION(NetMulticast, Reliable)
+	void NetMulticastEndTestSession(const bool bPassed);
+
+	UPROPERTY(Replicated)
+	uint8 NumClients;
+
 private:
 	UPROPERTY(Replicated)
 	USfTest* CurrentTest;
 
 	UPROPERTY(Replicated)
-	uint8 NumClients;
-
-	UPROPERTY(Replicated)
 	double TimeSinceStart;
 
-	static constexpr float ConnectionWaitInSeconds = 2.f;
+	static constexpr float ConnectionWaitInSeconds = 3.f;
 
 	TArray<UClass*> ServerIndexedTestsToRun;
 
 	bool ServerSetupPerformed = false;
 
 	uint8 NextTestIndex = 0;
+
+	FString DefaultMapName;
+
+	bool bServerKillWhenEmpty = false;
 };

@@ -48,6 +48,9 @@ public:
 
 	inline static constexpr int32 Int32MaxValue = 2147483647;
 
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
+	AActor* SpawnActorInOwnerWorld(const TSubclassOf<AActor>& InClass, const FVector& Location, const FRotator& Rotation);
+
 private:
 	UPROPERTY()
 	UFormCharacterComponent* FormCharacterComponent;

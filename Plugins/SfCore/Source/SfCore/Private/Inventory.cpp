@@ -25,6 +25,7 @@ void UInventory::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifeti
 	DefaultParams.bIsPushBased = true;
 	DefaultParams.Condition = COND_None;
 	DOREPLIFETIME_WITH_PARAMS_FAST(UInventory, Slotables, DefaultParams);
+	DOREPLIFETIME_WITH_PARAMS_FAST(UInventory, OwningFormCore, DefaultParams);
 	FDoRepLifetimeParams CardParams;
 	CardParams.bIsPushBased = true;
 	CardParams.Condition = COND_None;
@@ -927,7 +928,7 @@ void UInventory::ClientInitialize()
 			OrderedLastInputState.Add(false);
 		}
 	}
-	Client_Initialize();
+	//Client_Initialize();
 	bInitialized = true;
 }
 
@@ -980,19 +981,19 @@ void UInventory::ServerInitialize()
 	}
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
-	Server_Initialize();
+	//Server_Initialize();
 	bInitialized = true;
 }
 
 void UInventory::ClientDeinitialize()
 {
-	Client_Deinitialize();
+	//Client_Deinitialize();
 	bInitialized = false;
 }
 
 void UInventory::ServerDeinitialize()
 {
-	Server_Deinitialize();
+	//Server_Deinitialize();
 	bInitialized = false;
 }
 

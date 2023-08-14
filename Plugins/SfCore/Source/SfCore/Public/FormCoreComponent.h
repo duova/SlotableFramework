@@ -150,6 +150,7 @@ private:
 	UPROPERTY(Replicated, VisibleAnywhere, ReplicatedUsing = OnRep_Inventories, Category = "FormCoreComponent")
 	TArray<UInventory*> Inventories;
 
+	UPROPERTY()
 	TSet<UInventory*> ClientSubObjectListRegisteredInventories;
 
 	UPROPERTY(Replicated, VisibleAnywhere, Category = "FormCoreComponent")

@@ -13,5 +13,6 @@ AFormPawn::AFormPawn()
 	bReplicates = true;
 	CreateDefaultSubobject(FName("FormCore"), UFormCoreComponent::StaticClass(), UFormCoreComponent::StaticClass(), true, false);
 	PrimaryActorTick.bCanEverTick = true;
+	bReplicateUsingRegisteredSubObjectList = true;
 }
 

@@ -33,7 +33,7 @@ void USfTest::ServerExecute()
 		TestRunner->EndTest(TestCanPass);
 		return;
 	}
-	ClientExecute();
+	NetMulticastClientExecute();
 	bStartProcedures = true;
 	ExecuteServerProcedureIfCorrectNetRole();
 }
@@ -104,7 +104,7 @@ void USfTest::GenericAssert(const bool bInSuccess, const FString& SuccessText, c
 {
 	if (bInSuccess)
 	{
-		UE_LOG(LogGauntlet, Display, TEXT("%s Assert Suceeded: %s"),*GetClass()->GetName(), *SuccessText);
+		UE_LOG(LogGauntlet, Display, TEXT("%s Assert Succeeded: %s"),*GetClass()->GetName(), *SuccessText);
 		return;
 	}
 	UE_LOG(LogGauntlet, Error, TEXT("%s Assert Failed: %s"), *GetClass()->GetName(), *FailText);
@@ -115,7 +115,7 @@ void USfTest::AssertBool(const bool RuntimeValue, const bool ExpectedValue, cons
 {
 	if (RuntimeValue == ExpectedValue)
 	{
-		UE_LOG(LogGauntlet, Display, TEXT("%s Assert Suceeded In %s"), *Name, *GetClass()->GetName());
+		UE_LOG(LogGauntlet, Display, TEXT("%s Assert Succeeded In %s"), *Name, *GetClass()->GetName());
 		return;
 	}
 	UE_LOG(LogGauntlet, Error, TEXT("%s Assert Failed In %s: Expected %s was %s."), *Name, *GetClass()->GetName(),
@@ -127,7 +127,7 @@ void USfTest::AssertInt(const int32 RuntimeValue, const int32 ExpectedValueMinIn
 {
 	if (RuntimeValue >= ExpectedValueMinInclusive && RuntimeValue <= ExpectedValueMaxInclusive)
 	{
-		UE_LOG(LogGauntlet, Display, TEXT("%s Assert Suceeded In %s"), *Name, *GetClass()->GetName());
+		UE_LOG(LogGauntlet, Display, TEXT("%s Assert Succeeded In %s"), *Name, *GetClass()->GetName());
 		return;
 	}
 	UE_LOG(LogGauntlet, Error, TEXT("%s Assert Failed In %s: Expected between %d and %d was %d."), *Name,
@@ -139,7 +139,7 @@ void USfTest::AssertFloat(const float RuntimeValue, const float ExpectedValueMin
 {
 	if (RuntimeValue >= ExpectedValueMinInclusive && RuntimeValue <= ExpectedValueMaxInclusive)
 	{
-		UE_LOG(LogGauntlet, Display, TEXT("%s Assert Suceeded In %s"), *Name, *GetClass()->GetName());
+		UE_LOG(LogGauntlet, Display, TEXT("%s Assert Succeeded In %s"), *Name, *GetClass()->GetName());
 		return;
 	}
 	UE_LOG(LogGauntlet, Error, TEXT("%s Assert Failed In %s: Expected between %f and %f was %f."), *Name,
@@ -152,7 +152,7 @@ void USfTest::Log(const FString& Message)
 	UE_LOG(LogGauntlet, Display, TEXT("%s %s: %s"), *ASfTestRunner::GetNetRoleAsString(GetOwner()->GetLocalRole()), *GetClass()->GetName(), *Message);
 }
 
-void USfTest::ClientExecute_Implementation()
+void USfTest::NetMulticastClientExecute_Implementation()
 {
 	if (GetOwner()->HasAuthority()) return;
 	bStartProcedures = true;
@@ -173,9 +173,7 @@ void USfTest::ExecuteClientProcedureIfCorrectNetRole()
 	{
 		ServerClientBeginProcedureCallback();
 		Procedures[CurrentProcedureIndex].ProcedureDelegate.Execute();
-		//Limit min time until procedure end to 0.1 to ensure all client are able to perform the begin procedure callback
-		//before any client calls the finish callback. This is to prevent the server from continuing to the next procedure
-		//before all clients are finished.
+		//Min wait time of 0.1 seconds to allow for networked changes to propagate to prevent race conditions between test framework and Sf.
 		LocalTimeUntilProcedureEnd = FMath::Max(Procedures[CurrentProcedureIndex].PostProcedureWaitForSeconds, 0.1);
 		bLocalPendingEndProcedure = true;
 	}
@@ -187,15 +185,23 @@ void USfTest::ExecuteServerProcedureIfCorrectNetRole()
 	{
 		//Execute procedure and await the timer.
 		Procedures[CurrentProcedureIndex].ProcedureDelegate.Execute();
-		LocalTimeUntilProcedureEnd = Procedures[CurrentProcedureIndex].PostProcedureWaitForSeconds;
+		//Min wait time of 0.1 seconds to allow for networked changes to propagate to prevent race conditions between test framework and Sf.
+		LocalTimeUntilProcedureEnd = FMath::Max(Procedures[CurrentProcedureIndex].PostProcedureWaitForSeconds, 0.1);
 		bLocalPendingEndProcedure = true;
+		return;
 	}
 	if (Procedures[CurrentProcedureIndex].NetRole == ROLE_None)
 	{
-		LocalTimeUntilProcedureEnd = Procedures[CurrentProcedureIndex].PostProcedureWaitForSeconds;
+		//Min wait time of 0.1 seconds to allow for networked changes to propagate to prevent race conditions between test framework and Sf.
+		LocalTimeUntilProcedureEnd = FMath::Max(Procedures[CurrentProcedureIndex].PostProcedureWaitForSeconds, 0.1);
 		bLocalPendingEndProcedure = true;
+		return;
 	}
-	//Otherwise the server waits for the client callbacks.
+	//Otherwise the server waits for the client callbacks by setting the number of clients it is waiting for.
+	if (TestRunner->NumClients > 0)
+	{
+		ClientsRunningCurrentProcedure = Procedures[CurrentProcedureIndex].NetRole == ROLE_AutonomousProxy ? 1 : TestRunner->NumClients - 1;
+	}
 }
 
 void USfTest::ServerTick(const float DeltaTime)
@@ -226,25 +232,23 @@ void USfTest::ClientTick(const float DeltaTime)
 	if (LocalTimeUntilProcedureEnd < 0.f)
 	{
 		bLocalPendingEndProcedure = false;
-		ServerClientFinishProcedureCallback();
+		ServerClientFinishProcedureCallback(TestCanPass);
 	}
 }
 
 //Called on server.
 void USfTest::ServerClientBeginProcedureCallback_Implementation()
 {
-	//We increment an int to track the number of clients that are currently running a certain procedure.
-	ClientsRunningCurrentProcedure++;
 }
 
 //Called on server.
-void USfTest::ServerClientFinishProcedureCallback_Implementation()
+void USfTest::ServerClientFinishProcedureCallback_Implementation(const bool bPassed)
 {
+	//Set TestCanPass to false if client procedure did not pass.
+	TestCanPass &= bPassed;
 	//We decrease the int when clients are finished with the procedure to know when all clients are finished with the procedure.
 	ClientsRunningCurrentProcedure--;
 	if (ClientsRunningCurrentProcedure != 0) return;
-	//To prevent a situation where a client calls the begin and end callback in a simultaneous way such that the server believes
-	//only one client exists and skips to the next procedure, the min time of a client procedure is 0.1 seconds.
 	//Start next procedure.
 	CurrentProcedureIndex++;
 	if (CurrentProcedureIndex >= Procedures.Num())
@@ -252,10 +256,11 @@ void USfTest::ServerClientFinishProcedureCallback_Implementation()
 		TestRunner->EndTest(TestCanPass);
 		return;
 	}
+	ExecuteServerProcedureIfCorrectNetRole();
 	MARK_PROPERTY_DIRTY_FROM_NAME(USfTest, CurrentProcedureIndex, this);
 }
 
-void USfTest::InternalOnClientInit_Implementation()
+void USfTest::NetMulticastInternalOnClientInit_Implementation()
 {
 	if (GetOwner()->HasAuthority()) return;
 	OnClientInit();
@@ -264,7 +269,7 @@ void USfTest::InternalOnClientInit_Implementation()
 	UE_LOG(LogGauntlet, Display, TEXT("%s registered %d procedure(s) on client."), *GetClass()->GetName(), Procedures.Num());
 }
 
-void USfTest::InternalOnClientDeinit_Implementation()
+void USfTest::NetMulticastInternalOnClientDeinit_Implementation()
 {
 	if (GetOwner()->HasAuthority()) return;
 	OnClientDeinit();

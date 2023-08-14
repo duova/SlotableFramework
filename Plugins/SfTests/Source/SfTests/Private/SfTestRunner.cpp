@@ -20,6 +20,7 @@ ASfTestRunner::ASfTestRunner()
 void ASfTestRunner::BeginPlay()
 {
 	Super::BeginPlay();
+	DefaultMapName = GetWorld()->GetMapName();
 	if (GetLocalRole() == ROLE_Authority)
 	{
 		UE_LOG(LogGauntlet, Display, TEXT("Test runner spawned as Authority."));
@@ -50,6 +51,11 @@ void ASfTestRunner::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	if (bServerKillWhenEmpty && GetWorld()->GetAuthGameMode()->GetNumPlayers() == 0)
+	{
+		USfGauntletController::SfEndSession(bIsPassing);
+	}
+
 	if (!HasAuthority() && CurrentTest)
 	{
 		CurrentTest->ClientTick(DeltaTime);
@@ -76,6 +82,7 @@ void ASfTestRunner::Tick(float DeltaTime)
 
 		//Index valid tests based on test configuration.
 		NumClients = GetWorld()->GetAuthGameMode()->GetNumPlayers();
+		MARK_PROPERTY_DIRTY_FROM_NAME(ASfTestRunner, CurrentTest, this);
 		UE_LOG(LogGauntlet, Display, TEXT("Number of players in the world is: %d."), NumClients);
 
 		//Always set one client to autonomous so we can differentiate one client to spawn autonomous actors for.
@@ -110,7 +117,7 @@ void ASfTestRunner::Tick(float DeltaTime)
 			//End session if no more tests are available.
 			if (NextTestIndex >= ServerIndexedTestsToRun.Num())
 			{
-				ServerSfGauntletController->SfEndSession(bIsPassing);
+				NetMulticastEndTestSession(bIsPassing);
 				return;
 			}
 
@@ -126,12 +133,14 @@ bool ASfTestRunner::StartTest(const TSubclassOf<USfTest> TestClass)
 	if (CurrentTest) return false;
 	if (!TestClass.Get()) return false;
 	CurrentTest = NewObject<USfTest>(this, TestClass);
+	MARK_PROPERTY_DIRTY_FROM_NAME(ASfTestRunner, CurrentTest, this);
 	if (!CurrentTest) return false;
 	AddReplicatedSubObject(CurrentTest);
 	CurrentTest->TestRunner = this;
 	CurrentTest->OnServerInit();
-	CurrentTest->InternalOnClientInit();
+	CurrentTest->NetMulticastInternalOnClientInit();
 	CurrentTest->ServerExecute();
+	MARK_PROPERTY_DIRTY_FROM_NAME(ASfTestRunner, CurrentTest, this);
 	UE_LOG(LogGauntlet, Display, TEXT("%s test started."), *TestClass->GetName());
 	return true;
 }
@@ -140,14 +149,12 @@ void ASfTestRunner::EndTest(const bool bPassed)
 {
 	if (!CurrentTest) return;
 	CurrentTest->OnServerDeinit();
-	CurrentTest->InternalOnClientDeinit();
+	CurrentTest->NetMulticastInternalOnClientDeinit();
 	RemoveReplicatedSubObject(CurrentTest);
 	UE_LOG(LogGauntlet, Display, TEXT("%s test ended."), *CurrentTest->GetClass()->GetName());
 	CurrentTest = nullptr;
-	if (!bPassed)
-	{
-		bIsPassing = false;
-	}
+	MARK_PROPERTY_DIRTY_FROM_NAME(ASfTestRunner, CurrentTest, this);
+	bIsPassing &= bPassed;
 }
 
 FString ASfTestRunner::GetNetRoleAsString(const ENetRole NetRole)
@@ -165,4 +172,16 @@ FString ASfTestRunner::GetNetRoleAsString(const ENetRole NetRole)
 		return FString("SimulatedProxy");
 	}
 	return FString();
+}
+
+void ASfTestRunner::NetMulticastEndTestSession_Implementation(const bool bPassed)
+{
+	if (HasAuthority())
+	{
+		bServerKillWhenEmpty = true;
+	}
+	else
+	{
+		USfGauntletController::SfEndSession(bPassed);
+	}
 }

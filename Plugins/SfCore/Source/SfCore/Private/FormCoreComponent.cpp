@@ -6,7 +6,6 @@
 #include "CardObject.h"
 #include "Constituent.h"
 #include "Inventory.h"
-#include "Slotable.h"
 #include "FormCharacterComponent.h"
 #include "SfHealthComponent.h"
 #include "FormQueryComponent.h"
@@ -179,7 +178,11 @@ void UFormCoreComponent::BeginPlay()
 		}
 	}
 
-	FormCharacter->CalculateMovementSpeed();
+	if (FormCharacter)
+	{
+		FormCharacter->CalculateMovementSpeed();
+	}
+	
 	CalculatedTimeBetweenLowFrequencyTicks = 1.0 / LowFrequencyTicksPerSecond;
 }
 
@@ -291,6 +294,7 @@ FGameplayTag UFormCoreComponent::GetTeam()
 void UFormCoreComponent::Server_SetTeam(const FGameplayTag InTeam)
 {
 	Team = InTeam;
+	MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, Team, this);
 }
 
 UInventory* UFormCoreComponent::Server_AddInventory(const TSubclassOf<UInventory>& InInventoryClass)

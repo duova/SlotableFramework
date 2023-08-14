@@ -10,4 +10,5 @@ AFormCharacter::AFormCharacter(const FObjectInitializer& ObjectInitializer) : Su
 	FormCore = CreateDefaultSubobject<UFormCoreComponent>(FormCoreComponentName);
 	bReplicates = true;
 	PrimaryActorTick.bCanEverTick = true;
+	bReplicateUsingRegisteredSubObjectList = true;
 }
