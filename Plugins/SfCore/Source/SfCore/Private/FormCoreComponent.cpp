@@ -191,10 +191,9 @@ void UFormCoreComponent::BeginDestroy()
 	Super::BeginDestroy();
 	if (!GetOwner()) return;
 	if (!GetOwner()->HasAuthority()) return;
-	for (uint8 i = 0; i < Inventories.Num(); i++)
+	for (UInventory* Inventory : Inventories)
 	{
-		//We clear index 0 because the list shifts down.
-		Server_RemoveInventoryByIndex(0);
+		Inventory->ServerDeinitialize();
 	}
 }
 

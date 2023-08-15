@@ -82,18 +82,6 @@ void USlotable::AutonomousDeinitialize()
 
 void USlotable::ServerDeinitialize()
 {
-	for (int32 i = 0; i < Constituents.Num(); i++)
-	{
-		//We clear index 0 because the list shifts down. 
-		if (UConstituent* Constituent = Constituents[0])
-		{
-			ServerDeinitializeConstituent(Constituent);
-			//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
-			Constituent->Destroy();
-			Constituents.RemoveAt(0, 1, false);
-		}
-	}
-	MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, Constituents, this);
 	Server_Deinitialize();
 	ClientAutonomousDeinitialize();
 	for (UConstituent* Constituent : Constituents)
@@ -130,9 +118,7 @@ void USlotable::ServerInitializeConstituent(UConstituent* Constituent)
 void USlotable::ServerDeinitializeConstituent(UConstituent* Constituent)
 {
 	Constituent->ServerDeinitialize();
-	Constituent->OwningSlotable = nullptr;
 	//Constituent instance ids are recycled automatically.
-	MARK_PROPERTY_DIRTY_FROM_NAME(UConstituent, OwningSlotable, Constituent);
 	GetOwner()->RemoveReplicatedSubObject(Constituent);
 }
 

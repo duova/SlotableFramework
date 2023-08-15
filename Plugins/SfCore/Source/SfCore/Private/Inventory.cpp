@@ -49,45 +49,6 @@ void UInventory::AuthorityTick(float DeltaTime)
 	}
 }
 
-void UInventory::BeginDestroy()
-{
-	UObject::BeginDestroy();
-	if (!GetOwner()) return;
-	if (HasAuthority())
-	{
-		for (uint8 i = 0; i < Slotables.Num(); i++)
-		{
-			//We clear index 0 because the list shifts down.
-			if (USlotable* Slotable = Slotables[0])
-			{
-				DeinitializeSlotable(Slotable);
-				//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
-				Slotable->Destroy();
-			}
-			Slotables.RemoveAt(0, 1, false);
-			MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
-		}
-		Slotables.Shrink();
-		Cards.Empty();
-		MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
-	}
-	else
-	{
-		for (uint8 i = 0; i < ClientCardObjects.Num(); i++)
-		{
-			//We clear index 0 because the list shifts down.
-			if (UCardObject* Card = ClientCardObjects[0])
-			{
-				Card->Deinitialize();
-			}
-			ClientCardObjects.RemoveAt(0, 1, false);
-		}
-		ClientCardObjects.Shrink();
-		//We empty the list so the cards do not get created again.
-		Cards.Empty();
-	}
-}
-
 USlotable* UInventory::CreateUninitializedSlotable(const TSubclassOf<USlotable>& InSlotableClass) const
 {
 	if (!GetOwner()) return nullptr;
@@ -994,6 +955,10 @@ void UInventory::ServerDeinitialize()
 	Server_Deinitialize();
 	ClientAutonomousDeinitialize();
 	bInitialized = false;
+	for (USlotable* Slotable : Slotables)
+	{
+		DeinitializeSlotable(Slotable);
+	}
 }
 
 void UInventory::AssignConstituentInstanceId(UConstituent* Constituent)
