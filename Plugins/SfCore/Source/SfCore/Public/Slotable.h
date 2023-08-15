@@ -27,7 +27,7 @@ public:
 	
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	UPROPERTY(ReplicatedUsing = OnRep_OwningInventory, Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "Slotable")
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "Slotable")
 	class UInventory* OwningInventory;
 	
 	UFUNCTION(BlueprintPure)
@@ -36,25 +36,31 @@ public:
 	UFUNCTION(BlueprintPure)
 	TArray<UConstituent*> GetConstituentsOfClass(const TSubclassOf<UConstituent>& InConstituentClass);
 
-	void ClientInitialize();
+	void AutonomousInitialize();
 
 	void ServerInitialize();
 	
-	void ClientDeinitialize();
+	void AutonomousDeinitialize();
 
 	void ServerDeinitialize();
 
 	UFUNCTION(BlueprintImplementableEvent)
-	void Client_Initialize();
+	void Autonomous_Initialize();
 
 	UFUNCTION(BlueprintImplementableEvent)
 	void Server_Initialize();
 
 	UFUNCTION(BlueprintImplementableEvent)
-	void Client_Deinitialize();
+	void Autonomous_Deinitialize();
 
 	UFUNCTION(BlueprintImplementableEvent)
 	void Server_Deinitialize();
+
+	UFUNCTION(Client, Reliable)
+	void ClientAutonomousInitialize(UInventory* InOwningInventory);
+
+	UFUNCTION(Client, Reliable)
+	void ClientAutonomousDeinitialize();
 
 	void AssignConstituentInstanceId(UConstituent* Constituent);
 
@@ -62,8 +68,6 @@ public:
 	TArray<TSubclassOf<UConstituent>> InitialConstituentClasses;
 
 protected:
-
-	virtual void BeginDestroy() override;
 
 	/*
 	 * Called during slotable init.
@@ -83,12 +87,8 @@ private:
 	UPROPERTY(Replicated, VisibleAnywhere, ReplicatedUsing = OnRep_Constituents, Category = "Slotable")
 	TArray<UConstituent*> Constituents;
 
+	UPROPERTY()
 	TArray<UConstituent*> ClientSubObjectListRegisteredConstituents;
 
 	UConstituent* CreateUninitializedConstituent(const TSubclassOf<UConstituent>& InConstituentClass) const;
-
-	uint8 bAwaitingClientInit:1;
-
-	UFUNCTION()
-	void OnRep_OwningInventory();
 };

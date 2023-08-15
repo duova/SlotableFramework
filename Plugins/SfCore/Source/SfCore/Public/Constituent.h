@@ -173,8 +173,6 @@ class SFCORE_API UConstituent : public USfObject
 public:
 	UConstituent();
 
-	virtual void BeginDestroy() override;
-
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UPROPERTY(ReplicatedUsing = OnRep_OwningSlotable, Replicated, BlueprintReadOnly, VisibleAnywhere)
@@ -183,24 +181,12 @@ public:
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Constituent")
 	bool bEnableInputsAndPrediction = false;
 
-	//Note: Slotables should async load all assets on init and unload on deinit.
-
-	void ClientInitialize();
-
 	void ServerInitialize();
-
-	void ClientDeinitialize();
 
 	void ServerDeinitialize();
 
 	UFUNCTION(BlueprintImplementableEvent)
-	void Client_Initialize();
-
-	UFUNCTION(BlueprintImplementableEvent)
 	void Server_Initialize();
-
-	UFUNCTION(BlueprintImplementableEvent)
-	void Client_Deinitialize();
 
 	UFUNCTION(BlueprintImplementableEvent)
 	void Server_Deinitialize();

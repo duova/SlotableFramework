@@ -106,7 +106,9 @@ public:
 	UFUNCTION(BlueprintPure, BlueprintAuthorityOnly)
 	bool Server_HasTrigger(FGameplayTag Trigger);
 
-	UPROPERTY()
+	//References to all the constituents that isn't ordered. Used to iterate through all owned constituents on a form
+	//without accessing intermediate inventories and slotables.
+	UPROPERTY(Replicated)
 	TArray<UConstituent*> ConstituentRegistry;
 
 	UPROPERTY(EditAnywhere, Category = "FormCoreComponent")

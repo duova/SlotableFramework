@@ -63,4 +63,6 @@ private:
 	FString DefaultMapName;
 
 	bool bServerKillWhenEmpty = false;
+
+	float ServerAwaitClientDisconnectTimeout = 2.f;
 };

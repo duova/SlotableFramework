@@ -124,22 +124,22 @@ public:
 	UFUNCTION(BlueprintCallable)
 	int32 GetRemainingCapacity() const;
 
-	void ClientInitialize();
+	void AutonomousInitialize();
 
 	void ServerInitialize();
 	
-	void ClientDeinitialize();
+	void AutonomousDeinitialize();
 
 	void ServerDeinitialize();
 
 	UFUNCTION(BlueprintImplementableEvent)
-	void Client_Initialize();
+	void Autonomous_Initialize();
 
 	UFUNCTION(BlueprintImplementableEvent)
 	void Server_Initialize();
 
 	UFUNCTION(BlueprintImplementableEvent)
-	void Client_Deinitialize();
+	void Autonomous_Deinitialize();
 
 	UFUNCTION(BlueprintImplementableEvent)
 	void Server_Deinitialize();
@@ -223,6 +223,12 @@ private:
 
 	UFUNCTION()
 	void OnRep_Slotables();
+	
+	UFUNCTION(Client, Reliable)
+	void ClientAutonomousInitialize(UFormCoreComponent* InOwningFormCore);
+	
+	UFUNCTION(Client, Reliable)
+	void ClientAutonomousDeinitialize();
 	
 	UPROPERTY(Replicated, VisibleAnywhere, ReplicatedUsing = OnRep_Slotables, Category = "Inventory")
 	TArray<USlotable*> Slotables;

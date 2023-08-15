@@ -199,16 +199,6 @@ UConstituent::UConstituent()
 {
 }
 
-void UConstituent::BeginDestroy()
-{
-	Super::BeginDestroy();
-	if (!GetOwner()) return;
-	if (!HasAuthority())
-	{
-		ClientDeinitialize();
-	}
-}
-
 void UConstituent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -220,16 +210,6 @@ void UConstituent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, LastActionSetTimestamp, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, OriginatingConstituent, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, InstanceId, DefaultParams);
-}
-
-void UConstituent::OnRep_OwningSlotable()
-{
-	if (!GetOwner()) return;
-	if (bAwaitingClientInit && !HasAuthority())
-	{
-		bAwaitingClientInit = false;
-		ClientInitialize();
-	}
 }
 
 void UConstituent::SetFormCore()
@@ -252,25 +232,13 @@ void UConstituent::SetFormCore()
 	}
 }
 
-void UConstituent::ClientInitialize()
-{
-	SetFormCore();
-	FormCore->ConstituentRegistry.Add(this);
-	Client_Initialize();
-}
-
 void UConstituent::ServerInitialize()
 {
 	SetFormCore();
 	FormCore->ConstituentRegistry.Add(this);
+	MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, ConstituentRegistry, FormCore);
 	FormCore->GetFormQuery()->RegisterQueryDependencies(QueryDependencyClasses);
 	Server_Initialize();
-}
-
-void UConstituent::ClientDeinitialize()
-{
-	Client_Deinitialize();
-	FormCore->ConstituentRegistry.Remove(this);
 }
 
 void UConstituent::ServerDeinitialize()
@@ -278,6 +246,7 @@ void UConstituent::ServerDeinitialize()
 	Server_Deinitialize();
 	FormCore->GetFormQuery()->UnregisterQueryDependencies(QueryDependencyClasses);
 	FormCore->ConstituentRegistry.Remove(this);
+	MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, ConstituentRegistry, FormCore);
 	OwningSlotable->OwningInventory->RemoveCardsOfOwner(InstanceId);
 }
 

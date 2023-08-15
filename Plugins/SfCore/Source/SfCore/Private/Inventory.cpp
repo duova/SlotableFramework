@@ -14,8 +14,6 @@ UInventory::UInventory()
 	if (!GetOwner()) return;
 	bIsOnFormCharacter = false;
 	bInitialized = false;
-	//We can directly init here because when the constructor is called, the object should have a reference to its outer.
-	ClientInitialize();
 }
 
 void UInventory::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -87,7 +85,6 @@ void UInventory::BeginDestroy()
 		ClientCardObjects.Shrink();
 		//We empty the list so the cards do not get created again.
 		Cards.Empty();
-		ClientDeinitialize();
 	}
 }
 
@@ -897,7 +894,7 @@ bool UInventory::Predicted_RemoveOwnedCard(const TSubclassOf<UCardObject>& InCar
 	return false;
 }
 
-void UInventory::ClientInitialize()
+void UInventory::AutonomousInitialize()
 {
 	bIsOnFormCharacter = IsFormCharacter();
 	if (bIsOnFormCharacter)
@@ -928,7 +925,7 @@ void UInventory::ClientInitialize()
 			OrderedLastInputState.Add(false);
 		}
 	}
-	//Client_Initialize();
+	Autonomous_Initialize();
 	bInitialized = true;
 }
 
@@ -981,19 +978,21 @@ void UInventory::ServerInitialize()
 	}
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
-	//Server_Initialize();
+	ClientAutonomousInitialize(OwningFormCore);
+	Server_Initialize();
 	bInitialized = true;
 }
 
-void UInventory::ClientDeinitialize()
+void UInventory::AutonomousDeinitialize()
 {
-	//Client_Deinitialize();
+	Autonomous_Deinitialize();
 	bInitialized = false;
 }
 
 void UInventory::ServerDeinitialize()
 {
-	//Server_Deinitialize();
+	Server_Deinitialize();
+	ClientAutonomousDeinitialize();
 	bInitialized = false;
 }
 
@@ -1296,6 +1295,17 @@ void UInventory::OnRep_Slotables()
 		}
 	}
 	ClientSubObjectListRegisteredSlotables.Shrink();
+}
+
+void UInventory::ClientAutonomousInitialize_Implementation(UFormCoreComponent* InOwningFormCore)
+{
+	OwningFormCore = InOwningFormCore;
+	AutonomousInitialize();
+}
+
+void UInventory::ClientAutonomousDeinitialize_Implementation()
+{
+	AutonomousDeinitialize();
 }
 
 float UInventory::GetCardLifetime(const TSubclassOf<UCardObject>& InCardClass, const int32 InOwnerConstituentInstanceId)

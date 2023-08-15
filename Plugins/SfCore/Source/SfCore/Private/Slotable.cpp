@@ -9,32 +9,6 @@
 
 USlotable::USlotable()
 {
-	bAwaitingClientInit = false;
-	if (!GetOwner()) return;
-	if (HasAuthority())
-	{
-		if (InitialConstituentClasses.Num() > 32)
-		{
-			UE_LOG(LogSfCore, Error, TEXT("More than 32 constituents are in USlotable class %s. Removing excess."), *GetClass()->GetName());
-			while (InitialConstituentClasses.Num() > 32)
-			{
-				InitialConstituentClasses.RemoveAt(33, 1, false);
-			}
-			InitialConstituentClasses.Shrink();
-		}
-		//We don't instantly init as on the server we need to make sure the slotable is in an inventory first.
-		Constituents.Reserve(InitialConstituentClasses.Num());
-		for (auto ConstituentClass : InitialConstituentClasses)
-		{
-			UConstituent* ConstituentInstance = CreateUninitializedConstituent(ConstituentClass);
-			Constituents.Add(ConstituentInstance);
-			MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, Constituents, this);
-		}
-	}
-	else
-	{
-		bAwaitingClientInit = true;
-	}
 }
 
 void USlotable::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -69,62 +43,79 @@ TArray<UConstituent*> USlotable::GetConstituentsOfClass(const TSubclassOf<UConst
 	return ConstituentsOfClass;
 }
 
-void USlotable::ClientInitialize()
+void USlotable::AutonomousInitialize()
 {
-	Client_Initialize();
+	Autonomous_Initialize();
 }
 
 void USlotable::ServerInitialize()
 {
+	if (InitialConstituentClasses.Num() > 32)
+	{
+		UE_LOG(LogSfCore, Error, TEXT("More than 32 constituents are in USlotable class %s. Removing excess."), *GetClass()->GetName());
+		while (InitialConstituentClasses.Num() > 32)
+		{
+			InitialConstituentClasses.RemoveAt(33, 1, false);
+		}
+		InitialConstituentClasses.Shrink();
+	}
+	//We don't instantly init as on the server we need to make sure the slotable is in an inventory first.
+	Constituents.Reserve(InitialConstituentClasses.Num());
+	for (auto ConstituentClass : InitialConstituentClasses)
+	{
+		UConstituent* ConstituentInstance = CreateUninitializedConstituent(ConstituentClass);
+		Constituents.Add(ConstituentInstance);
+		MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, Constituents, this);
+	}
 	for (UConstituent* Constituent : Constituents)
 	{
 		ServerInitializeConstituent(Constituent);
 	}
 	Server_Initialize();
+	ClientAutonomousInitialize(OwningInventory);
 }
 
-void USlotable::ClientDeinitialize()
+void USlotable::AutonomousDeinitialize()
 {
-	Client_Deinitialize();
+	Autonomous_Deinitialize();
 }
 
 void USlotable::ServerDeinitialize()
 {
+	for (int32 i = 0; i < Constituents.Num(); i++)
+	{
+		//We clear index 0 because the list shifts down. 
+		if (UConstituent* Constituent = Constituents[0])
+		{
+			ServerDeinitializeConstituent(Constituent);
+			//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
+			Constituent->Destroy();
+			Constituents.RemoveAt(0, 1, false);
+		}
+	}
+	MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, Constituents, this);
 	Server_Deinitialize();
+	ClientAutonomousDeinitialize();
 	for (UConstituent* Constituent : Constituents)
 	{
 		ServerDeinitializeConstituent(Constituent);
 	}
 }
 
+void USlotable::ClientAutonomousInitialize_Implementation(UInventory* InOwningInventory)
+{
+	OwningInventory = InOwningInventory;
+	AutonomousInitialize();
+}
+
+void USlotable::ClientAutonomousDeinitialize_Implementation()
+{
+	AutonomousDeinitialize();
+}
+
 void USlotable::AssignConstituentInstanceId(UConstituent* Constituent)
 {
 	OwningInventory->AssignConstituentInstanceId(Constituent);
-}
-
-void USlotable::BeginDestroy()
-{
-	Super::BeginDestroy();
-	if (!GetOwner()) return;
-	if (HasAuthority())
-	{
-		for (int32 i = 0; i < Constituents.Num(); i++)
-		{
-			//We clear index 0 because the list shifts down. 
-			if (UConstituent* Constituent = Constituents[0])
-			{
-				ServerDeinitializeConstituent(Constituent);
-				//We manually mark the object as garbage so its deletion can be replicated sooner to clients.
-				Constituent->Destroy();
-				Constituents.RemoveAt(0, 1, false);
-			}
-		}
-		MARK_PROPERTY_DIRTY_FROM_NAME(USlotable, Constituents, this);
-	}
-	else
-	{
-		ClientDeinitialize();
-	}
 }
 
 void USlotable::ServerInitializeConstituent(UConstituent* Constituent)
@@ -192,13 +183,4 @@ UConstituent* USlotable::CreateUninitializedConstituent(const TSubclassOf<UConst
 		UE_LOG(LogSfCore, Error, TEXT("Failed to create UConstituent instance on USlotable class %s."), *GetClass()->GetName());
 	}
 	return ConstituentInstance;
-}
-
-void USlotable::OnRep_OwningInventory()
-{
-	if (bAwaitingClientInit)
-	{
-		bAwaitingClientInit = false;
-		ClientInitialize();
-	}
 }

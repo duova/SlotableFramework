@@ -279,6 +279,7 @@ void UFormCoreComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, SwimSpeedStat, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, FlySpeedStat, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, AccelerationStat, DefaultParams);
+	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, ConstituentRegistry, DefaultParams);
 }
 
 const TArray<UInventory*>& UFormCoreComponent::GetInventories()
