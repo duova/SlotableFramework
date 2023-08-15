@@ -175,7 +175,7 @@ public:
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	UPROPERTY(ReplicatedUsing = OnRep_OwningSlotable, Replicated, BlueprintReadOnly, VisibleAnywhere)
+	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere)
 	class USlotable* OwningSlotable;
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Constituent")
@@ -304,9 +304,6 @@ protected:
 	TArray<TSubclassOf<USfQuery>> QueryDependencyClasses;
 
 private:
-	UFUNCTION()
-	void OnRep_OwningSlotable();
-
 	void SetFormCore();
 
 	bool bAwaitingClientInit = true;
