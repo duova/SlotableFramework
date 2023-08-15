@@ -148,7 +148,7 @@ void UFormCoreComponent::BeginPlay()
 		//We sort this in a deterministic order to index items.
 		AllCardObjectClassesSortedByName.Sort([](const UClass& A, const UClass& B)
 		{
-			return A.GetFullName() > B.GetFullName();
+			return A.GetPathName() > B.GetPathName();
 		});
 		CardObjectClassesFetched = true;
 	}

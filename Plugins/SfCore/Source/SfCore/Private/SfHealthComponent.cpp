@@ -114,7 +114,7 @@ void USfHealthComponent::BeginPlay()
 		//We sort this in a deterministic order to index items.
 		AllHealthChangeProcessorClassesSortedByName.Sort([](const UClass& A, const UClass& B)
 		{
-			return A.GetFullName() > B.GetFullName();
+			return A.GetPathName() > B.GetPathName();
 		});
 		if (AllHealthChangeProcessorClassesSortedByName.Num() > 255)
 		{
