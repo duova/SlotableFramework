@@ -184,8 +184,6 @@ public:
 
 protected:
 
-	virtual void BeginDestroy() override;
-
 	//These must be registered with the FormCharacterComponent first.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory")
 	TArray<UInputAction*> OrderedInputBindings;
@@ -211,7 +209,7 @@ protected:
 	bool bIsChangeLocked;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = 1, ClampMax = 127), Category = "Inventory")
-	int32 Capacity;
+	int32 Capacity = 1;
 
 	//Called after a slotable is added to an inventory.
 	void InitializeSlotable(USlotable* Slotable, UConstituent* Origin);
