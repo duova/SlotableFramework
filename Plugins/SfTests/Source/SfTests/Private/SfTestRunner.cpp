@@ -20,6 +20,14 @@ ASfTestRunner::ASfTestRunner()
 void ASfTestRunner::BeginPlay()
 {
 	Super::BeginPlay();
+	if (IS_PUSH_MODEL_ENABLED())
+	{
+		UE_LOG(LogGauntlet, Display, TEXT("Push model is enabled."));
+	}
+	else
+	{
+		UE_LOG(LogGauntlet, Display, TEXT("Push model is disabled."));
+	}
 	DefaultMapName = GetWorld()->GetMapName();
 	if (GetLocalRole() == ROLE_Authority)
 	{
@@ -51,9 +59,12 @@ void ASfTestRunner::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (bServerKillWhenEmpty && GetWorld()->GetAuthGameMode()->GetNumPlayers() == 0)
+	if (bServerKillWhenEmpty)
 	{
-		USfGauntletController::SfEndSession(bIsPassing);
+		if (GetWorld()->GetAuthGameMode()->GetNumPlayers() == 0)
+		{
+			USfGauntletController::SfEndSession(bIsPassing);
+		}
 	}
 
 	if (!HasAuthority() && CurrentTest)
@@ -88,7 +99,7 @@ void ASfTestRunner::Tick(float DeltaTime)
 		//Always set one client to autonomous so we can differentiate one client to spawn autonomous actors for.
 		if (NumClients != 0)
 		{
-			APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
+			PlayerController = GetWorld()->GetFirstPlayerController();
 			PlayerController->Possess(this);
 		}
 		

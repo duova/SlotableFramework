@@ -56,12 +56,6 @@ public:
 	UFUNCTION(BlueprintImplementableEvent)
 	void Server_Deinitialize();
 
-	UFUNCTION(Client, Reliable)
-	void ClientAutonomousInitialize(UInventory* InOwningInventory);
-
-	UFUNCTION(Client, Reliable)
-	void ClientAutonomousDeinitialize();
-
 	void AssignConstituentInstanceId(UConstituent* Constituent);
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Slotable")
@@ -80,7 +74,12 @@ protected:
 	void ServerDeinitializeConstituent(UConstituent* Constituent);
 
 private:
+	UFUNCTION(Client, Reliable)
+	void ClientAutonomousInitialize(UInventory* InOwningInventory);
 
+	UFUNCTION(Client, Reliable)
+	void ClientAutonomousDeinitialize();
+	
 	UFUNCTION()
 	void OnRep_Constituents();
 	

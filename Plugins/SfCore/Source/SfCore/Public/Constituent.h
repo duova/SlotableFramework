@@ -227,7 +227,7 @@ public:
 	UFUNCTION(BlueprintImplementableEvent)
 	void OnInputUp(const bool bInIsPredictableContext);
 
-	//Ticks at a rate set in UFormCoreComponent.
+	//Opt in with bEnableLowFreqTick. Ticks at a rate set in UFormCoreComponent.
 	UFUNCTION(BlueprintImplementableEvent)
 	void Server_LowFrequencyTick(const float InDeltaTime);
 
@@ -298,12 +298,16 @@ public:
 	//Used to know how long ago the last action took place so we can fast forward the effects after replay.
 	FUint16_Quantize100 TimeSincePredictedLastActionSet = FUint16_Quantize100();
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	bool bEnableLowFreqTick = false;
+
 protected:
 	//USfQuery classes that this UConstituent depends on.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Constituent")
 	TArray<TSubclassOf<USfQuery>> QueryDependencyClasses;
 
 private:
+	
 	void SetFormCore();
 
 	bool bAwaitingClientInit = true;

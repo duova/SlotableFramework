@@ -231,34 +231,39 @@ void UFormCoreComponent::TickComponent(float DeltaTime, ELevelTick TickType,
                                        FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	if (!GetOwner()) return;
+
+	NonCompensatedServerFormTime += DeltaTime;
+
+	if (NonCompensatedServerFormTime * 0.1 - FMath::Floor(NonCompensatedServerFormTime * 0.1) <= DeltaTime * 0.1)
+	{
+		//Remove empty delegate bindings for inventories every 10 seconds.
+		for (UInventory* Inventory : Inventories)
+		{
+			Inventory->RemoveEmptyDelegateBindings();
+		}
+	}
+	
 	if (!GetOwner()->HasAuthority()) return;
+	//Server only.
 
 	for (UInventory* Inventory : Inventories)
 	{
 		Inventory->AuthorityTick(DeltaTime);
 	}
 
-	if (GetOwner()->HasAuthority())
-	{
-		NonCompensatedServerWorldTime = GetWorld()->TimeSeconds;
-	}
-	else
-	{
-		NonCompensatedServerWorldTime += DeltaTime;
-	}
-
-	if (static_cast<int>(NonCompensatedServerWorldTime) % 2)
+	if (NonCompensatedServerFormTime * 0.5 - FMath::Floor(NonCompensatedServerFormTime * 0.5) <= DeltaTime * 0.5)
 	{
 		//We synchronize every 2 seconds.
-		MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, NonCompensatedServerWorldTime, this);
+		MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, NonCompensatedServerFormTime, this);
 	}
-
-	if (!GetOwner()->HasAuthority()) return;
+	
 	LowFrequencyTickDeltaTime += DeltaTime;
 	if (LowFrequencyTickDeltaTime > CalculatedTimeBetweenLowFrequencyTicks)
 	{
 		for (UConstituent* Constituent : ConstituentRegistry)
 		{
+			if (!Constituent->bEnableLowFreqTick) continue;
 			Constituent->Server_LowFrequencyTick(LowFrequencyTickDeltaTime);
 		}
 		LowFrequencyTickDeltaTime -= CalculatedTimeBetweenLowFrequencyTicks;
@@ -273,7 +278,7 @@ void UFormCoreComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	DefaultParams.Condition = COND_None;
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, Inventories, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, Team, DefaultParams);
-	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, NonCompensatedServerWorldTime, DefaultParams);
+	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, NonCompensatedServerFormTime, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, WalkSpeedStat, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, SwimSpeedStat, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, FlySpeedStat, DefaultParams);
@@ -409,22 +414,22 @@ bool UFormCoreComponent::IsFirstPerson()
 
 float UFormCoreComponent::GetNonCompensatedServerWorldTime() const
 {
-	return NonCompensatedServerWorldTime;
+	return NonCompensatedServerFormTime;
 }
 
 float UFormCoreComponent::CalculateFutureServerTimestamp(const float InAdditionalTime) const
 {
-	return NonCompensatedServerWorldTime + InAdditionalTime;
+	return NonCompensatedServerFormTime + InAdditionalTime;
 }
 
 float UFormCoreComponent::CalculateTimeUntilServerTimestamp(const float InTimestamp) const
 {
-	return NonCompensatedServerWorldTime - InTimestamp;
+	return InTimestamp - NonCompensatedServerFormTime;
 }
 
 float UFormCoreComponent::CalculateTimeSinceServerTimestamp(const float InTimestamp) const
 {
-	return InTimestamp - NonCompensatedServerWorldTime;
+	return NonCompensatedServerFormTime - InTimestamp;
 }
 
 bool UFormCoreComponent::HasServerTimestampPassed(const float InTimestamp) const

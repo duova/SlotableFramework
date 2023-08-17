@@ -45,6 +45,9 @@ public:
 	UPROPERTY(Replicated)
 	uint8 NumClients;
 
+	UPROPERTY()
+	APlayerController* PlayerController;
+
 private:
 	UPROPERTY(Replicated)
 	USfTest* CurrentTest;
@@ -63,6 +66,4 @@ private:
 	FString DefaultMapName;
 
 	bool bServerKillWhenEmpty = false;
-
-	float ServerAwaitClientDisconnectTimeout = 2.f;
 };

@@ -10,16 +10,9 @@ DEFINE_LOG_CATEGORY(LogSfCore);
 void USfObject::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-	//Get blueprint class replicated properties and make them push based.
 	if (const UBlueprintGeneratedClass* BPClass = Cast<UBlueprintGeneratedClass>(GetClass()))
 	{
-		TArray<FLifetimeProperty> BPLifetimeProps;
-		BPClass->GetLifetimeBlueprintReplicationList(BPLifetimeProps);
-		for (FLifetimeProperty& Prop : BPLifetimeProps)
-		{
-			Prop.bIsPushBased = true;
-			OutLifetimeProps.AddUnique(Prop);
-		}
+		BPClass->GetLifetimeBlueprintReplicationList(OutLifetimeProps);
 	}
 }
 
@@ -105,6 +98,10 @@ UFormCharacterComponent* USfObject::GetFormCharacter()
 		bDoesNotHaveFormCharacter = true;
 	}
 	return Cast<UFormCharacterComponent>(GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()));
+}
+
+USfObject::USfObject()
+{
 }
 
 bool USfObject::HasAuthority() const

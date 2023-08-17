@@ -1033,7 +1033,7 @@ void UFormCharacterComponent::RemovePredictedCardWithEndedLifetimes() const
 		TArray<FCard>& Cards = Inventory->Cards;
 		for (int16 i = Cards.Num() - 1; i >= 0; i--)
 		{
-			if (Cards[i].bUsingPredictedTimestamp && CalculateTimeUntilPredictedTimestamp(Cards[i].LifetimeEndTimestamp)
+			if (Cards[i].bUsingPredictedTimestamp && Cards[i].LifetimeEndTimestamp > -1.f &&  CalculateTimeUntilPredictedTimestamp(Cards[i].LifetimeEndTimestamp)
 				< 0)
 			{
 				Cards.RemoveAt(i, 1, false);

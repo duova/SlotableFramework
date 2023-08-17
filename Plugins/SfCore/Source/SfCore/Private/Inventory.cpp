@@ -38,10 +38,10 @@ void UInventory::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifeti
 void UInventory::AuthorityTick(float DeltaTime)
 {
 	//We remove server timestamp cards with ended lifetimes only on the server.
-	//This is synchronize to clients through the FormCharacter and normal replication depending on the role of the client.
+	//This is synchronized to clients through the FormCharacter and normal replication depending on the role of the client.
 	for (int16 i = Cards.Num() - 1; i >= 0; i--)
 	{
-		if (!Cards[i].bUsingPredictedTimestamp && OwningFormCore->CalculateTimeUntilServerTimestamp(
+		if (!Cards[i].bUsingPredictedTimestamp && Cards[i].LifetimeEndTimestamp > -1.f && OwningFormCore->CalculateTimeUntilServerTimestamp(
 			Cards[i].LifetimeEndTimestamp) < 0)
 		{
 			Server_RemoveOwnedCard(Cards[i].Class, Cards[i].OwnerConstituentInstanceId);
@@ -212,18 +212,16 @@ bool UInventory::HasSharedCard(const TSubclassOf<UCardObject>& InCardClass) cons
 		       *GetClass()->GetName());
 		return false;
 	}
-	bool Value = false;
 	for (const FCard& Card : Cards)
 	{
 		//If disabled we don't count it as existing.
 		if (Card.bIsDisabledForDestroy) continue;
 		if (Card.Class == InCardClass && Card.OwnerConstituentInstanceId == 0)
 		{
-			Value = true;
-			break;
+			return true;
 		}
 	}
-	return Value;
+	return false;
 }
 
 bool UInventory::HasOwnedCard(const TSubclassOf<UCardObject>& InCardClass,
@@ -324,7 +322,8 @@ USlotable* UInventory::Server_AddSlotable(const TSubclassOf<USlotable>& InSlotab
 	if (ConstituentCount > 254 - InSlotableClass.GetDefaultObject()->InitialConstituentClasses.Num())
 	{
 		UE_LOG(LogTemp, Error,
-		       TEXT("Called Server_AddSlotable on UInventory class %s with max constituent count of 254 reached."), *GetClass()->GetName());
+		       TEXT("Called Server_AddSlotable on UInventory class %s with max constituent count of 254 reached."),
+		       *GetClass()->GetName());
 		return nullptr;
 	}
 	USlotable* SlotableInstance = CreateUninitializedSlotable(InSlotableClass);
@@ -510,7 +509,15 @@ bool UInventory::Server_SwapSlotables(USlotable* SlotableA, USlotable* SlotableB
 		       ), *GetClass()->GetName());
 		return false;
 	}
-	Server_SwapSlotablesByIndex(Slotables.Find(SlotableA), Slotables.Find(SlotableA));
+	if (SlotableA == SlotableB)
+	{
+		UE_LOG(LogSfCore, Error,
+		       TEXT(
+			       "Called Server_SwapSlotables on UInventory class %s with pointers to the same slotable."
+		       ), *GetClass()->GetName());
+		return false;
+	}
+	Server_SwapSlotablesByIndex(Slotables.Find(SlotableA), Slotables.Find(SlotableB));
 	return true;
 }
 
@@ -551,8 +558,16 @@ void UInventory::Server_SwapSlotablesByIndex(const int32 InIndexA, const int32 I
 		return;
 	}
 	//We can just use last because all originating constituents in all constituents should be the same.
-	UConstituent* OriginA = Slotables[InIndexA]->GetConstituents().Last()->GetOriginatingConstituent();
-	UConstituent* OriginB = Slotables[InIndexB]->GetConstituents().Last()->GetOriginatingConstituent();
+	UConstituent* OriginA = nullptr;
+	UConstituent* OriginB = nullptr;
+	if (Slotables[InIndexA]->GetConstituents().Num() > 0)
+	{
+		OriginA = Slotables[InIndexA]->GetConstituents().Last()->GetOriginatingConstituent();
+	}
+	if (Slotables[InIndexB]->GetConstituents().Num() > 0)
+	{
+		OriginB = Slotables[InIndexB]->GetConstituents().Last()->GetOriginatingConstituent();
+	}
 	DeinitializeSlotable(Slotables[InIndexA]);
 	DeinitializeSlotable(Slotables[InIndexB]);
 	USlotable* TempSlotablePtr = Slotables[InIndexA];
@@ -590,8 +605,16 @@ void UInventory::Server_TradeSlotablesBetweenInventories(USlotable* SlotableA, U
 	UInventory* InventoryA = SlotableA->OwningInventory;
 	UInventory* InventoryB = SlotableB->OwningInventory;
 	//We can just use last because all originating constituents in all constituents should be the same.
-	UConstituent* OriginA = SlotableA->GetConstituents().Last()->GetOriginatingConstituent();
-	UConstituent* OriginB = SlotableB->GetConstituents().Last()->GetOriginatingConstituent();
+	UConstituent* OriginA = nullptr;
+	UConstituent* OriginB = nullptr;
+	if (SlotableA->GetConstituents().Num() > 0)
+	{
+		OriginA = SlotableA->GetConstituents().Last()->GetOriginatingConstituent();
+	}
+	if (SlotableB->GetConstituents().Num() > 0)
+	{
+		OriginB = SlotableB->GetConstituents().Last()->GetOriginatingConstituent();
+	}
 	const int8 IndexA = InventoryA->GetSlotables().Find(SlotableA);
 	const int8 IndexB = InventoryB->GetSlotables().Find(SlotableB);
 	if (InventoryA->bIsChangeLocked || InventoryB->bIsChangeLocked)
@@ -631,7 +654,7 @@ bool UInventory::Server_RemoveSharedCard(const TSubclassOf<UCardObject>& InCardC
 }
 
 bool UInventory::Server_AddOwnedCard(const TSubclassOf<UCardObject>& InCardClass,
-                                     const int32 InInOwnerConstituentInstanceId, const float InCustomLifetime)
+                                     const int32 InOwnerConstituentInstanceId, const float InCustomLifetime)
 {
 	if (!HasAuthority())
 	{
@@ -639,10 +662,17 @@ bool UInventory::Server_AddOwnedCard(const TSubclassOf<UCardObject>& InCardClass
 		       *GetClass()->GetName());
 		return false;
 	}
+	if (InCustomLifetime < 0.f)
+	{
+		UE_LOG(LogSfCore, Error,
+		       TEXT("Called Server_AddOwnedCard on UInventory class %s with a custom lifetime less than 0."),
+		       *GetClass()->GetName());
+		return false;
+	}
 	for (FCard Card : Cards)
 	{
 		//Check for duplicates.
-		if (Card.Class == InCardClass && Card.OwnerConstituentInstanceId == InInOwnerConstituentInstanceId)
+		if (Card.Class == InCardClass && Card.OwnerConstituentInstanceId == InOwnerConstituentInstanceId)
 		{
 			return false;
 		}
@@ -653,12 +683,12 @@ bool UInventory::Server_AddOwnedCard(const TSubclassOf<UCardObject>& InCardClass
 		if (IsFormCharacter())
 		{
 			Cards.Emplace(InCardClass, FCard::ECardType::UseCustomLifetimePredictedTimestamp,
-			              InInOwnerConstituentInstanceId, GetFormCharacter(), nullptr, InCustomLifetime);
+			              InOwnerConstituentInstanceId, GetFormCharacter(), nullptr, InCustomLifetime);
 		}
 		else
 		{
 			Cards.Emplace(InCardClass, FCard::ECardType::UseCustomLifetimeServerTimestamp,
-			              InInOwnerConstituentInstanceId,
+			              InOwnerConstituentInstanceId,
 			              nullptr, OwningFormCore, InCustomLifetime);
 		}
 	}
@@ -667,12 +697,12 @@ bool UInventory::Server_AddOwnedCard(const TSubclassOf<UCardObject>& InCardClass
 		if (IsFormCharacter())
 		{
 			Cards.Emplace(InCardClass, FCard::ECardType::UseDefaultLifetimePredictedTimestamp,
-			              InInOwnerConstituentInstanceId, GetFormCharacter());
+			              InOwnerConstituentInstanceId, GetFormCharacter());
 		}
 		else
 		{
 			Cards.Emplace(InCardClass, FCard::ECardType::UseCustomLifetimeServerTimestamp,
-			              InInOwnerConstituentInstanceId,
+			              InOwnerConstituentInstanceId,
 			              nullptr, OwningFormCore);
 		}
 	}
@@ -687,7 +717,14 @@ bool UInventory::Server_AddOwnedCard(const TSubclassOf<UCardObject>& InCardClass
 		GetFormCharacter()->MarkCardsDirty();
 	}
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
-	CallBindedOnAddCardDelegates(CardAdded, false);
+	if (InOwnerConstituentInstanceId == 0)
+	{
+		CallBindedOnAddSharedCardDelegates(CardAdded, false);
+	}
+	else
+	{
+		CallBindedOnAddOwnedCardDelegates(CardAdded, false);
+	}
 	return true;
 }
 
@@ -700,30 +737,38 @@ bool UInventory::Server_RemoveOwnedCard(const TSubclassOf<UCardObject>& InCardCl
 		       *GetClass()->GetName());
 		return false;
 	}
-	for (FCard& Card : Cards)
+	for (int16 i = Cards.Num() - 1; i >= 0; i--)
 	{
-		if (Card.Class == InCardClass && Card.OwnerConstituentInstanceId == InOwnerConstituentInstanceId)
+		if (Cards[i].Class == InCardClass && Cards[i].OwnerConstituentInstanceId == InOwnerConstituentInstanceId)
 		{
 			if (IsFormCharacter())
 			{
 				//Same concept as above.
-				Card.bIsDisabledForDestroy = true;
-				Card.ServerAwaitClientSyncTimeoutTimestamp = Card.ServerAwaitClientSyncTimeoutDuration + GetWorld()->
+				Cards[i].bIsDisabledForDestroy = true;
+				Cards[i].ServerAwaitClientSyncTimeoutTimestamp = Cards[i].ServerAwaitClientSyncTimeoutDuration +
+					GetWorld()->
 					TimeSeconds;
 				GetFormCharacter()->MarkCardsDirty();
 				MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
 				return true;
 			}
 			//Otherwise remove it instantly.
-			CallBindedOnRemoveCardDelegates(Card, false);
-			Cards.Remove(Card);
+			if (InOwnerConstituentInstanceId == 0)
+			{
+				CallBindedOnRemoveSharedCardDelegates(Cards[i], false);
+			}
+			else
+			{
+				CallBindedOnAddOwnedCardDelegates(Cards[i], false);
+			}
+			Cards.RemoveAt(i);
 			MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
+			if (IsFormCharacter())
+			{
+				GetFormCharacter()->bMovementSpeedNeedsRecalculation = true;
+			}
 			return true;
 		}
-	}
-	if (IsFormCharacter())
-	{
-		GetFormCharacter()->bMovementSpeedNeedsRecalculation = true;
 	}
 	return false;
 }
@@ -787,7 +832,14 @@ bool UInventory::Predicted_AddOwnedCard(const TSubclassOf<UCardObject>& InCardCl
 		Cards.Emplace(InCardClass, FCard::ECardType::UseDefaultLifetimePredictedTimestamp, InOwnerConstituentInstanceId,
 		              GetFormCharacter());
 	}
-	CallBindedOnAddCardDelegates(Cards.Last(), true);
+	if (InOwnerConstituentInstanceId == 0)
+	{
+		CallBindedOnAddSharedCardDelegates(Cards.Last(), true);
+	}
+	else
+	{
+		CallBindedOnAddOwnedCardDelegates(Cards.Last(), true);
+	}
 	//We don't need to set correction pausing variables since we can start correcting instantly as this is predicted.
 	if (HasAuthority())
 	{
@@ -826,13 +878,20 @@ bool UInventory::Predicted_RemoveOwnedCard(const TSubclassOf<UCardObject>& InCar
 		return false;
 	}
 	GetFormCharacter()->bMovementSpeedNeedsRecalculation = true;
-	for (FCard& Card : Cards)
+	for (int16 i = Cards.Num() - 1; i >= 0; i--)
 	{
-		if (Card.Class == InCardClass && Card.OwnerConstituentInstanceId == InOwnerConstituentInstanceId)
+		if (Cards[i].Class == InCardClass && Cards[i].OwnerConstituentInstanceId == InOwnerConstituentInstanceId)
 		{
 			//We always instantly destroy as we should be able to sync instantly.
-			CallBindedOnRemoveCardDelegates(Card, true);
-			Cards.Remove(Card);
+			if (InOwnerConstituentInstanceId == 0)
+			{
+				CallBindedOnRemoveSharedCardDelegates(Cards[i], true);
+			}
+			else
+			{
+				CallBindedOnAddOwnedCardDelegates(Cards[i], true);
+			}
+			Cards.RemoveAt(i);
 			if (HasAuthority())
 			{
 				MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
@@ -906,9 +965,9 @@ void UInventory::ServerInitialize()
 	if (Capacity > 127)
 	{
 		UE_LOG(LogSfCore, Error,
-						   TEXT(
-							   "UInventory class %s has an inventory capacity of over 127."
-						   ), *GetClass()->GetName());
+		       TEXT(
+			       "UInventory class %s has an inventory capacity of over 127."
+		       ), *GetClass()->GetName());
 		Capacity = 127;
 	}
 	Slotables.Reserve(InitialOrderedSlotableClasses.Num());
@@ -918,27 +977,54 @@ void UInventory::ServerInitialize()
 		Slotables.Add(SlotableInstance);
 		InitializeSlotable(SlotableInstance, nullptr);
 	}
-	if (TArrayCheckDuplicate(InitialSharedCardClassesInfiniteLifetime, [](const TSubclassOf<UCardObject>& A, const TSubclassOf<UCardObject>& B){return A == B;}))
+	if (TArrayCheckDuplicate(InitialSharedCardClassesInfiniteLifetime,
+	                         [](const TSubclassOf<UCardObject>& A, const TSubclassOf<UCardObject>& B)
+	                         {
+		                         return A == B;
+	                         }))
 	{
 		UE_LOG(LogSfCore, Error,
-						   TEXT(
-							   "UInventory class %s has duplicate initial shared cards. Handling duplicates."
-						   ), *GetClass()->GetName());
+		       TEXT(
+			       "UInventory class %s has duplicate initial shared cards. Handling duplicates."
+		       ), *GetClass()->GetName());
 		auto ElementGroups = TArrayGroupEquivalentElements(InitialSharedCardClassesInfiniteLifetime);
 		InitialSharedCardClassesInfiniteLifetime.Empty();
 		InitialSharedCardClassesInfiniteLifetime.Reserve(ElementGroups.Num());
 		for (auto It = ElementGroups.CreateIterator(); It; ++It)
 		{
 			InitialSharedCardClassesInfiniteLifetime.Add(It.Key());
-		} 
+		}
 	}
 	Cards.Reserve(InitialSharedCardClassesInfiniteLifetime.Num());
 	for (const TSubclassOf<UCardObject> CardClass : InitialSharedCardClassesInfiniteLifetime)
 	{
-		Cards.Emplace(CardClass, FCard::ECardType::DoNotUseLifetime);
+		if (bIsOnFormCharacter)
+		{
+			Cards.Emplace(CardClass, FCard::ECardType::UseDefaultLifetimePredictedTimestamp,
+			              0, GetFormCharacter());
+		}
+		else
+		{
+			Cards.Emplace(CardClass, FCard::ECardType::UseCustomLifetimeServerTimestamp,
+			              0,
+			              nullptr, OwningFormCore);
+		}
+		FCard& CardAdded = Cards.Last();
+		CardAdded.LifetimeEndTimestamp = -1.f;
+		if (bIsOnFormCharacter)
+		{
+			GetFormCharacter()->bMovementSpeedNeedsRecalculation = true;
+			//We set it to be not corrected and set a timeout so the client has a chance to synchronize before we start issuing corrections.
+			CardAdded.bIsNotCorrected = true;
+			CardAdded.ServerAwaitClientSyncTimeoutTimestamp = CardAdded.ServerAwaitClientSyncTimeoutDuration +
+				GetWorld()->
+				TimeSeconds;
+			GetFormCharacter()->MarkCardsDirty();
+		}
+		MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
+		CallBindedOnAddSharedCardDelegates(CardAdded, false);
 	}
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Slotables, this);
-	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
 	ClientAutonomousInitialize(OwningFormCore);
 	Server_Initialize();
 	bInitialized = true;
@@ -991,9 +1077,9 @@ void UInventory::ReassignAllConstituentInstanceIds()
 			if (LastAssignedConstituentId > 254)
 			{
 				UE_LOG(LogSfCore, Error,
-						   TEXT(
-							   "UInventory class %s has exceed the number of max UConstituents. Removing overflow."
-						   ), *GetClass()->GetName());
+				       TEXT(
+					       "UInventory class %s has exceed the number of max UConstituents. Removing overflow."
+				       ), *GetClass()->GetName());
 				bOverflowing = true;
 				break;
 			}
@@ -1017,7 +1103,7 @@ void UInventory::RemoveCardsOfOwner(const int32 InOwnerConstituentInstanceId)
 	{
 		if (Cards[i].OwnerConstituentInstanceId == InOwnerConstituentInstanceId)
 		{
-			Server_RemoveOwnedCard(Cards[i].Class,Cards[i].OwnerConstituentInstanceId);
+			Server_RemoveOwnedCard(Cards[i].Class, Cards[i].OwnerConstituentInstanceId);
 		}
 	}
 }
@@ -1041,11 +1127,12 @@ TArray<const FCard*> UInventory::GetCardsOfClass(const TSubclassOf<UCardObject>&
 }
 
 void UInventory::Server_BindOnAddSlotable(const TSubclassOf<USlotable>& InSlotableClass,
-	const FOnAddSlotable& EventToBind)
+                                          const FOnAddSlotable& EventToBind)
 {
 	if (!InSlotableClass.Get())
 	{
-		UE_LOG(LogSfCore, Error, TEXT("Server_BindOnAddSlotable called with empty TSubclassOf in UInventory class %s."), *GetClass()->GetName());
+		UE_LOG(LogSfCore, Error, TEXT("Server_BindOnAddSlotable called with empty TSubclassOf in UInventory class %s."),
+		       *GetClass()->GetName());
 		return;
 	}
 	//Add to existing pair if possible, otherwise add pair.
@@ -1057,15 +1144,17 @@ void UInventory::Server_BindOnAddSlotable(const TSubclassOf<USlotable>& InSlotab
 			return;
 		}
 	}
-	BindedOnAddSlotableDelegates.Emplace(InSlotableClass, TSet{ EventToBind });
+	BindedOnAddSlotableDelegates.Emplace(InSlotableClass, TSet{EventToBind});
 }
 
 void UInventory::Server_BindOnRemoveSlotable(const TSubclassOf<USlotable>& InSlotableClass,
-	const FOnRemoveSlotable& EventToBind)
+                                             const FOnRemoveSlotable& EventToBind)
 {
 	if (!InSlotableClass.Get())
 	{
-		UE_LOG(LogSfCore, Error, TEXT("Server_BindOnRemoveSlotable called with empty TSubclassOf in UInventory class %s."), *GetClass()->GetName());
+		UE_LOG(LogSfCore, Error,
+		       TEXT("Server_BindOnRemoveSlotable called with empty TSubclassOf in UInventory class %s."),
+		       *GetClass()->GetName());
 		return;
 	}
 	//Add to existing pair if possible, otherwise add pair.
@@ -1077,18 +1166,19 @@ void UInventory::Server_BindOnRemoveSlotable(const TSubclassOf<USlotable>& InSlo
 			return;
 		}
 	}
-	BindedOnRemoveSlotableDelegates.Emplace(InSlotableClass, TSet{ EventToBind });
+	BindedOnRemoveSlotableDelegates.Emplace(InSlotableClass, TSet{EventToBind});
 }
 
-void UInventory::BindOnAddCard(const TSubclassOf<UCardObject>& InCardClass, const FOnAddCard& EventToBind)
+void UInventory::BindOnAddSharedCard(const TSubclassOf<UCardObject>& InCardClass, const FOnAddSharedCard& EventToBind)
 {
 	if (!InCardClass.Get())
 	{
-		UE_LOG(LogSfCore, Error, TEXT("BindOnAddCard called with empty TSubclassOf in UInventory class %s."), *GetClass()->GetName());
+		UE_LOG(LogSfCore, Error, TEXT("BindOnAddSharedCard called with empty TSubclassOf in UInventory class %s."),
+		       *GetClass()->GetName());
 		return;
 	}
 	//Add to existing pair if possible, otherwise add pair.
-	for (TPair<TSubclassOf<UCardObject>, TSet<FOnAddCard>>& Pair : BindedOnAddCardDelegates)
+	for (TPair<TSubclassOf<UCardObject>, TSet<FOnAddSharedCard>>& Pair : BindedOnAddSharedCardDelegates)
 	{
 		if (Pair.Key == InCardClass)
 		{
@@ -1096,18 +1186,20 @@ void UInventory::BindOnAddCard(const TSubclassOf<UCardObject>& InCardClass, cons
 			return;
 		}
 	}
-	BindedOnAddCardDelegates.Emplace(InCardClass, TSet{ EventToBind });
+	BindedOnAddSharedCardDelegates.Emplace(InCardClass, TSet{EventToBind});
 }
 
-void UInventory::BindOnRemoveCard(const TSubclassOf<UCardObject>& InCardClass, const FOnRemoveCard& EventToBind)
+void UInventory::BindOnRemoveSharedCard(const TSubclassOf<UCardObject>& InCardClass,
+                                        const FOnRemoveSharedCard& EventToBind)
 {
 	if (!InCardClass.Get())
 	{
-		UE_LOG(LogSfCore, Error, TEXT("BindOnRemoveCard called with empty TSubclassOf in UInventory class %s."), *GetClass()->GetName());
+		UE_LOG(LogSfCore, Error, TEXT("BindOnRemoveSharedCard called with empty TSubclassOf in UInventory class %s."),
+		       *GetClass()->GetName());
 		return;
 	}
 	//Add to existing pair if possible, otherwise add pair.
-	for (TPair<TSubclassOf<UCardObject>, TSet<FOnRemoveCard>>& Pair : BindedOnRemoveCardDelegates)
+	for (TPair<TSubclassOf<UCardObject>, TSet<FOnRemoveSharedCard>>& Pair : BindedOnRemoveSharedCardDelegates)
 	{
 		if (Pair.Key == InCardClass)
 		{
@@ -1115,7 +1207,63 @@ void UInventory::BindOnRemoveCard(const TSubclassOf<UCardObject>& InCardClass, c
 			return;
 		}
 	}
-	BindedOnRemoveCardDelegates.Emplace(InCardClass, TSet{ EventToBind });
+	BindedOnRemoveSharedCardDelegates.Emplace(InCardClass, TSet{EventToBind});
+}
+
+void UInventory::BindOnAddOwnedCard(const TSubclassOf<UCardObject>& InCardClass, const FOnAddOwnedCard& EventToBind)
+{
+	if (!InCardClass.Get())
+	{
+		UE_LOG(LogSfCore, Error, TEXT("BindOnAddOwnedCard called with empty TSubclassOf in UInventory class %s."),
+		       *GetClass()->GetName());
+		return;
+	}
+	//Add to existing pair if possible, otherwise add pair.
+	for (TPair<TSubclassOf<UCardObject>, TSet<FOnAddOwnedCard>>& Pair : BindedOnAddOwnedCardDelegates)
+	{
+		if (Pair.Key == InCardClass)
+		{
+			Pair.Value.Add(EventToBind);
+			return;
+		}
+	}
+	BindedOnAddOwnedCardDelegates.Emplace(InCardClass, TSet{EventToBind});
+}
+
+void UInventory::BindOnRemoveOwnedCard(const TSubclassOf<UCardObject>& InCardClass,
+                                       const FOnRemoveOwnedCard& EventToBind)
+{
+	if (!InCardClass.Get())
+	{
+		UE_LOG(LogSfCore, Error, TEXT("BindOnRemoveOwnedCard called with empty TSubclassOf in UInventory class %s."),
+		       *GetClass()->GetName());
+		return;
+	}
+	//Add to existing pair if possible, otherwise add pair.
+	for (TPair<TSubclassOf<UCardObject>, TSet<FOnRemoveOwnedCard>>& Pair : BindedOnRemoveOwnedCardDelegates)
+	{
+		if (Pair.Key == InCardClass)
+		{
+			Pair.Value.Add(EventToBind);
+			return;
+		}
+	}
+	BindedOnRemoveOwnedCardDelegates.Emplace(InCardClass, TSet{EventToBind});
+}
+
+UConstituent* UInventory::GetConstituentFromInstanceId(const uint8 Id)
+{
+	for (USlotable* Slotable : Slotables)
+	{
+		for (UConstituent* Constituent : Slotable->GetConstituents())
+		{
+			if (Constituent->GetInstanceId() == Id)
+			{
+				return Constituent;
+			}
+		}
+	}
+	return nullptr;
 }
 
 void UInventory::CallBindedOnAddSlotableDelegates(USlotable* Slotable)
@@ -1166,50 +1314,142 @@ void UInventory::CallBindedOnRemoveSlotableDelegates(USlotable* Slotable)
 	}
 }
 
-void UInventory::CallBindedOnAddCardDelegates(FCard& Card, const bool bInIsPredictableContext)
+void UInventory::CallBindedOnAddSharedCardDelegates(FCard& Card, const bool bInIsPredictableContext)
 {
-	for (TPair<TSubclassOf<UCardObject>, TSet<FOnAddCard>>& Pair : BindedOnAddCardDelegates)
+	for (TPair<TSubclassOf<UCardObject>, TSet<FOnAddSharedCard>>& Pair : BindedOnAddSharedCardDelegates)
 	{
 		//Always call if it is UCardObject.
 		if (Pair.Key.Get() == UCardObject::StaticClass())
 		{
-			for (FOnAddCard& Delegate : Pair.Value)
+			for (FOnAddSharedCard& Delegate : Pair.Value)
 			{
-				Delegate.ExecuteIfBound(Card, bInIsPredictableContext);
+				Delegate.ExecuteIfBound(Card.Class, bInIsPredictableContext);
 			}
 			continue;
 		}
 		//Otherwise call if it is the class of the added card.
 		if (Pair.Key == Card.Class)
 		{
-			for (FOnAddCard& Delegate : Pair.Value)
+			for (FOnAddSharedCard& Delegate : Pair.Value)
 			{
-				Delegate.ExecuteIfBound(Card, bInIsPredictableContext);
+				Delegate.ExecuteIfBound(Card.Class, bInIsPredictableContext);
 			}
 		}
 	}
 }
 
-void UInventory::CallBindedOnRemoveCardDelegates(FCard& Card, const bool bInIsPredictableContext)
+void UInventory::CallBindedOnRemoveSharedCardDelegates(FCard& Card, const bool bInIsPredictableContext)
 {
-	for (TPair<TSubclassOf<UCardObject>, TSet<FOnRemoveCard>>& Pair : BindedOnRemoveCardDelegates)
+	for (TPair<TSubclassOf<UCardObject>, TSet<FOnRemoveSharedCard>>& Pair : BindedOnRemoveSharedCardDelegates)
 	{
 		//Always call if it is UCardObject.
 		if (Pair.Key.Get() == UCardObject::StaticClass())
 		{
-			for (FOnRemoveCard& Delegate : Pair.Value)
+			for (FOnRemoveSharedCard& Delegate : Pair.Value)
 			{
-				Delegate.ExecuteIfBound(Card, bInIsPredictableContext);
+				Delegate.ExecuteIfBound(Card.Class, bInIsPredictableContext);
 			}
 			continue;
 		}
 		//Otherwise call if it is the class of the removed card.
 		if (Pair.Key == Card.Class)
 		{
-			for (FOnRemoveCard& Delegate : Pair.Value)
+			for (FOnRemoveSharedCard& Delegate : Pair.Value)
 			{
-				Delegate.ExecuteIfBound(Card, bInIsPredictableContext);
+				Delegate.ExecuteIfBound(Card.Class, bInIsPredictableContext);
 			}
+		}
+	}
+}
+
+void UInventory::CallBindedOnAddOwnedCardDelegates(FCard& Card, const bool bInIsPredictableContext)
+{
+	for (TPair<TSubclassOf<UCardObject>, TSet<FOnAddOwnedCard>>& Pair : BindedOnAddOwnedCardDelegates)
+	{
+		//Always call if it is UCardObject.
+		if (Pair.Key.Get() == UCardObject::StaticClass())
+		{
+			for (FOnAddOwnedCard& Delegate : Pair.Value)
+			{
+				Delegate.ExecuteIfBound(Card.Class, GetConstituentFromInstanceId(Card.OwnerConstituentInstanceId),
+				                        bInIsPredictableContext);
+			}
+			continue;
+		}
+		//Otherwise call if it is the class of the added card.
+		if (Pair.Key == Card.Class)
+		{
+			for (FOnAddOwnedCard& Delegate : Pair.Value)
+			{
+				Delegate.ExecuteIfBound(Card.Class, GetConstituentFromInstanceId(Card.OwnerConstituentInstanceId),
+				                        bInIsPredictableContext);
+			}
+		}
+	}
+}
+
+void UInventory::CallBindedOnRemoveOwnedCardDelegates(FCard& Card, const bool bInIsPredictableContext)
+{
+	for (TPair<TSubclassOf<UCardObject>, TSet<FOnRemoveOwnedCard>>& Pair : BindedOnRemoveOwnedCardDelegates)
+	{
+		//Always call if it is UCardObject.
+		if (Pair.Key.Get() == UCardObject::StaticClass())
+		{
+			for (FOnRemoveOwnedCard& Delegate : Pair.Value)
+			{
+				Delegate.ExecuteIfBound(Card.Class, GetConstituentFromInstanceId(Card.OwnerConstituentInstanceId),
+				                        bInIsPredictableContext);
+			}
+			continue;
+		}
+		//Otherwise call if it is the class of the removed card.
+		if (Pair.Key == Card.Class)
+		{
+			for (FOnRemoveOwnedCard& Delegate : Pair.Value)
+			{
+				Delegate.ExecuteIfBound(Card.Class, GetConstituentFromInstanceId(Card.OwnerConstituentInstanceId),
+				                        bInIsPredictableContext);
+			}
+		}
+	}
+}
+
+void UInventory::RemoveEmptyDelegateBindings()
+{
+	for (TPair<TSubclassOf<USlotable>, TSet<FOnAddSlotable>>& Pair : BindedOnAddSlotableDelegates)
+	{
+		RemoveEmptyDelegatesFromTSet(Pair.Value);
+	}
+	for (TPair<TSubclassOf<USlotable>, TSet<FOnRemoveSlotable>>& Pair : BindedOnRemoveSlotableDelegates)
+	{
+		RemoveEmptyDelegatesFromTSet(Pair.Value);
+	}
+	for (TPair<TSubclassOf<UCardObject>, TSet<FOnAddSharedCard>>& Pair : BindedOnAddSharedCardDelegates)
+	{
+		RemoveEmptyDelegatesFromTSet(Pair.Value);
+	}
+	for (TPair<TSubclassOf<UCardObject>, TSet<FOnRemoveSharedCard>>& Pair : BindedOnRemoveSharedCardDelegates)
+	{
+		RemoveEmptyDelegatesFromTSet(Pair.Value);
+	}
+	for (TPair<TSubclassOf<UCardObject>, TSet<FOnAddOwnedCard>>& Pair : BindedOnAddOwnedCardDelegates)
+	{
+		RemoveEmptyDelegatesFromTSet(Pair.Value);
+	}
+	for (TPair<TSubclassOf<UCardObject>, TSet<FOnRemoveOwnedCard>>& Pair : BindedOnRemoveOwnedCardDelegates)
+	{
+		RemoveEmptyDelegatesFromTSet(Pair.Value);
+	}
+}
+
+template <class T>
+void UInventory::RemoveEmptyDelegatesFromTSet(TSet<T>& DelegateSet)
+{
+	for (auto It = DelegateSet.CreateIterator(); It; ++It)
+	{
+		if (It->GetUObjectEvenIfUnreachable() == nullptr)
+		{
+			It.RemoveCurrent();
 		}
 	}
 }

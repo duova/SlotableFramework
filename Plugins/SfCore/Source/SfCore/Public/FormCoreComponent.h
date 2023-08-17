@@ -144,7 +144,7 @@ protected:
 private:
 
 	UPROPERTY(Replicated)
-	float NonCompensatedServerWorldTime;
+	float NonCompensatedServerFormTime;
 	
 	UFUNCTION()
 	void OnRep_Inventories();

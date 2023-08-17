@@ -22,6 +22,9 @@ class SFCORE_API USfObject : public UObject
 	GENERATED_BODY()
 
 public:
+
+	USfObject();
+	
 	UFUNCTION(BlueprintPure)
 	AActor* GetOwner() const
 	{

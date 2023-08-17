@@ -15,8 +15,10 @@ class UCardObject;
 
 DECLARE_DYNAMIC_DELEGATE_OneParam(FOnAddSlotable, USlotable*, Slotable);
 DECLARE_DYNAMIC_DELEGATE_OneParam(FOnRemoveSlotable, USlotable*, Slotable);
-DECLARE_DYNAMIC_DELEGATE_TwoParams(FOnAddCard, FCard&, Card, const bool, bIsPredictableContext);
-DECLARE_DYNAMIC_DELEGATE_TwoParams(FOnRemoveCard, FCard&, Card, const bool, bIsPredictableContext);
+DECLARE_DYNAMIC_DELEGATE_TwoParams(FOnAddSharedCard, UClass*, CardClass, const bool, bIsPredictableContext);
+DECLARE_DYNAMIC_DELEGATE_TwoParams(FOnRemoveSharedCard, UClass*, CardClass, const bool, bIsPredictableContext);
+DECLARE_DYNAMIC_DELEGATE_ThreeParams(FOnAddOwnedCard, UClass*, CardClass, UConstituent*, Owner, const bool, bIsPredictableContext);
+DECLARE_DYNAMIC_DELEGATE_ThreeParams(FOnRemoveOwnedCard, UClass*, CardClass, UConstituent*, Owner, const bool, bIsPredictableContext);
 
 /**
  * Inventories of slotables.
@@ -71,14 +73,16 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	void Server_TradeSlotablesBetweenInventories(USlotable* SlotableA, USlotable* SlotableB);
 
+	//Leave custom lifetime at 0 to use the card's default lifetime.
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, meta = (AutoCreateRefTerm = "InCustomLifetime"))
 	bool Server_AddSharedCard(const TSubclassOf<UCardObject>& InCardClass, const float InCustomLifetime = 0);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	bool Server_RemoveSharedCard(const TSubclassOf<UCardObject>& InCardClass);
 
+	//Leave custom lifetime at 0 to use the card's default lifetime.
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, meta = (AutoCreateRefTerm = "InCustomLifetime"))
-	bool Server_AddOwnedCard(const TSubclassOf<UCardObject>& InCardClass, const int32 InInOwnerConstituentInstanceId, const float InCustomLifetime = 0);
+	bool Server_AddOwnedCard(const TSubclassOf<UCardObject>& InCardClass, const int32 InOwnerConstituentInstanceId, const float InCustomLifetime = 0);
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	bool Server_RemoveOwnedCard(const TSubclassOf<UCardObject>& InCardClass, const int32 InOwnerConstituentInstanceId);
@@ -164,23 +168,45 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	void Server_BindOnRemoveSlotable(const TSubclassOf<USlotable>& InSlotableClass, const FOnRemoveSlotable& EventToBind);
 
+	//Bind an event that is called when a shared card of a certain class is added.
+	//Use the UCardObject base class to trigger for any class.
+	UFUNCTION(BlueprintCallable)
+	void BindOnAddSharedCard(const TSubclassOf<UCardObject>& InCardClass, const FOnAddSharedCard& EventToBind);
+
+	//Bind an event that is called when a shared card of a certain class is removed.
+	//Use the UCardObject base class to trigger for any class.
+	UFUNCTION(BlueprintCallable)
+	void BindOnRemoveSharedCard(const TSubclassOf<UCardObject>& InCardClass, const FOnRemoveSharedCard& EventToBind);
+
 	//Bind an event that is called when a card of a certain class is added.
 	//Use the UCardObject base class to trigger for any class.
 	UFUNCTION(BlueprintCallable)
-	void BindOnAddCard(const TSubclassOf<UCardObject>& InCardClass, const FOnAddCard& EventToBind);
+	void BindOnAddOwnedCard(const TSubclassOf<UCardObject>& InCardClass, const FOnAddOwnedCard& EventToBind);
 
 	//Bind an event that is called when a card of a certain class is removed.
 	//Use the UCardObject base class to trigger for any class.
 	UFUNCTION(BlueprintCallable)
-	void BindOnRemoveCard(const TSubclassOf<UCardObject>& InCardClass, const FOnRemoveCard& EventToBind);
+	void BindOnRemoveOwnedCard(const TSubclassOf<UCardObject>& InCardClass, const FOnRemoveOwnedCard& EventToBind);
+
+	UFUNCTION(BlueprintCallable)
+	UConstituent* GetConstituentFromInstanceId(uint8 Id);
 
 	void CallBindedOnAddSlotableDelegates(USlotable* Slotable);
 
 	void CallBindedOnRemoveSlotableDelegates(USlotable* Slotable);
 
-	void CallBindedOnAddCardDelegates(FCard& Card, const bool bInIsPredictableContext);
+	void CallBindedOnAddSharedCardDelegates(FCard& Card, const bool bInIsPredictableContext);
 
-	void CallBindedOnRemoveCardDelegates(FCard& Card, const bool bInIsPredictableContext);
+	void CallBindedOnRemoveSharedCardDelegates(FCard& Card, const bool bInIsPredictableContext);
+
+	void CallBindedOnAddOwnedCardDelegates(FCard& Card, const bool bInIsPredictableContext);
+
+	void CallBindedOnRemoveOwnedCardDelegates(FCard& Card, const bool bInIsPredictableContext);
+
+	void RemoveEmptyDelegateBindings();
+
+	template<class T>
+	void RemoveEmptyDelegatesFromTSet(TSet<T>& DelegateSet);
 
 protected:
 
@@ -192,7 +218,7 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory")
 	TArray<TSubclassOf<USlotable>> InitialOrderedSlotableClasses;
 
-	//Initially spawned cards with infinite lifetime.
+	//Initially spawned cards that will always have an infinite lifetime regardless of UCardObject.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Inventory")
 	TArray<TSubclassOf<UCardObject>> InitialSharedCardClassesInfiniteLifetime;
 
@@ -218,7 +244,6 @@ protected:
 	void DeinitializeSlotable(USlotable* Slotable);
 
 private:
-
 	UFUNCTION()
 	void OnRep_Slotables();
 	
@@ -264,7 +289,13 @@ private:
 
 	TMap<TSubclassOf<USlotable>, TSet<FOnRemoveSlotable>> BindedOnRemoveSlotableDelegates;
 
-	TMap<TSubclassOf<UCardObject>, TSet<FOnAddCard>> BindedOnAddCardDelegates;
+	TMap<TSubclassOf<UCardObject>, TSet<FOnAddSharedCard>> BindedOnAddSharedCardDelegates;
 
-	TMap<TSubclassOf<UCardObject>, TSet<FOnRemoveCard>> BindedOnRemoveCardDelegates;
+	TMap<TSubclassOf<UCardObject>, TSet<FOnRemoveSharedCard>> BindedOnRemoveSharedCardDelegates;
+
+	TMap<TSubclassOf<UCardObject>, TSet<FOnAddOwnedCard>> BindedOnAddOwnedCardDelegates;
+
+	TMap<TSubclassOf<UCardObject>, TSet<FOnRemoveOwnedCard>> BindedOnRemoveOwnedCardDelegates;
+
+	float LocalInventoryTime;
 };
