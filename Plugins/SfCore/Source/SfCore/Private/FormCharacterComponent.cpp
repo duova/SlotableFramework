@@ -24,6 +24,12 @@ bool FInventoryCards::operator==(const FInventoryCards& Other) const
 	return Other.Cards == Cards;
 }
 
+bool FInventoryCards::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
+{
+	Ar << Cards;
+	return bOutSuccess;
+}
+
 
 FNetCardIdentifier::FNetCardIdentifier(): ClassIndex(0), OwnerConstituentInstanceId(0)
 {
@@ -37,6 +43,25 @@ FNetCardIdentifier::FNetCardIdentifier(const uint16 InClassIndex, const uint8 In
 bool FNetCardIdentifier::operator==(const FNetCardIdentifier& Other) const
 {
 	return ClassIndex == Other.ClassIndex && OwnerConstituentInstanceId == Other.OwnerConstituentInstanceId;
+}
+
+bool FNetCardIdentifier::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
+{
+	//We try to not send the full index if we don't have to.
+	bool bClassIndexIsLarge = ClassIndex > 255;
+	Ar.SerializeBits(&bClassIndexIsLarge, 1);
+	if (bClassIndexIsLarge)
+	{
+		Ar << ClassIndex;
+	}
+	else
+	{
+		uint8 Value = ClassIndex;
+		Ar << Value;
+		ClassIndex = Value;
+	}
+	Ar << OwnerConstituentInstanceId;
+	return bOutSuccess;
 }
 
 FCardIdentifiersInAnInventory::FCardIdentifiersInAnInventory()
@@ -53,6 +78,12 @@ bool FCardIdentifiersInAnInventory::operator==(const FCardIdentifiersInAnInvento
 	return Other.CardIdentifiers == CardIdentifiers;
 }
 
+bool FCardIdentifiersInAnInventory::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
+{
+	Ar << CardIdentifiers;
+	return bOutSuccess;
+}
+
 FIdentifiedActionSet::FIdentifiedActionSet(): ConstituentInstanceId(0)
 {
 }
@@ -66,6 +97,13 @@ bool FIdentifiedActionSet::operator==(const FIdentifiedActionSet& Other) const
 {
 	if (Other.ConstituentInstanceId == ConstituentInstanceId && Other.ActionSet == ActionSet) return true;
 	return false;
+}
+
+bool FIdentifiedActionSet::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
+{
+	Ar << ConstituentInstanceId;
+	ActionSet.NetSerialize(Ar, Map, bOutSuccess);
+	return bOutSuccess;
 }
 
 FSavedMove_Sf::FSavedMove_Sf()
@@ -982,14 +1020,14 @@ void UFormCharacterComponent::HandleCardClientSyncTimeout() const
 		TArray<FCard>& Cards = Inventory->Cards;
 		for (int16 i = Cards.Num() - 1; i >= 0; i--)
 		{
-			if (Cards[i].bIsNotCorrected && FormCore->HasServerTimestampPassed(
+			if (Cards[i].bIsNotCorrected && FormCore->HasServerFormTimestampPassed(
 				Cards[i].ServerAwaitClientSyncTimeoutTimestamp))
 			{
 				//We set bIsNotCorrected to false so these cards get checked against the client ones and essentially
 				//force a correction to get the client to sync up.
 				Cards[i].bIsNotCorrected = false;
 			}
-			if (Cards[i].bIsDisabledForDestroy && FormCore->HasServerTimestampPassed(
+			if (Cards[i].bIsDisabledForDestroy && FormCore->HasServerFormTimestampPassed(
 				Cards[i].ServerAwaitClientSyncTimeoutTimestamp))
 			{
 				//We remove these cards which also forces a correction to get the client to sync up.

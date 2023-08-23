@@ -45,6 +45,7 @@ void USfTest::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeP
 	DefaultParams.bIsPushBased = true;
 	DefaultParams.Condition = COND_None;
 	DOREPLIFETIME_WITH_PARAMS_FAST(USfTest, CurrentProcedureIndex, DefaultParams);
+	DOREPLIFETIME_WITH_PARAMS_FAST(USfTest, TestRunner, DefaultParams);
 }
 
 int32 USfTest::GetFunctionCallspace(UFunction* Function, FFrame* Stack)
@@ -152,11 +153,26 @@ void USfTest::Log(const FString& Message)
 	UE_LOG(LogGauntlet, Display, TEXT("%s %s: %s"), *ASfTestRunner::GetNetRoleAsString(GetOwner()->GetLocalRole()), *GetClass()->GetName(), *Message);
 }
 
+void USfTest::PossessInstantiatedActor(AActor* ActorToPossess)
+{
+	if (!HasAuthority()) return;
+	ActorToPossess->SetOwner(TestRunner);
+	ActorToPossess->SetAutonomousProxy(true);
+	UE_LOG(LogGauntlet, Display, TEXT("The remote role of actor %s is now: %s."), *ActorToPossess->GetName(), *ASfTestRunner::GetNetRoleAsString(ActorToPossess->GetRemoteRole()));
+	ClientPossess(ActorToPossess);
+}
+
 void USfTest::NetMulticastClientExecute_Implementation()
 {
 	if (GetOwner()->HasAuthority()) return;
 	bStartProcedures = true;
 	ExecuteClientProcedureIfCorrectNetRole();
+}
+
+void USfTest::ClientPossess_Implementation(AActor* ActorToPossess)
+{
+	ActorToPossess->SetOwner(TestRunner);
+	ActorToPossess->SetAutonomousProxy(true);
 }
 
 void USfTest::OnRep_CurrentProcedureIndex()

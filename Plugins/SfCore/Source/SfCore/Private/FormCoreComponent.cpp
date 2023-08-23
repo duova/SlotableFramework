@@ -252,6 +252,13 @@ void UFormCoreComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 		Inventory->AuthorityTick(DeltaTime);
 	}
 
+	for (UConstituent* Constituent : ConstituentRegistry)
+	{
+		if (!Constituent->bLastActionSetPendingClientExecution) return;
+		Constituent->PerformLastActionSetOnClients();
+		Constituent->bLastActionSetPendingClientExecution = false;
+	}
+
 	if (NonCompensatedServerFormTime * 0.5 - FMath::Floor(NonCompensatedServerFormTime * 0.5) <= DeltaTime * 0.5)
 	{
 		//We synchronize every 2 seconds.
@@ -387,7 +394,7 @@ void UFormCoreComponent::InternalClientSetToFirstPerson()
 	//Refresh actions to use new one. (ie. use effects from the new perspective)
 	for (UConstituent* Constituent : ConstituentRegistry)
 	{
-		Constituent->OnRep_LastActionSet();
+		Constituent->InternalClientPerformActionSet();
 	}
 }
 
@@ -403,7 +410,7 @@ void UFormCoreComponent::InternalClientSetToThirdPerson()
 	//Refresh actions to use new one. (ie. use effects from the new perspective)
 	for (UConstituent* Constituent : ConstituentRegistry)
 	{
-		Constituent->OnRep_LastActionSet();
+		Constituent->InternalClientPerformActionSet();
 	}
 }
 
@@ -412,27 +419,27 @@ bool UFormCoreComponent::IsFirstPerson()
 	return bIsFirstPerson;
 }
 
-float UFormCoreComponent::GetNonCompensatedServerWorldTime() const
+float UFormCoreComponent::GetNonCompensatedServerFormTime() const
 {
 	return NonCompensatedServerFormTime;
 }
 
-float UFormCoreComponent::CalculateFutureServerTimestamp(const float InAdditionalTime) const
+float UFormCoreComponent::CalculateFutureServerFormTimestamp(const float InAdditionalTime) const
 {
 	return NonCompensatedServerFormTime + InAdditionalTime;
 }
 
-float UFormCoreComponent::CalculateTimeUntilServerTimestamp(const float InTimestamp) const
+float UFormCoreComponent::CalculateTimeUntilServerFormTimestamp(const float InTimestamp) const
 {
 	return InTimestamp - NonCompensatedServerFormTime;
 }
 
-float UFormCoreComponent::CalculateTimeSinceServerTimestamp(const float InTimestamp) const
+float UFormCoreComponent::CalculateTimeSinceServerFormTimestamp(const float InTimestamp) const
 {
 	return NonCompensatedServerFormTime - InTimestamp;
 }
 
-bool UFormCoreComponent::HasServerTimestampPassed(const float InTimestamp) const
+bool UFormCoreComponent::HasServerFormTimestampPassed(const float InTimestamp) const
 {
-	return CalculateTimeUntilServerTimestamp(InTimestamp) <= 0;
+	return CalculateTimeUntilServerFormTimestamp(InTimestamp) <= 0;
 }

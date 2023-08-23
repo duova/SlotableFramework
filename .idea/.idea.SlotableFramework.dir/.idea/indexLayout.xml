@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="UserContentModel">
-    <attachedFolders />
+    <attachedFolders>
+      <Path>../../../../../UnrealEngine-5.1.1-release/Engine</Path>
+    </attachedFolders>
     <explicitIncludes />
-    <explicitExcludes />
+    <explicitExcludes>
+      <Path>../../../../../UnrealEngine-5.1.1-release/Engine/Source/Programs</Path>
+    </explicitExcludes>
   </component>
 </project>

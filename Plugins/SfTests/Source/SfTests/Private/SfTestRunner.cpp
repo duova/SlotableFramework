@@ -96,7 +96,7 @@ void ASfTestRunner::Tick(float DeltaTime)
 		MARK_PROPERTY_DIRTY_FROM_NAME(ASfTestRunner, CurrentTest, this);
 		UE_LOG(LogGauntlet, Display, TEXT("Number of players in the world is: %d."), NumClients);
 
-		//Always set one client to autonomous so we can differentiate one client to spawn autonomous actors for.
+		//Always set one client to autonomous so the test runner can own the tested actor and make it autonomous.
 		if (NumClients != 0)
 		{
 			PlayerController = GetWorld()->GetFirstPlayerController();
@@ -148,6 +148,7 @@ bool ASfTestRunner::StartTest(const TSubclassOf<USfTest> TestClass)
 	if (!CurrentTest) return false;
 	AddReplicatedSubObject(CurrentTest);
 	CurrentTest->TestRunner = this;
+	MARK_PROPERTY_DIRTY_FROM_NAME(USfTest, TestRunner, CurrentTest);
 	CurrentTest->OnServerInit();
 	CurrentTest->NetMulticastInternalOnClientInit();
 	CurrentTest->ServerExecute();

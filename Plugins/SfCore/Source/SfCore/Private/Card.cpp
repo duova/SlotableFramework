@@ -83,7 +83,7 @@ FCard::FCard(const TSubclassOf<UCardObject>& InCardClass, const ECardType InCard
 				UE_LOG(LogSfCore, Error, TEXT("FCard constructor requires form core reference."));
 				break;
 			}
-			LifetimeEndTimestamp = InNullUnlessUsingServerTimestampFormCore->CalculateFutureServerTimestamp(
+			LifetimeEndTimestamp = InNullUnlessUsingServerTimestampFormCore->CalculateFutureServerFormTimestamp(
 				CardCDO->DefaultLifetimeInSeconds);
 		}
 		else
@@ -110,7 +110,7 @@ FCard::FCard(const TSubclassOf<UCardObject>& InCardClass, const ECardType InCard
 			UE_LOG(LogSfCore, Error, TEXT("FCard constructor requires form core reference."));
 			break;
 		}
-		LifetimeEndTimestamp = InNullUnlessUsingServerTimestampFormCore->CalculateFutureServerTimestamp(InCustomLifetime);
+		LifetimeEndTimestamp = InNullUnlessUsingServerTimestampFormCore->CalculateFutureServerFormTimestamp(InCustomLifetime);
 		break;
 	}
 }
@@ -125,4 +125,33 @@ bool FCard::operator==(const FCard& Other) const
 	return Class == Other.Class && OwnerConstituentInstanceId == Other.OwnerConstituentInstanceId &&
 		bUsingPredictedTimestamp == Other.bUsingPredictedTimestamp &&
 		LifetimeEndTimestamp == Other.LifetimeEndTimestamp;
+}
+
+bool FCard::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
+{
+	//We have a list of all CardObject classes that is sorted by name deterministically so we only have to send the index.
+	//We try to not send the full index if we don't have to.
+	bool bClassIndexIsLarge = ClassIndex > 255;
+	Ar.SerializeBits(&bClassIndexIsLarge, 1);
+	if (bClassIndexIsLarge)
+	{
+		Ar << ClassIndex;
+	}
+	else
+	{
+		uint8 Value = ClassIndex;
+		Ar << Value;
+		ClassIndex = Value;
+	}
+	if (Ar.IsLoading())
+	{
+		Class = UFormCoreComponent::GetAllCardObjectClassesSortedByName()[ClassIndex];
+	}
+	Ar << OwnerConstituentInstanceId;
+	Ar.SerializeBits(&bIsDisabledForDestroy, 1);
+	//Don't serialize anything else if card is disabled, we don't need it.
+	if (bIsDisabledForDestroy) return bOutSuccess;
+	Ar.SerializeBits(&bUsingPredictedTimestamp, 1);
+	Ar << LifetimeEndTimestamp;
+	return bOutSuccess;
 }

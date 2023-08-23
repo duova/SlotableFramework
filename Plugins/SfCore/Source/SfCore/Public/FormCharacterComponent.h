@@ -186,6 +186,19 @@ struct SFCORE_API FInventoryCards
 		Ar << InventoryCards.Cards;
 		return Ar;
 	}
+
+	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+};
+
+template<>
+struct TStructOpsTypeTraits<FInventoryCards> : public TStructOpsTypeTraitsBase2<FCard>
+{
+	enum
+	{
+		WithNetSerializer = true,
+		WithIdenticalViaEquality = true,
+		WithCopy = true
+	};
 };
 
 USTRUCT()
@@ -221,6 +234,19 @@ struct SFCORE_API FNetCardIdentifier
 		Ar << CardIdentifier.OwnerConstituentInstanceId;
 		return Ar;
 	}
+
+	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+};
+
+template<>
+struct TStructOpsTypeTraits<FNetCardIdentifier> : public TStructOpsTypeTraitsBase2<FCard>
+{
+	enum
+	{
+		WithNetSerializer = true,
+		WithIdenticalViaEquality = true,
+		WithCopy = true
+	};
 };
 
 USTRUCT()
@@ -241,6 +267,19 @@ struct SFCORE_API FCardIdentifiersInAnInventory
 		Ar << InventoryCardIdentifiers.CardIdentifiers;
 		return Ar;
 	}
+
+	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+};
+
+template<>
+struct TStructOpsTypeTraits<FCardIdentifiersInAnInventory> : public TStructOpsTypeTraitsBase2<FCard>
+{
+	enum
+	{
+		WithNetSerializer = true,
+		WithIdenticalViaEquality = true,
+		WithCopy = true
+	};
 };
 
 USTRUCT()
@@ -258,12 +297,25 @@ struct SFCORE_API FIdentifiedActionSet
 
 	bool operator==(const FIdentifiedActionSet& Other) const;
 
+	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+
 	friend FArchive& operator<<(FArchive& Ar, FIdentifiedActionSet& ConstituentActionSet)
 	{
 		Ar << ConstituentActionSet.ConstituentInstanceId;
 		Ar << ConstituentActionSet.ActionSet;
 		return Ar;
 	}
+};
+
+template<>
+struct TStructOpsTypeTraits<FIdentifiedActionSet> : public TStructOpsTypeTraitsBase2<FCard>
+{
+	enum
+	{
+		WithNetSerializer = true,
+		WithIdenticalViaEquality = true,
+		WithCopy = true
+	};
 };
 
 class FSavedMove_Sf : public FSavedMove_Character

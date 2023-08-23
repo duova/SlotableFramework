@@ -9,7 +9,7 @@ public class SfCoreEditor : ModuleRules
         PublicDependencyModuleNames.AddRange(
             new string[]
             {
-                "Core",
+                "Core", "BlueprintGraph",
             }
         );
 

@@ -23,6 +23,13 @@ bool FResource::operator!=(const FResource& Other) const
 	return !(*this == Other);
 }
 
+bool FResource::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
+{
+	//We don't serialize the tag because the index is always the same since we can't add a resource during runtime.
+	Ar << Value;
+	return bOutSuccess;
+}
+
 UFormResourceComponent::UFormResourceComponent()
 {
 	if (!GetOwner()) return;
@@ -50,10 +57,10 @@ void UFormResourceComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	if (!GetOwner()->HasAuthority()) return;
-	if (FormCore->CalculateTimeUntilServerTimestamp(NextReplicationServerTimestamp) < 0)
+	if (FormCore->CalculateTimeUntilServerFormTimestamp(NextReplicationServerTimestamp) < 0)
 	{
 		MARK_PROPERTY_DIRTY_FROM_NAME(UFormResourceComponent, Resources, this);
-		NextReplicationServerTimestamp = FormCore->CalculateFutureServerTimestamp(CalculatedTimeToEachReplication);
+		NextReplicationServerTimestamp = FormCore->CalculateFutureServerFormTimestamp(CalculatedTimeToEachReplication);
 	}
 }
 

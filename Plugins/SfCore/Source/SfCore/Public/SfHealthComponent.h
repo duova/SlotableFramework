@@ -51,7 +51,9 @@ struct TStructOpsTypeTraits<FHealthChangeData> : TStructOpsTypeTraitsBase2<FHeal
 {
 	enum
 	{
-		WithNetSerializer = true
+		WithNetSerializer = true,
+		WithIdenticalViaEquality = true,
+		WithCopy = true
 	};
 };
 

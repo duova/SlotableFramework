@@ -45,6 +45,19 @@ struct SFCORE_API FResource
 		Ar << Resource.Value;
 		return Ar;
 	}
+
+	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+};
+
+template<>
+struct TStructOpsTypeTraits<FResource> : public TStructOpsTypeTraitsBase2<FResource>
+{
+	enum
+	{
+		WithNetSerializer = true,
+		WithIdenticalViaEquality = true,
+		WithCopy = true
+	};
 };
 
 /**

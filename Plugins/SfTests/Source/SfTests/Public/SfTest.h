@@ -96,12 +96,15 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void Log(const FString& Message);
 
+	UFUNCTION(BlueprintCallable)
+	void PossessInstantiatedActor(AActor* ActorToPossess);
+
 	bool TestCanPass = true;
 
 private:
 	TArray<FTestProcedure> Procedures;
 
-	UPROPERTY()
+	UPROPERTY(Replicated)
 	ASfTestRunner* TestRunner;
 
 	UPROPERTY(ReplicatedUsing = OnRep_CurrentProcedureIndex)
@@ -123,6 +126,9 @@ private:
 
 	UFUNCTION(Server, Reliable)
 	void ServerClientFinishProcedureCallback(const bool bPassed);
+
+	UFUNCTION(Client, Reliable)
+	void ClientPossess(AActor* ActorToPossess);
 
 	UFUNCTION()
 	void OnRep_CurrentProcedureIndex();

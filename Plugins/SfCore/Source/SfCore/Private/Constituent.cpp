@@ -11,19 +11,18 @@
 #include "FormQueryComponent.h"
 #include "Net/UnrealNetwork.h"
 
-FActionSet::FActionSet(): NumActionsIncludingZero(0), ActionZero(0), ActionOne(0), ActionTwo(0), ActionThree(0),
-                          WorldTime(0),
-                          bFlipToForceReplicate(0)
+FActionSet::FActionSet(): NumActionsMinusOne(0), ActionZero(0), ActionOne(0), ActionTwo(0), ActionThree(0),
+                          WorldTime(0)
 {
 }
 
 FActionSet::FActionSet(const float InCurrentWorldTime, const uint8 InActionZero, const uint8 InActionOne,
-                       const uint8 InActionTwo, const uint8 InActionThree): ActionZero(InActionZero),
+                       const uint8 InActionTwo, const uint8 InActionThree): NumActionsMinusOne(0),
+                                                                            ActionZero(InActionZero),
                                                                             ActionOne(InActionOne),
                                                                             ActionTwo(InActionTwo),
                                                                             ActionThree(InActionThree),
-                                                                            WorldTime(InCurrentWorldTime),
-                                                                            bFlipToForceReplicate(0)
+                                                                            WorldTime(InCurrentWorldTime)
 {
 	if (InActionZero == 0)
 	{
@@ -32,12 +31,12 @@ FActionSet::FActionSet(const float InCurrentWorldTime, const uint8 InActionZero,
 	UConstituent::IsIdWithinRange(InActionZero);
 	if (InActionOne != 0)
 	{
-		NumActionsIncludingZero = 1;
+		NumActionsMinusOne = 1;
 		UConstituent::IsIdWithinRange(InActionOne);
 	}
 	if (InActionTwo != 0)
 	{
-		NumActionsIncludingZero = 2;
+		NumActionsMinusOne = 2;
 		if (InActionOne == 0)
 		{
 			UE_LOG(LogSfCore, Error, TEXT("Created ActionSet with action two but no action one."));
@@ -46,7 +45,7 @@ FActionSet::FActionSet(const float InCurrentWorldTime, const uint8 InActionZero,
 	}
 	if (InActionThree != 0)
 	{
-		NumActionsIncludingZero = 3;
+		NumActionsMinusOne = 3;
 		if (InActionTwo == 0)
 		{
 			UE_LOG(LogSfCore, Error, TEXT("Created ActionSet with action three but no action two."));
@@ -59,17 +58,20 @@ bool FActionSet::TryAddActionCheckIfSameFrame(const float InCurrentWorldTime, co
 {
 	if (InCurrentWorldTime != WorldTime) return false;
 	UConstituent::IsIdWithinRange(InAction);
-	if (NumActionsIncludingZero == 0)
+	if (NumActionsMinusOne == 0)
 	{
 		ActionOne = InAction;
+		NumActionsMinusOne++;
 	}
-	else if (NumActionsIncludingZero == 1)
+	else if (NumActionsMinusOne == 1)
 	{
 		ActionTwo = InAction;
+		NumActionsMinusOne++;
 	}
-	else if (NumActionsIncludingZero == 2)
+	else if (NumActionsMinusOne == 2)
 	{
 		ActionThree = InAction;
+		NumActionsMinusOne++;
 	}
 	else
 	{
@@ -80,9 +82,9 @@ bool FActionSet::TryAddActionCheckIfSameFrame(const float InCurrentWorldTime, co
 
 bool FActionSet::operator==(const FActionSet& Other) const
 {
-	if (WorldTime == Other.WorldTime && NumActionsIncludingZero == Other.NumActionsIncludingZero &&
+	if (WorldTime == Other.WorldTime && NumActionsMinusOne == Other.NumActionsMinusOne &&
 		ActionZero == Other.ActionZero && ActionOne == Other.ActionOne && ActionTwo == Other.ActionTwo && ActionThree ==
-		Other.ActionThree && bFlipToForceReplicate == Other.bFlipToForceReplicate)
+		Other.ActionThree)
 		return true;
 	return false;
 }
@@ -91,19 +93,38 @@ TArray<uint8> FActionSet::ToArray() const
 {
 	TArray<uint8> Array;
 	Array.Add(ActionZero);
-	if (NumActionsIncludingZero > 0)
+	if (NumActionsMinusOne > 0)
 	{
 		Array.Add(ActionOne);
 	}
-	if (NumActionsIncludingZero > 1)
+	if (NumActionsMinusOne > 1)
 	{
 		Array.Add(ActionTwo);
 	}
-	if (NumActionsIncludingZero > 2)
+	if (NumActionsMinusOne > 2)
 	{
 		Array.Add(ActionThree);
 	}
 	return Array;
+}
+
+bool FActionSet::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
+{
+	Ar.SerializeBits(&NumActionsMinusOne, 2);
+	Ar.SerializeBits(&ActionZero, 6);
+	if (NumActionsMinusOne > 0)
+	{
+		Ar.SerializeBits(&ActionOne, 6);
+	}
+	if (NumActionsMinusOne > 1)
+	{
+		Ar.SerializeBits(&ActionTwo, 6);
+	}
+	if (NumActionsMinusOne > 2)
+	{
+		Ar.SerializeBits(&ActionThree, 6);
+	}
+	return true;
 }
 
 FBufferedInput::FBufferedInput(): LifetimePredictedTimestamp(0)
@@ -197,6 +218,7 @@ uint32 GetTypeHash(const FBufferedInput& BufferedInput)
 
 UConstituent::UConstituent()
 {
+	UBlueprintGeneratedClass::BindDynamicDelegates(GetClass(), this);
 }
 
 void UConstituent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -206,10 +228,9 @@ void UConstituent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLife
 	DefaultParams.bIsPushBased = true;
 	DefaultParams.Condition = COND_None;
 	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, OwningSlotable, DefaultParams);
-	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, LastActionSet, DefaultParams);
-	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, LastActionSetTimestamp, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, OriginatingConstituent, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, InstanceId, DefaultParams);
+	DOREPLIFETIME_WITH_PARAMS_FAST(UConstituent, FormCore, DefaultParams);
 }
 
 void UConstituent::SetFormCore()
@@ -224,12 +245,13 @@ void UConstituent::SetFormCore()
 		UE_LOG(LogSfCore, Error, TEXT("Constituent of class %s has no OwningInventory, destroying."), *GetClass()->GetName());
 		Destroy();
 	}
-	else
+	else if (!OwningSlotable->OwningInventory->OwningFormCore)
 	{
-		FormCore = OwningSlotable->OwningInventory->OwningFormCore;
 		UE_LOG(LogSfCore, Error, TEXT("Constituent of class %s has no FormCoreComponent, destroying."), *GetClass()->GetName());
 		Destroy();
 	}
+	FormCore = OwningSlotable->OwningInventory->OwningFormCore;
+	MARK_PROPERTY_DIRTY_FROM_NAME(UConstituent, FormCore, this);
 }
 
 void UConstituent::ServerInitialize()
@@ -237,14 +259,20 @@ void UConstituent::ServerInitialize()
 	SetFormCore();
 	FormCore->ConstituentRegistry.Add(this);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, ConstituentRegistry, FormCore);
-	FormCore->GetFormQuery()->RegisterQueryDependencies(QueryDependencyClasses);
+	if (FormCore->GetFormQuery())
+	{
+		FormCore->GetFormQuery()->RegisterQueryDependencies(QueryDependencyClasses);
+	}
 	Server_Initialize();
 }
 
 void UConstituent::ServerDeinitialize()
 {
 	Server_Deinitialize();
-	FormCore->GetFormQuery()->UnregisterQueryDependencies(QueryDependencyClasses);
+	if (FormCore->GetFormQuery())
+	{
+		FormCore->GetFormQuery()->UnregisterQueryDependencies(QueryDependencyClasses);
+	}
 	FormCore->ConstituentRegistry.Remove(this);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, ConstituentRegistry, FormCore);
 	OwningSlotable->OwningInventory->RemoveCardsOfOwner(InstanceId);
@@ -289,24 +317,24 @@ void UConstituent::InternalExecuteAction(const uint8 InActionId, const bool bInI
 			TimeSincePredictedLastActionSet.SetFloat(0);
 			if (bEnableInputsAndPrediction && IsFormCharacter())
 			{
-				Predicted_OnExecute(InActionId, GetFormCharacter()->IsReplaying(), FormCore->IsFirstPerson(), true);
+				if (Predicted_OnExecute.IsBound())
+				{
+					InternalPredictedOnExecute(InActionId, GetFormCharacter()->IsReplaying(), FormCore->IsFirstPerson(), true);
+				}
 			}
 		}
 		//LastActionSet always needs to be updated if we execute an action, no matter the context.
 		if (!LastActionSet.TryAddActionCheckIfSameFrame(ServerWorldTime, InActionId))
 		{
-			const bool bFlipToReplicate = LastActionSet.bFlipToForceReplicate;
 			LastActionSet = FActionSet(ServerWorldTime, InActionId);
-			//Make a guaranteed change to make sure OnRep is fired.
-			LastActionSet.bFlipToForceReplicate = !bFlipToReplicate;
 		}
-		Server_OnExecute(InActionId);
-		//We replicate this so that simulated proxies can know how long their previous action has ran for after they
-		//become relevant.
-		LastActionSetTimestamp = OwningSlotable->OwningInventory->OwningFormCore->GetNonCompensatedServerWorldTime();
-		MARK_PROPERTY_DIRTY_FROM_NAME(UConstituent, LastActionSet, this);
-		//We only mark this dirty when we execute.
-		MARK_PROPERTY_DIRTY_FROM_NAME(UConstituent, LastActionSetTimestamp, this);
+		if (Server_OnExecute.IsBound())
+		{
+			InternalServerOnExecute(InActionId);
+		}
+		LastActionSetTimestamp = OwningSlotable->OwningInventory->OwningFormCore->GetNonCompensatedServerFormTime();
+		//Flag so FormCoreComponent can call NetMulticastClientPerformActionSet on the LastActionSet.
+		bLastActionSetPendingClientExecution = true;
 	}
 	else if (bEnableInputsAndPrediction && IsFormCharacter() && bInIsPredictableContext && GetOwner()->
 		GetLocalRole() ==
@@ -321,9 +349,45 @@ void UConstituent::InternalExecuteAction(const uint8 InActionId, const bool bInI
 		}
 		bPredictedLastActionSetUpdated = true;
 		TimeSincePredictedLastActionSet.SetFloat(0);
-		Predicted_OnExecute(InActionId, GetFormCharacter()->IsReplaying(), FormCore->IsFirstPerson(), false);
+		if (Predicted_OnExecute.IsBound())
+		{
+			InternalPredictedOnExecute(InActionId, GetFormCharacter()->IsReplaying(), FormCore->IsFirstPerson(), false);
+		}
 	}
-	//Other roles change their states OnRep.
+}
+
+void UConstituent::InternalServerOnExecute(const uint8 InActionId)
+{
+	CurrentActionId = InActionId;
+	Server_OnExecute.Broadcast();
+}
+
+void UConstituent::InternalPredictedOnExecute(const uint8 InActionId, const bool bInIsReplaying,
+	const bool bInIsFirstPerson, const bool bInIsServer)
+{
+	CurrentActionId = InActionId;
+	bCurrentIsReplaying = bInIsReplaying;
+	bCurrentIsFirstPerson = bInIsFirstPerson;
+	bCurrentIsServer = bInIsServer;
+	Predicted_OnExecute.Broadcast();
+}
+
+void UConstituent::InternalAutonomousOnExecute(const uint8 InActionId, const float InTimeSinceExecution,
+	const bool bInIsFirstPerson)
+{
+	CurrentActionId = InActionId;
+	CurrentTimeSinceExecution = InTimeSinceExecution;
+	bCurrentIsFirstPerson = bInIsFirstPerson;
+	Autonomous_OnExecute.Broadcast();
+}
+
+void UConstituent::InternalSimulatedOnExecute(const uint8 InActionId, const float InTimeSinceExecution,
+	const bool bInIsFirstPerson)
+{
+	CurrentActionId = InActionId;
+	CurrentTimeSinceExecution = InTimeSinceExecution;
+	bCurrentIsFirstPerson = bInIsFirstPerson;
+	Simulated_OnExecute.Broadcast();
 }
 
 bool UConstituent::IsIdWithinRange(const uint8 InId)
@@ -363,23 +427,42 @@ UConstituent* UConstituent::GetOriginatingConstituent() const
 	return OriginatingConstituent;
 }
 
-void UConstituent::OnRep_LastActionSet()
+void UConstituent::NetMulticastClientPerformActionSet_Implementation(const FActionSet& InActionSet, const float InServerFormTimestamp)
+{
+	LastActionSet = InActionSet;
+	LastActionSetTimestamp = InServerFormTimestamp;
+	if (HasAuthority()) return;
+	InternalClientPerformActionSet();
+}
+
+void UConstituent::InternalClientPerformActionSet()
 {
 	if (!FormCore) return;
-	const float TimeSinceExecution = FormCore->CalculateTimeSinceServerTimestamp(LastActionSetTimestamp);
+	float TimeSinceExecution = FMath::Max(FormCore->CalculateTimeSinceServerFormTimestamp(LastActionSetTimestamp), 0.f);
+	//We zero out minimal differences to prevent subsequent nodes from making unnecessary calculations.
+	if (TimeSinceExecution < 0.05)
+	{
+		TimeSinceExecution = 0.f;
+	}
 	if (!GetOwner()) return;
 	if (GetOwner()->GetLocalRole() == ROLE_AutonomousProxy)
 	{
 		for (const uint8 Id : LastActionSet.ToArray())
 		{
-			Autonomous_OnExecute(Id, TimeSinceExecution, FormCore->IsFirstPerson());
+			if (Autonomous_OnExecute.IsBound())
+			{
+				InternalAutonomousOnExecute(Id, TimeSinceExecution, FormCore->IsFirstPerson());
+			}
 		}
 	}
 	if (GetOwner()->GetLocalRole() == ROLE_SimulatedProxy)
 	{
 		for (const uint8 Id : LastActionSet.ToArray())
 		{
-			Simulated_OnExecute(Id, TimeSinceExecution, FormCore->IsFirstPerson());
+			if (Simulated_OnExecute.IsBound())
+			{
+				InternalSimulatedOnExecute(Id, TimeSinceExecution, FormCore->IsFirstPerson());
+			}
 		}
 	}
 }
@@ -387,6 +470,16 @@ void UConstituent::OnRep_LastActionSet()
 void UConstituent::IncrementTimeSincePredictedLastActionSet(const float InTimePassed)
 {
 	TimeSincePredictedLastActionSet.SetFloat(TimeSincePredictedLastActionSet.GetFloat() + InTimePassed);
+}
+
+void UConstituent::PerformLastActionSetOnClients()
+{
+	if (!HasAuthority())
+	{
+		UE_LOG(LogSfCore, Error, TEXT("UConstituent of class %s tried to call PerformLastActionSetsOnClients without authority."), *GetClass()->GetName());
+		return;
+	}
+	NetMulticastClientPerformActionSet(LastActionSet, FormCore->GetNonCompensatedServerFormTime());
 }
 
 USfQuery* UConstituent::GetQuery(const TSubclassOf<USfQuery> QueryClass) const
@@ -472,4 +565,29 @@ UFormCoreComponent* UConstituent::GetFormCoreComponent() const
 		UE_LOG(LogSfCore, Error, TEXT("UConstituent of class %s does not have FormCoreComponent."), *GetClass()->GetName())
 	}
 	return FormCore;
+}
+
+int32 UConstituent::GetCurrentActionId() const
+{
+	return CurrentActionId;
+}
+
+bool UConstituent::GetCurrentIsReplaying() const
+{
+	return bCurrentIsReplaying;
+}
+
+bool UConstituent::GetCurrentIsFirstPerson() const
+{
+	return bCurrentIsFirstPerson;
+}
+
+bool UConstituent::GetCurrentIsServer() const
+{
+	return bCurrentIsServer;
+}
+
+float UConstituent::GetCurrentTimeSinceExecution() const
+{
+	return CurrentTimeSinceExecution;
 }

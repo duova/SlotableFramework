@@ -60,6 +60,7 @@ struct TStructOpsTypeTraits<FStatArray> : TStructOpsTypeTraitsBase2<FStatArray>
 	enum 
 	{
 		WithNetDeltaSerializer = true,
+		WithCopy = true
    };
 };
 

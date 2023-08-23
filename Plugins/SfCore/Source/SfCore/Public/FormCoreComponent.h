@@ -69,19 +69,19 @@ public:
 	bool IsFirstPerson();
 
 	//Works for client and server.
-	float GetNonCompensatedServerWorldTime() const;
+	float GetNonCompensatedServerFormTime() const;
 
 	//Works for client and server.
-	float CalculateFutureServerTimestamp(const float InAdditionalTime) const;
+	float CalculateFutureServerFormTimestamp(const float InAdditionalTime) const;
 
 	//Works for client and server.
-	float CalculateTimeUntilServerTimestamp(const float InTimestamp) const;
+	float CalculateTimeUntilServerFormTimestamp(const float InTimestamp) const;
 
 	//Works for client and server.
-	float CalculateTimeSinceServerTimestamp(const float InTimestamp) const;
+	float CalculateTimeSinceServerFormTimestamp(const float InTimestamp) const;
 
 	//Works for client and server.
-	bool HasServerTimestampPassed(const float InTimestamp) const;
+	bool HasServerFormTimestampPassed(const float InTimestamp) const;
 
 	static const TArray<UClass*>& GetAllCardObjectClassesSortedByName();
 

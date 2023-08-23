@@ -28,6 +28,17 @@ struct SFECONOMY_API FCurrencyValuePair
 	bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess);
 };
 
+template<>
+struct TStructOpsTypeTraits<FCurrencyValuePair> : public TStructOpsTypeTraitsBase2<FCurrencyValuePair>
+{
+	enum
+	{
+		WithNetSerializer = true,
+		WithIdenticalViaEquality = true,
+		WithCopy = true
+	};
+};
+
 //Container for different currencies identified by a FGameplayTag.
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class SFECONOMY_API USfCurrencyComponent : public UActorComponent

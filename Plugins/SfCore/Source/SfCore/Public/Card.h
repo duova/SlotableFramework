@@ -97,4 +97,17 @@ struct SFCORE_API FCard
 		Ar << Card.LifetimeEndTimestamp;
 		return Ar;
 	}
+
+	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+};
+
+template<>
+struct TStructOpsTypeTraits<FCard> : public TStructOpsTypeTraitsBase2<FCard>
+{
+	enum
+	{
+		WithNetSerializer = true,
+		WithIdenticalViaEquality = true,
+		WithCopy = true
+	};
 };

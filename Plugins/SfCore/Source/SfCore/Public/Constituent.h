@@ -19,7 +19,7 @@ struct SFCORE_API FActionSet
 {
 	GENERATED_BODY()
 
-	uint8 NumActionsIncludingZero; //Serialized to 2 bits.
+	uint8 NumActionsMinusOne; //Serialized to 2 bits.
 
 	uint8 ActionZero; //Serialized to 6 bits.
 
@@ -28,13 +28,9 @@ struct SFCORE_API FActionSet
 	uint8 ActionTwo; //Serialized to 6 bits.
 
 	uint8 ActionThree; //Serialized to 6 bits.
-
+	
 	//Used for checking whether actions were performed in the same frame.
 	float WorldTime;
-
-	//Since replication needs a variable to change in order to replicate and OnRep, we flip this bool when we want to
-	//force send changes.
-	uint8 bFlipToForceReplicate:1;
 
 	//Do not use default constructor.
 	FActionSet();
@@ -50,24 +46,37 @@ struct SFCORE_API FActionSet
 
 	TArray<uint8> ToArray() const;
 
+	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+	
 	friend FArchive& operator<<(FArchive& Ar, FActionSet& Set)
 	{
-		Ar.SerializeBits(&Set.NumActionsIncludingZero, 2);
+		Ar.SerializeBits(&Set.NumActionsMinusOne, 2);
 		Ar.SerializeBits(&Set.ActionZero, 6);
-		if (Set.NumActionsIncludingZero > 0)
+		if (Set.NumActionsMinusOne > 0)
 		{
 			Ar.SerializeBits(&Set.ActionOne, 6);
 		}
-		if (Set.NumActionsIncludingZero > 1)
+		if (Set.NumActionsMinusOne > 1)
 		{
 			Ar.SerializeBits(&Set.ActionTwo, 6);
 		}
-		if (Set.NumActionsIncludingZero > 2)
+		if (Set.NumActionsMinusOne > 2)
 		{
 			Ar.SerializeBits(&Set.ActionThree, 6);
 		}
 		return Ar;
 	}
+};
+
+template<>
+struct TStructOpsTypeTraits<FActionSet> : public TStructOpsTypeTraitsBase2<FActionSet>
+{
+	enum
+	{
+		WithNetSerializer = true,
+		WithIdenticalViaEquality = true,
+		WithCopy = true
+	};
 };
 
 DECLARE_DYNAMIC_DELEGATE(FBufferedInputDelegate);
@@ -102,7 +111,22 @@ struct SFCORE_API FBufferedInput
 	bool CheckConditionsMet(const UInventory* InInventoryToCheck, const UConstituent* InCurrentConstituent) const;
 };
 
+template<>
+struct TStructOpsTypeTraits<FBufferedInput> : public TStructOpsTypeTraitsBase2<FBufferedInput>
+{
+	enum
+	{
+		WithIdenticalViaEquality = true,
+		WithCopy = true
+	};
+};
+
 uint32 GetTypeHash(const FBufferedInput& BufferedInput);
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FServer_OnExecute);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FPredicted_OnExecute);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FAutonomous_OnExecute);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FSimulated_OnExecute);
 
 /**
  * Building blocks of a slotable which can be reused to share functionality between slotables.
@@ -171,6 +195,7 @@ class SFCORE_API UConstituent : public USfObject
 	friend class UInventory;
 
 public:
+	
 	UConstituent();
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -186,10 +211,10 @@ public:
 	void ServerDeinitialize();
 
 	UFUNCTION(BlueprintImplementableEvent)
-	void Server_Initialize();
+	void Server_Initialize(const bool bInIsPredictableContext = false);
 
 	UFUNCTION(BlueprintImplementableEvent)
-	void Server_Deinitialize();
+	void Server_Deinitialize(const bool bInIsPredictableContext = false);
 
 	//Executes an action, which acts as an identifier for certain event graphs. See UConstituent description for details.
 	//ActionId can only be between 1-63 inclusive.
@@ -199,25 +224,31 @@ public:
 	void InternalExecuteAction(const uint8 InActionId, const bool bInIsPredictableContext = false);
 
 	//Called when an action is executed on the server.
-	UFUNCTION(BlueprintImplementableEvent, BlueprintInternalUseOnly)
-	void Server_OnExecute(const int32 InActionId);
+	UPROPERTY(BlueprintAssignable)
+	FServer_OnExecute Server_OnExecute;
 
 	//Called when an action is executed on the server and client predictively.
 	//Only use functions marked Predicted_.
 	//bIsFirstPerson is only valid on the client.
-	UFUNCTION(BlueprintImplementableEvent, BlueprintInternalUseOnly)
-	void Predicted_OnExecute(const int32 InActionId, const bool bInIsReplaying, const bool bIsFirstPerson,
-	                         const bool bIsServer);
-
-	//TimeSinceLastActionSet does not increment past 655 seconds.
+	UPROPERTY(BlueprintAssignable)
+	FPredicted_OnExecute Predicted_OnExecute;
 
 	//Called when an action is executed on the autonomous client.
-	UFUNCTION(BlueprintImplementableEvent, BlueprintInternalUseOnly)
-	void Autonomous_OnExecute(const int32 InActionId, const float InTimeSinceExecution, const bool bIsFirstPerson);
+	UPROPERTY(BlueprintAssignable)
+	FAutonomous_OnExecute Autonomous_OnExecute;
 
 	//Called when an action is executed on the simulated client.
-	UFUNCTION(BlueprintImplementableEvent, BlueprintInternalUseOnly)
-	void Simulated_OnExecute(const int32 InActionId, const float InTimeSinceExecution, const bool bIsFirstPerson);
+	UPROPERTY(BlueprintAssignable)
+	FSimulated_OnExecute Simulated_OnExecute;
+	
+	void InternalServerOnExecute(const uint8 InActionId);
+	
+	void InternalPredictedOnExecute(const uint8 InActionId, const bool bInIsReplaying, const bool bInIsFirstPerson,
+	                         const bool bInIsServer);
+	
+	void InternalAutonomousOnExecute(const uint8 InActionId, const float InTimeSinceExecution, const bool bInIsFirstPerson);
+	
+	void InternalSimulatedOnExecute(const uint8 InActionId, const float InTimeSinceExecution, const bool bInIsFirstPerson);
 
 	//Input down for the input registered to the UConstituent in UFormCharacterComponent.
 	UFUNCTION(BlueprintImplementableEvent)
@@ -229,7 +260,7 @@ public:
 
 	//Opt in with bEnableLowFreqTick. Ticks at a rate set in UFormCoreComponent.
 	UFUNCTION(BlueprintImplementableEvent)
-	void Server_LowFrequencyTick(const float InDeltaTime);
+	void Server_LowFrequencyTick(const float InDeltaTime, const bool bInIsPredictableContext = false);
 
 	static bool IsIdWithinRange(const uint8 InId);
 
@@ -244,10 +275,16 @@ public:
 	UFUNCTION(BlueprintPure)
 	UConstituent* GetOriginatingConstituent() const;
 
-	UFUNCTION()
-	void OnRep_LastActionSet();
+	UFUNCTION(NetMulticast, Reliable)
+	void NetMulticastClientPerformActionSet(const FActionSet& InActionSet, const float InServerFormTimestamp);
+
+	//TODO: On relevancy, pass a pointer to this actor through the PlayerController to the client where this actor just became relevant.
+	//This is so we can call internal client perform action set and play the most recent action(s).
+	void InternalClientPerformActionSet();
 
 	void IncrementTimeSincePredictedLastActionSet(const float InTimePassed);
+
+	void PerformLastActionSetOnClients();
 
 	//Returns the query of QueryClass.
 	//This needs to be casted to the class to get the event from the query.
@@ -301,11 +338,43 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	bool bEnableLowFreqTick = false;
 
+	//Variables given to BP only during action execution through the K2Node_ConstituentAction.
+	//Grabbed directly from the constituent class instead of passed through the delegate because
+	//it's more complicated to find a way to make K2Nodes work with multicast delegates with different variables.
+
+	UFUNCTION(BlueprintPure, BlueprintInternalUseOnly)
+	int32 GetCurrentActionId() const;
+
+	UFUNCTION(BlueprintPure, BlueprintInternalUseOnly)
+	bool GetCurrentIsReplaying() const;
+
+	UFUNCTION(BlueprintPure, BlueprintInternalUseOnly)
+	bool GetCurrentIsFirstPerson() const;
+
+	UFUNCTION(BlueprintPure, BlueprintInternalUseOnly)
+	bool GetCurrentIsServer() const;
+
+	UFUNCTION(BlueprintPure, BlueprintInternalUseOnly)
+	float GetCurrentTimeSinceExecution() const;
+	
+	int32 CurrentActionId;
+	
+	bool bCurrentIsReplaying;
+	
+	bool bCurrentIsFirstPerson;
+	
+	bool bCurrentIsServer;
+
+	float CurrentTimeSinceExecution;
+
+	//True to send and execute action set on clients.
+	uint8 bLastActionSetPendingClientExecution:1;
+
 protected:
 	//USfQuery classes that this UConstituent depends on.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Constituent")
 	TArray<TSubclassOf<USfQuery>> QueryDependencyClasses;
-
+	
 private:
 	
 	void SetFormCore();
@@ -313,15 +382,13 @@ private:
 	bool bAwaitingClientInit = true;
 
 	//Actions performed on the last frame any actions were performed.
-	UPROPERTY(Replicated, ReplicatedUsing = OnRep_LastActionSet)
 	FActionSet LastActionSet;
 
-	//Only mark dirty when LastActionSet is changed. This is for replicating effects that started right before relevancy.
+	//This is for replicating effects that started right before relevancy.
 	//Uses replicated non-compensated timestamp found in form core.
-	UPROPERTY(Replicated)
 	float LastActionSetTimestamp;
 
-	UPROPERTY()
+	UPROPERTY(Replicated)
 	UFormCoreComponent* FormCore;
 
 	UPROPERTY(Replicated)
@@ -329,8 +396,8 @@ private:
 
 	//In case the naming is confusing:
 	//On the server, neither "time since" is relevant because actions are always executed instantly. On the simulated proxy,
-	//we always use LastActionSet paired with TimeSinceLastActionSet because prediction isn't running. On the autonomous proxy,
-	//TimeSinceLastActionSet will almost always be 0 since we're always relevant, so we only recreate the effects from
+	//we always use LastActionSet paired with LastActionSetTimestamp because prediction isn't running. On the autonomous proxy,
+	//LastActionSetTimestamp will almost always be 0 since we're always relevant, so we only recreate the effects from
 	//PredictedLastActionSet using the respective "time since" and let OnRep handle LastActionSet changes.
 
 	TSet<FBufferedInput> BufferedInputs;
