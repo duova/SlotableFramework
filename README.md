@@ -1,5 +1,6 @@
 # SlotableFramework
-A framework built in Unreal Engine 5 for character based multiplayer games requiring modularity and quality netcode.
+
+A framework built in Unreal Engine 5 for character based competitive multiplayer games that aims to offer a designer centric iteration workflow and fluid netcode implementation with minimum performance compromise.
 
 # Basic Concepts
 
@@ -17,7 +18,7 @@ Operators - Blueprint functions that produces some sort of change to a target. T
 
 Vfx, Animation, and Audio functions - Blueprint functions that serve as an abstraction for audiovisual feature calls. These have prediction and replication in mind. They are designed for humanoid characters - where the usage is as simplified as possible - but can still be used for other rigs.
 
-Other concepts are generally self-explanatory.
+Documentation outside of in-code commenting is WIP.
 
 # Gauntlet
 
