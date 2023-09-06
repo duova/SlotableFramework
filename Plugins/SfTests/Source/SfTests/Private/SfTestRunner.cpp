@@ -96,11 +96,13 @@ void ASfTestRunner::Tick(float DeltaTime)
 		MARK_PROPERTY_DIRTY_FROM_NAME(ASfTestRunner, CurrentTest, this);
 		UE_LOG(LogGauntlet, Display, TEXT("Number of players in the world is: %d."), NumClients);
 
-		//Always set one client to autonomous so the test runner can own the tested actor and make it autonomous.
+		//Always set one client to autonomous so there is a identifiably different client.
 		if (NumClients != 0)
 		{
 			PlayerController = GetWorld()->GetFirstPlayerController();
-			PlayerController->Possess(this);
+			SetOwner(PlayerController);
+			SetAutonomousProxy(true);
+			ClientPossess(PlayerController);
 		}
 		
 		TArray<UClass*> TestClasses = GetSubclassesOf(USfTest::StaticClass());
@@ -184,6 +186,12 @@ FString ASfTestRunner::GetNetRoleAsString(const ENetRole NetRole)
 		return FString("SimulatedProxy");
 	}
 	return FString();
+}
+
+void ASfTestRunner::ClientPossess_Implementation(APlayerController* InPlayerController)
+{
+	SetOwner(InPlayerController);
+	SetAutonomousProxy(true);
 }
 
 void ASfTestRunner::NetMulticastEndTestSession_Implementation(const bool bPassed)

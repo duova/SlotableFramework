@@ -7,7 +7,7 @@
 #include "FormStatComponent.h"
 #include "Net/UnrealNetwork.h"
 
-FResource::FResource(): Value(0)
+FResource::FResource(): Value(0), MaxValueOverride(0)
 {
 }
 
@@ -32,7 +32,6 @@ bool FResource::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
 
 UFormResourceComponent::UFormResourceComponent()
 {
-	if (!GetOwner()) return;
 	PrimaryComponentTick.bCanEverTick = true;
 	bReplicateUsingRegisteredSubObjectList = true;
 	SetIsReplicatedByDefault(true);

@@ -437,14 +437,22 @@ void UConstituent::NetMulticastClientPerformActionSet_Implementation(const FActi
 
 void UConstituent::InternalClientPerformActionSet()
 {
-	if (!FormCore) return;
+	if (!FormCore)
+	{
+		UE_LOG(LogSfCore, Error, TEXT("InternalClientPerformActionSet was called on UConstituent class %s without a missing FormCoreComponent."), *GetClass()->GetName());
+		return;
+	}
+	if (!GetOwner())
+	{
+		UE_LOG(LogSfCore, Error, TEXT("InternalClientPerformActionSet was called on UConstituent class %s without a valid owner."), *GetClass()->GetName());
+		return;
+	}
 	float TimeSinceExecution = FMath::Max(FormCore->CalculateTimeSinceServerFormTimestamp(LastActionSetTimestamp), 0.f);
 	//We zero out minimal differences to prevent subsequent nodes from making unnecessary calculations.
 	if (TimeSinceExecution < 0.05)
 	{
 		TimeSinceExecution = 0.f;
 	}
-	if (!GetOwner()) return;
 	if (GetOwner()->GetLocalRole() == ROLE_AutonomousProxy)
 	{
 		for (const uint8 Id : LastActionSet.ToArray())

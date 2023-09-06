@@ -27,7 +27,6 @@ bool FCurrencyValuePair::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOut
 
 USfCurrencyComponent::USfCurrencyComponent()
 {
-	if (!GetOwner()) return;
 	PrimaryComponentTick.bCanEverTick = false;
 	bReplicateUsingRegisteredSubObjectList = true;
 	SetIsReplicatedByDefault(true);

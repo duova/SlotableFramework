@@ -14,4 +14,3 @@ AFormPawn::AFormPawn()
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicateUsingRegisteredSubObjectList = true;
 }
-

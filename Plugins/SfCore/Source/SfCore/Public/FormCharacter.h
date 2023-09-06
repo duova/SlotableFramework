@@ -23,4 +23,8 @@ public:
 	UFormCoreComponent* FormCore;
 
 	inline static FName FormCoreComponentName = "FormCoreComp";
+
+	inline static FName EnhancedInputComponentName = "EnhancedInputComp";
+
+	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 };

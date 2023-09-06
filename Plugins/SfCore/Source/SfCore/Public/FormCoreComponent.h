@@ -132,10 +132,25 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, VisibleAnywhere, Category = "FormCoreComponent")
 	float AccelerationStat;
 
+	UPROPERTY(Replicated, BlueprintReadOnly)
+	UFormCharacterComponent* FormCharacter;
+
+	UPROPERTY(Replicated, BlueprintReadOnly)
+	UFormQueryComponent* FormQuery;
+
+	UPROPERTY(Replicated, BlueprintReadOnly)
+	USfHealthComponent* SfHealth;
+
+	UPROPERTY(Replicated, BlueprintReadOnly)
+	UFormStatComponent* FormStat;
+
+	UPROPERTY(Replicated, BlueprintReadOnly)
+	UFormResourceComponent* FormResource;
+
 protected:
 	virtual void BeginPlay() override;
 
-	virtual void BeginDestroy() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	//Inventories to create when this form is spawned.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "FormCoreComponent")
@@ -166,21 +181,6 @@ private:
 	inline static TArray<UClass*> AllCardObjectClassesSortedByName = TArray<UClass*>();
 
 	inline static bool CardObjectClassesFetched = false;
-
-	UPROPERTY()
-	UFormCharacterComponent* FormCharacter;
-
-	UPROPERTY()
-	UFormQueryComponent* FormQuery;
-
-	UPROPERTY()
-	USfHealthComponent* SfHealth;
-
-	UPROPERTY()
-	UFormStatComponent* FormStat;
-
-	UPROPERTY()
-	UFormResourceComponent* FormResource;
 	
 	TMap<FGameplayTag, FTriggerDelegate> Triggers;
 	

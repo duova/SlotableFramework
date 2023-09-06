@@ -96,10 +96,16 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void Log(const FString& Message);
 
-	UFUNCTION(BlueprintCallable)
+	/*
+	//The actor must have been instantiated in a previous procedure.
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	void PossessInstantiatedActor(AActor* ActorToPossess);
+	*/
 
 	bool TestCanPass = true;
+
+	UFUNCTION(BlueprintPure)
+	APlayerController* GetAutonomousPlayerController() const;
 
 private:
 	TArray<FTestProcedure> Procedures;
@@ -127,8 +133,10 @@ private:
 	UFUNCTION(Server, Reliable)
 	void ServerClientFinishProcedureCallback(const bool bPassed);
 
+	/*
 	UFUNCTION(Client, Reliable)
 	void ClientPossess(AActor* ActorToPossess);
+	*/
 
 	UFUNCTION()
 	void OnRep_CurrentProcedureIndex();

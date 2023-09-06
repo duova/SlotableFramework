@@ -84,7 +84,6 @@ void UDeathHandler::InternalClientOnDeathRPC_Implementation(USfHealthComponent* 
 
 USfHealthComponent::USfHealthComponent()
 {
-	if (!GetOwner()) return;
 	PrimaryComponentTick.bCanEverTick = true;
 	bReplicateUsingRegisteredSubObjectList = true;
 	SetIsReplicatedByDefault(true);

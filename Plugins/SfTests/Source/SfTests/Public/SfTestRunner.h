@@ -49,6 +49,9 @@ public:
 	APlayerController* PlayerController;
 
 private:
+	UFUNCTION(Client, Reliable)
+	void ClientPossess(APlayerController* InPlayerController);
+	
 	UPROPERTY(Replicated)
 	USfTest* CurrentTest;
 

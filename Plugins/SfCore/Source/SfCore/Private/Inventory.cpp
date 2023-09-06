@@ -11,7 +11,6 @@
 
 UInventory::UInventory()
 {
-	if (!GetOwner()) return;
 	bIsOnFormCharacter = false;
 	bInitialized = false;
 }
@@ -1038,13 +1037,13 @@ void UInventory::AutonomousDeinitialize()
 
 void UInventory::ServerDeinitialize()
 {
-	Server_Deinitialize();
-	ClientAutonomousDeinitialize();
-	bInitialized = false;
 	for (USlotable* Slotable : Slotables)
 	{
 		DeinitializeSlotable(Slotable);
 	}
+	Server_Deinitialize();
+	ClientAutonomousDeinitialize();
+	bInitialized = false;
 }
 
 void UInventory::AssignConstituentInstanceId(UConstituent* Constituent)

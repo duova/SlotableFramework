@@ -12,7 +12,6 @@
 
 USfShopBroadcasterComponent::USfShopBroadcasterComponent()
 {
-	if (!GetOwner()) return;
 	PrimaryComponentTick.bCanEverTick = false;
 	bReplicateUsingRegisteredSubObjectList = true;
 	SetIsReplicatedByDefault(true);

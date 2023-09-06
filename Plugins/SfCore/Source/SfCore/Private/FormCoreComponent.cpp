@@ -15,7 +15,6 @@
 
 UFormCoreComponent::UFormCoreComponent()
 {
-	if (!GetOwner()) return;
 	PrimaryComponentTick.bCanEverTick = true;
 	bReplicateUsingRegisteredSubObjectList = true;
 	SetIsReplicatedByDefault(true);
@@ -97,6 +96,11 @@ void UFormCoreComponent::BeginPlay()
 	SfHealth = Cast<USfHealthComponent>(GetOwner()->FindComponentByClass(USfHealthComponent::StaticClass()));
 	FormStat = Cast<UFormStatComponent>(GetOwner()->FindComponentByClass(UFormStatComponent::StaticClass()));
 	FormResource = Cast<UFormResourceComponent>(GetOwner()->FindComponentByClass(UFormResourceComponent::StaticClass()));
+	MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, FormCharacter, this);
+	MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, FormQuery, this);
+	MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, SfHealth, this);
+	MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, FormStat, this);
+	MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, FormResource, this);
 
 	if (FormCharacter)
 	{
@@ -186,14 +190,14 @@ void UFormCoreComponent::BeginPlay()
 	CalculatedTimeBetweenLowFrequencyTicks = 1.0 / LowFrequencyTicksPerSecond;
 }
 
-void UFormCoreComponent::BeginDestroy()
+void UFormCoreComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	Super::BeginDestroy();
-	if (!GetOwner()) return;
-	if (!GetOwner()->HasAuthority()) return;
-	for (UInventory* Inventory : Inventories)
+	if (GetOwner() && GetOwner()->HasAuthority())
 	{
-		Inventory->ServerDeinitialize();
+		for (int16 i = Inventories.Num() - 1; i >= 0; i--)
+		{
+			Server_RemoveInventoryByIndex(i);
+		}
 	}
 }
 
@@ -291,6 +295,11 @@ void UFormCoreComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, FlySpeedStat, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, AccelerationStat, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, ConstituentRegistry, DefaultParams);
+	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, FormCharacter, DefaultParams);
+	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, FormQuery, DefaultParams);
+	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, SfHealth, DefaultParams);
+	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, FormStat, DefaultParams);
+	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, FormResource, DefaultParams);
 }
 
 const TArray<UInventory*>& UFormCoreComponent::GetInventories()

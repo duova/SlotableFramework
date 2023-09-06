@@ -153,6 +153,12 @@ void USfTest::Log(const FString& Message)
 	UE_LOG(LogGauntlet, Display, TEXT("%s %s: %s"), *ASfTestRunner::GetNetRoleAsString(GetOwner()->GetLocalRole()), *GetClass()->GetName(), *Message);
 }
 
+APlayerController* USfTest::GetAutonomousPlayerController() const
+{
+	return Cast<APlayerController>(TestRunner->GetOwner());
+}
+
+/*
 void USfTest::PossessInstantiatedActor(AActor* ActorToPossess)
 {
 	if (!HasAuthority()) return;
@@ -161,6 +167,7 @@ void USfTest::PossessInstantiatedActor(AActor* ActorToPossess)
 	UE_LOG(LogGauntlet, Display, TEXT("The remote role of actor %s is now: %s."), *ActorToPossess->GetName(), *ASfTestRunner::GetNetRoleAsString(ActorToPossess->GetRemoteRole()));
 	ClientPossess(ActorToPossess);
 }
+*/
 
 void USfTest::NetMulticastClientExecute_Implementation()
 {
@@ -169,11 +176,13 @@ void USfTest::NetMulticastClientExecute_Implementation()
 	ExecuteClientProcedureIfCorrectNetRole();
 }
 
+/*
 void USfTest::ClientPossess_Implementation(AActor* ActorToPossess)
 {
 	ActorToPossess->SetOwner(TestRunner);
 	ActorToPossess->SetAutonomousProxy(true);
 }
+*/
 
 void USfTest::OnRep_CurrentProcedureIndex()
 {

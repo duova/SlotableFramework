@@ -200,7 +200,7 @@ FNetworkPredictionData_Client_Sf::FNetworkPredictionData_Client_Sf(const UCharac
 
 FSavedMovePtr FNetworkPredictionData_Client_Sf::AllocateNewMove()
 {
-	return FSavedMovePtr(new FSavedMove_Sf);
+	return MakeShared<FSavedMove_Sf>();
 }
 
 FSfNetworkMoveData::FSfNetworkMoveData()
@@ -213,7 +213,7 @@ bool FSfNetworkMoveData::Serialize(UCharacterMovementComponent& CharacterMovemen
                                    UPackageMap* PackageMap, ENetworkMoveType MoveType)
 {
 	UFormCharacterComponent* CharacterComponent = Cast<UFormCharacterComponent>(&CharacterMovement);
-
+	
 	NetworkMoveType = MoveType;
 
 	bool bLocalSuccess = true;
@@ -229,8 +229,17 @@ bool FSfNetworkMoveData::Serialize(UCharacterMovementComponent& CharacterMovemen
 	ControlRotation.NetSerialize(Ar, PackageMap, bLocalSuccess);
 
 	SerializeOptionalValue<uint8>(bIsSaving, Ar, CompressedMoveFlags, 0);
-
+	
+	if (MoveType == ENetworkMoveType::NewMove)
+	{
+		// Location, relative movement base, and ending movement mode is only used for error checking, so only save for the final move.
+		SerializeOptionalValue<UPrimitiveComponent*>(bIsSaving, Ar, MovementBase, nullptr);
+		SerializeOptionalValue<FName>(bIsSaving, Ar, MovementBaseBoneName, NAME_None);
+		SerializeOptionalValue<uint8>(bIsSaving, Ar, MovementMode, MOVE_Walking);
+	}
+	
 	//We add our flags to serialization.
+	Ar.SerializeBits(&EnabledInputSets, 2);
 	if (EnabledInputSets > 0)
 	{
 		SerializeOptionalValue<uint8>(bIsSaving, Ar, PrimaryInputSet, 0);
@@ -261,7 +270,7 @@ bool FSfNetworkMoveData::Serialize(UCharacterMovementComponent& CharacterMovemen
 		//Negative values mean do not check on server.
 		PredictedNetClock = -1;
 	}
-
+	
 	//Only serialize pending action sets if actions were made that frame.
 	bool bDoSerializeActionSets = bIsSaving && !PendingActionSets.IsEmpty();
 	Ar.SerializeBits(&bDoSerializeActionSets, 1);
@@ -269,7 +278,7 @@ bool FSfNetworkMoveData::Serialize(UCharacterMovementComponent& CharacterMovemen
 	{
 		Ar << PendingActionSets;
 	}
-
+	
 	//Conditionally serialize InventoryCardIdentifiers if they have been changed.
 	bool bDoSerializeCardIdentifiers = bIsSaving && CardIdentifiersInInventories != CharacterComponent->
 		OldCardIdentifiersInInventories;
@@ -287,29 +296,25 @@ bool FSfNetworkMoveData::Serialize(UCharacterMovementComponent& CharacterMovemen
 		CardIdentifiersInInventories = CharacterComponent->OldCardIdentifiersInInventories;
 	}
 
-	//Conditionally serialize Resources if they have been changed.
-	bool bDoSerializeResources = bIsSaving && Resources != CharacterComponent->
-		OldClientSentResources;
-	Ar.SerializeBits(&bDoSerializeResources, 1);
-	if (bDoSerializeResources)
+	//Only if FormResource is available on the form.
+	if (CharacterComponent->FormResource)
 	{
-		Ar << Resources;
-		//We set update OldClientSentResources on both the server and client.
-		//The client version is what we use to check if we have attempted to send our latest changes already.
-		//The server version is what is used if the client indicates they have no updates.
-		CharacterComponent->OldClientSentResources = Resources;
-	}
-	else if (!bIsSaving)
-	{
-		Resources = CharacterComponent->OldClientSentResources;
-	}
-
-	if (MoveType == ENetworkMoveType::NewMove)
-	{
-		// Location, relative movement base, and ending movement mode is only used for error checking, so only save for the final move.
-		SerializeOptionalValue<UPrimitiveComponent*>(bIsSaving, Ar, MovementBase, nullptr);
-		SerializeOptionalValue<FName>(bIsSaving, Ar, MovementBaseBoneName, NAME_None);
-		SerializeOptionalValue<uint8>(bIsSaving, Ar, MovementMode, MOVE_Walking);
+		//Conditionally serialize Resources if they have been changed.
+		bool bDoSerializeResources = bIsSaving && Resources != CharacterComponent->
+			OldClientSentResources;
+		Ar.SerializeBits(&bDoSerializeResources, 1);
+		if (bDoSerializeResources)
+		{
+			Ar << Resources;
+			//We set update OldClientSentResources on both the server and client.
+			//The client version is what we use to check if we have attempted to send our latest changes already.
+			//The server version is what is used if the client indicates they have no updates.
+			CharacterComponent->OldClientSentResources = Resources;
+		}
+		else if (!bIsSaving)
+		{
+			Resources = CharacterComponent->OldClientSentResources;
+		}
 	}
 
 	return !Ar.IsError();
@@ -460,9 +465,9 @@ bool FSfMoveResponseDataContainer::Serialize(UCharacterMovementComponent& Charac
 		}
 
 		//Conditionally serialize ActionSets.
-		bool bDoSerializeStates = (CharacterComponent->CorrectionConditionFlags
+		bool bDoSerializeActionSets = (CharacterComponent->CorrectionConditionFlags
 			& Repredict_ActionSetsCardsResources) != 0;
-		if (bDoSerializeStates)
+		if (bDoSerializeActionSets)
 		{
 			Ar << CharacterComponent->ActionSetResponses;
 			Ar << CharacterComponent->TimesSinceLastAction;
@@ -520,10 +525,8 @@ bool FSfMoveResponseDataContainer::Serialize(UCharacterMovementComponent& Charac
 
 UFormCharacterComponent::UFormCharacterComponent()
 {
-	if (!GetOwner()) return;
 	SetNetworkMoveDataContainer(SfNetworkMoveDataContainer);
 	SetMoveResponseDataContainer(SfMoveResponseDataContainer);
-	//Initialize variables.
 	bWantsToSprint = false;
 	bMovementSpeedNeedsRecalculation = true;
 	EnabledInputSets = 0;
@@ -586,7 +589,7 @@ void UFormCharacterComponent::SetupFormCharacter(UFormCoreComponent* FormCoreCom
 	FormCore = FormCoreComponent;
 
 	//Sanity check to ensure only 24 slotable inputs are available.
-	if (InputActionRegistry.Num() > 23)
+	if (InputActionRegistry.Num() > 24)
 	{
 		UE_LOG(LogSfCore, Error,
 		       TEXT(
@@ -597,11 +600,11 @@ void UFormCharacterComponent::SetupFormCharacter(UFormCoreComponent* FormCoreCom
 	}
 
 	//Enable input sets depending on how many are necessary.
-	if (InputActionRegistry.Num() < 8)
+	if (InputActionRegistry.Num() < 9)
 	{
 		EnabledInputSets = 1;
 	}
-	else if (InputActionRegistry.Num() < 16)
+	else if (InputActionRegistry.Num() < 17)
 	{
 		EnabledInputSets = 2;
 	}
@@ -609,26 +612,13 @@ void UFormCharacterComponent::SetupFormCharacter(UFormCoreComponent* FormCoreCom
 	{
 		EnabledInputSets = 3;
 	}
-
-	//Bind actions on owning client.
-	if (GetOwner() && GetOwner()->GetLocalRole() == ROLE_AutonomousProxy)
-	{
-		EnhancedInputComponent = Cast<UEnhancedInputComponent>(CharacterOwner->InputComponent);
-		//We bind all the inputs to the same function as we figure out which input triggered it with FInputActionInstance.
-		for (const UInputAction* InputAction : InputActionRegistry)
-		{
-			EnhancedInputComponent->BindAction(InputAction, ETriggerEvent::Started, this,
-			                                   &UFormCharacterComponent::OnInputDown);
-			EnhancedInputComponent->BindAction(InputAction, ETriggerEvent::Canceled, this,
-			                                   &UFormCharacterComponent::OnInputUp);
-		}
-	}
 }
 
 void UFormCharacterComponent::SecondarySetupFormCharacter()
 {
 	FormStat = FormCore->GetFormStat();
 	FormResource = FormCore->GetFormResource();
+	if (!FormResource) return;
 	TimeBetweenResourceUpdate = FormResource->CalculatedTimeToEachResourceUpdate;
 	ResourceUpdatesPerSecond = 1/TimeBetweenResourceUpdate;
 }
@@ -668,8 +658,26 @@ bool UFormCharacterComponent::HasPredictedTimestampPassed(const float InTimestam
 	return CalculateTimeUntilPredictedTimestamp(InTimestamp) <= 0;
 }
 
+void UFormCharacterComponent::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+{
+	if (GetOwner() && !GetOwner()->HasAuthority())
+	{
+		EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent);
+		//We bind all the inputs to the same function as we figure out which input triggered it with FInputActionInstance.
+		for (const UInputAction* InputAction : InputActionRegistry)
+		{
+			if (!InputAction) continue;
+			EnhancedInputComponent->BindAction(InputAction, ETriggerEvent::Started, this,
+											   &UFormCharacterComponent::OnInputDown);
+			EnhancedInputComponent->BindAction(InputAction, ETriggerEvent::Canceled, this,
+											   &UFormCharacterComponent::OnInputUp);
+		}
+	}
+}
+
 void UFormCharacterComponent::OnInputDown(const FInputActionInstance& Instance)
 {
+	if (GetOwner()->GetLocalRole() != ROLE_AutonomousProxy) return;
 	//Use the registry index to write to input sets.
 	const uint8 InputIndex = FindInputIndexInRegistry(Instance);
 	if (InputIndex == INDEX_NONE) return;
@@ -689,6 +697,7 @@ void UFormCharacterComponent::OnInputDown(const FInputActionInstance& Instance)
 
 void UFormCharacterComponent::OnInputUp(const FInputActionInstance& Instance)
 {
+	if (GetOwner()->GetLocalRole() != ROLE_AutonomousProxy) return;
 	//Use the registry index to write to input sets.
 	const uint8 InputIndex = FindInputIndexInRegistry(Instance);
 	if (InputIndex == INDEX_NONE) return;
@@ -753,46 +762,42 @@ void UFormCharacterComponent::MoveAutonomous(float ClientTimeStamp, float DeltaT
 	Super::MoveAutonomous(ClientTimeStamp, DeltaTime, CompressedFlags, NewAccel);
 }
 
-bool UFormCharacterComponent::CardHasEquivalentCardIdentifier(
-	const FCardIdentifiersInAnInventory& InCardIdentifierInventory,
+bool UFormCharacterComponent::CardHasEquivalentCardIdentifierFromClient(
+	const FCardIdentifiersInAnInventory& InCardIdentifierInventoryFromClient,
 	const FCard& InCard)
 {
-	bool bFoundCardIdentifier = false;
-	for (const FNetCardIdentifier& CardIdentifier : InCardIdentifierInventory.CardIdentifiers)
+	for (const FNetCardIdentifier& CardIdentifier : InCardIdentifierInventoryFromClient.CardIdentifiers)
 	{
 		if (CardIdentifier.ClassIndex == InCard.ClassIndex && CardIdentifier.OwnerConstituentInstanceId == InCard.
 			OwnerConstituentInstanceId)
 		{
-			bFoundCardIdentifier = true;
-			break;
+			return true;
 		}
 	}
-	return bFoundCardIdentifier;
+	return false;
 }
 
 bool UFormCharacterComponent::CardCanBeFoundInInventory(UInventory* Inventory,
                                                         const FNetCardIdentifier InCardIdentifier)
 {
-	bool bFoundCard = false;
 	for (const FCard& Card : Inventory->Cards)
 	{
 		if (InCardIdentifier.ClassIndex == Card.ClassIndex && InCardIdentifier.OwnerConstituentInstanceId == Card.
 			OwnerConstituentInstanceId)
 		{
-			bFoundCard = true;
-			break;
+			return true;
 		}
 	}
-	return bFoundCard;
+	return false;
 }
 
 void UFormCharacterComponent::HandleInventoryDifferencesAndSetCorrectionFlags(
-	UInventory* Inventory, const FCardIdentifiersInAnInventory& InCardIdentifierInventory)
+	UInventory* Inventory, const FCardIdentifiersInAnInventory& InCardIdentifierInventoryFromClient)
 {
 	TArray<FCard>& ServerCards = Inventory->Cards;
 	for (int16 i = ServerCards.Num() - 1; i >= 0; i--)
 	{
-		if (CardHasEquivalentCardIdentifier(InCardIdentifierInventory, ServerCards[i]))
+		if (CardHasEquivalentCardIdentifierFromClient(InCardIdentifierInventoryFromClient, ServerCards[i]))
 		{
 			//If the client has been updated with a server initiated card addition, we can start correcting that card.
 			if (ServerCards[i].bIsNotCorrected)
@@ -818,7 +823,7 @@ void UFormCharacterComponent::HandleInventoryDifferencesAndSetCorrectionFlags(
 	ServerCards.Shrink();
 
 	//Check if any card identifier is missing the equivalent card on the server. If so correct.
-	for (const FNetCardIdentifier& CardIdentifier : InCardIdentifierInventory.CardIdentifiers)
+	for (const FNetCardIdentifier& CardIdentifier : InCardIdentifierInventoryFromClient.CardIdentifiers)
 	{
 		if (!CardCanBeFoundInInventory(Inventory, CardIdentifier))
 		{
@@ -883,7 +888,10 @@ void UFormCharacterComponent::SfServerCheckClientError()
 		                                                ClientCardIdentifiersInInventories[InventoryIndex]);
 	}
 
-	HandleResourcesDifferencesAndSetCorrectionFlags(FormCore->GetFormResource(), MoveData->Resources);
+	if (FormResource)
+	{
+		HandleResourcesDifferencesAndSetCorrectionFlags(FormResource, MoveData->Resources);
+	}
 }
 
 void UFormCharacterComponent::UpdateFromAdditionInputs()
@@ -913,7 +921,10 @@ bool UFormCharacterComponent::ClientUpdatePositionAfterServerUpdate()
 		CorrectionConditionFlags = 0;
 
 		//Call a delegate so form components know to restart with their current state.
-		OnPostRollback.Broadcast();
+		if (OnPostRollback.IsBound())
+		{
+			OnPostRollback.Broadcast();
+		}
 	}
 	return ReturnValue;
 }
@@ -922,6 +933,7 @@ void UFormCharacterComponent::CorrectActionSets()
 {
 	//Constituent registry can't be used since this has to be in a deterministic order.
 	uint16 i = 0;
+	if (ActionSetResponses.Num() == 0 || TimesSinceLastAction.Num() == 0) return;
 	for (const UInventory* Inventory : FormCore->GetInventories())
 	{
 		for (const USlotable* Slotable : Inventory->GetSlotables())
@@ -948,15 +960,15 @@ void UFormCharacterComponent::CorrectCards()
 
 void UFormCharacterComponent::CorrectResources() const
 {
-	FormCore->GetFormResource()->Resources = ResourcesResponse;
+	FormResource->Resources = ResourcesResponse;
 }
 
 void UFormCharacterComponent::PackActionSets()
 {
 	ActionSetResponses.Empty();
 	TimesSinceLastAction.Empty();
-	ActionSetResponses.Reserve(ActionSetResponses.Num() + FormCore->ConstituentRegistry.Num());
-	TimesSinceLastAction.Reserve(TimesSinceLastAction.Num() + FormCore->ConstituentRegistry.Num());
+	ActionSetResponses.Reserve(FormCore->ConstituentRegistry.Num());
+	TimesSinceLastAction.Reserve(FormCore->ConstituentRegistry.Num());
 	//Constituent registry can't be used since this has to be in a deterministic order.
 	for (const UInventory* Inventory : FormCore->GetInventories())
 	{
@@ -1040,6 +1052,7 @@ void UFormCharacterComponent::HandleCardClientSyncTimeout() const
 
 void UFormCharacterComponent::ApplyInputBitsToInventory(const uint32 InInputBits, const UInventory* InInventory)
 {
+	//Note that input indices 0-23 represent the index of the input action that is registered in the InputActionRegistry.
 	const TArray<int8>& BoundInputIndices = InInventory->OrderedInputBindingIndices;
 	for (uint8 i = 0; i < BoundInputIndices.Num(); i++)
 	{
@@ -1048,7 +1061,8 @@ void UFormCharacterComponent::ApplyInputBitsToInventory(const uint32 InInputBits
 		const bool bInputValue = GetValueFromInputSets(BoundInputIndices[i], InInputBits);
 		//We don't want to do anything if the value isn't actually updated.
 		if (InInventory->OrderedLastInputState[i] == bInputValue) continue;
-		if (InInventory->Slotables.Num() < i || InInventory->Slotables[i] == nullptr) continue;
+		if (InInventory->Slotables.Num() <= i) continue;
+		if (InInventory->Slotables[i] == nullptr) continue;
 		for (UConstituent* Constituent : InInventory->Slotables[i]->GetConstituents())
 		{
 			if (!Constituent->bEnableInputsAndPrediction) continue;
@@ -1180,28 +1194,33 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 			bClientCardsWereUpdated = false;
 			CorrectCards();
 		}
-		if (bClientResourcesWereUpdated)
+		if (FormResource && bClientResourcesWereUpdated)
 		{
 			bClientResourcesWereUpdated = false;
 			CorrectResources();
 		}
 	}
 
+	//If we're not replaying, or if we would like to repredict the net clock or action sets, cards, or resources.
+	//Not if we want to repredict movement or update cards only.
 	if (!IsReplaying() || (CorrectionConditionFlags & (Repredict_NetClock | Repredict_ActionSetsCardsResources)) != 0)
 	{
-		//Apply consistent resource changes.
-		//Applies every at a specified increment of the predicted net clock only to reduce bandwidth and processing usage.
-		//This math is supposed to divide the clock by the time between resource updates and use FMath::Floor to determine whether
-		//the second number has crossed the threshold. Multiplication is used instead for speed.
-		if (FMath::Floor(PredictedNetClock * ResourceUpdatesPerSecond) != FMath::Floor(
-			(PredictedNetClock + DeltaSeconds) * ResourceUpdatesPerSecond))
+		if (FormResource)
 		{
-			for (FResource& Resource : FormResource->Resources)
+			//Apply consistent resource changes.
+			//Applies every at a specified increment of the predicted net clock only to reduce bandwidth and processing usage.
+			//This math is supposed to divide the clock by the time between resource updates and use FMath::Floor to determine whether
+			//the second number has crossed the threshold. Multiplication is used instead for speed.
+			if (FMath::Floor(PredictedNetClock * ResourceUpdatesPerSecond) != FMath::Floor(
+				(PredictedNetClock + DeltaSeconds) * ResourceUpdatesPerSecond))
 			{
-				FormResource->LocalInternalAddResourceValue(
-					Resource, FormStat->GetStat(Resource.IncreasePerSecondStat) * TimeBetweenResourceUpdate);
-				FormResource->LocalInternalRemoveResourceValue(
-					Resource, FormStat->GetStat(Resource.DecreasePerSecondStat) * TimeBetweenResourceUpdate);
+				for (FResource& Resource : FormResource->Resources)
+				{
+					FormResource->LocalInternalAddResourceValue(
+						Resource, FormStat->GetStat(Resource.IncreasePerSecondStat) * TimeBetweenResourceUpdate);
+					FormResource->LocalInternalRemoveResourceValue(
+						Resource, FormStat->GetStat(Resource.DecreasePerSecondStat) * TimeBetweenResourceUpdate);
+				}
 			}
 		}
 
@@ -1214,7 +1233,7 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 
 		RemovePredictedCardWithEndedLifetimes();
 
-		//Run input if we're not replaying, or if we want to predict anything that is not movement.
+		//Run input if we're not replaying, or if we want to repredict anything that is not movement.
 		const uint32 InputBits = GetInputSetsJoinedBits();
 		for (const UInventory* Inventory : FormCore->GetInventories())
 		{
@@ -1228,7 +1247,7 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 			//Note that the buffered inputs firing is implemented with the addition or removal of cards.
 		}
 
-		//Pack the states back into the FormCharacter only after we've changed them.
+		//Pack the action sets back into the FormCharacter only after we've changed them.
 		PendingActionSets.Empty();
 		PendingActionSets.Reserve(FormCore->ConstituentRegistry.Num());
 		for (UConstituent* Constituent : FormCore->ConstituentRegistry)
@@ -1241,7 +1260,10 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 			}
 		}
 
-		PackResources();
+		if (FormResource)
+		{
+			PackResources();
+		}
 
 		if (GetOwner() && !GetOwner()->HasAuthority())
 		{

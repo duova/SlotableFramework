@@ -12,3 +12,9 @@ AFormCharacter::AFormCharacter(const FObjectInitializer& ObjectInitializer) : Su
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicateUsingRegisteredSubObjectList = true;
 }
+
+void AFormCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+{
+	Super::SetupPlayerInputComponent(PlayerInputComponent);
+	Cast<UFormCharacterComponent>(GetCharacterMovement())->SetupPlayerInputComponent(PlayerInputComponent);
+}

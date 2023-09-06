@@ -279,6 +279,7 @@ public:
 	void NetMulticastClientPerformActionSet(const FActionSet& InActionSet, const float InServerFormTimestamp);
 
 	//TODO: On relevancy, pass a pointer to this actor through the PlayerController to the client where this actor just became relevant.
+	//The last action set and time since values will have to be passed through as those would presumably not have updated.
 	//This is so we can call internal client perform action set and play the most recent action(s).
 	void InternalClientPerformActionSet();
 

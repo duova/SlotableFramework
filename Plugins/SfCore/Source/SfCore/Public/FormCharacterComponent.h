@@ -364,7 +364,8 @@ public:
 struct FSfNetworkMoveData : FCharacterNetworkMoveData
 {
 	//Number of input sets to enable.
-	uint8 EnabledInputSets:2;
+	//Serialized to 2 bits.
+	uint8 EnabledInputSets;
 
 	//Additional inputs.
 	uint8 PrimaryInputSet;
@@ -483,6 +484,9 @@ public:
 
 	void CalculateMovementSpeed();
 
+	//Must be called by character to setup input.
+	void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent);
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "FormCharacterComponent", meta = (ClampMin = 0.f, ClampMax = 999999.f))
 	float BaseWalkSpeed;
 
@@ -597,11 +601,16 @@ protected:
 
 	FOnPostRollback OnPostRollback;
 
+	//Register InputActions that can be used for constituent implementation.
+	//Only 24 InputActions can be used.
+	//Movement inputs work with the CMC system and not the constituent/form character system.
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "FormCharacterComponent")
 	TArray<UInputAction*> InputActionRegistry;
-
+	
+	UFUNCTION()
 	void OnInputDown(const FInputActionInstance& Instance);
 
+	UFUNCTION()
 	void OnInputUp(const FInputActionInstance& Instance);
 	
 	virtual void BeginPlay() override;
@@ -616,12 +625,12 @@ protected:
 	virtual void MoveAutonomous(float ClientTimeStamp, float DeltaTime, uint8 CompressedFlags,
 	                            const FVector& NewAccel) override;
 
-	bool CardHasEquivalentCardIdentifier(const FCardIdentifiersInAnInventory& InCardIdentifierInventory, const FCard& InCard);
+	bool CardHasEquivalentCardIdentifierFromClient(const FCardIdentifiersInAnInventory& InCardIdentifierInventoryFromClient, const FCard& InCard);
 
 	bool CardCanBeFoundInInventory(UInventory* Inventory, const FNetCardIdentifier InCardIdentifier);
 
 	void HandleInventoryDifferencesAndSetCorrectionFlags(UInventory* Inventory,
-	                                                     const FCardIdentifiersInAnInventory& InCardIdentifierInventory);
+	                                                     const FCardIdentifiersInAnInventory& InCardIdentifierInventoryFromClient);
 
 	void HandleResourcesDifferencesAndSetCorrectionFlags(const UFormResourceComponent* FormResourceComponent, const TArray<FResource>& InResources);
 

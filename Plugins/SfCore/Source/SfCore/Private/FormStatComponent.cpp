@@ -45,7 +45,6 @@ FStatArray::FStatArray(): OwningFormStat(nullptr)
 
 UFormStatComponent::UFormStatComponent()
 {
-	if (!GetOwner()) return;
 	PrimaryComponentTick.bCanEverTick = false;
 	CurrentStats.OwningFormStat = this;
 	SetIsReplicatedByDefault(true);
