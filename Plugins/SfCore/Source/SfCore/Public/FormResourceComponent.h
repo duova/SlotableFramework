@@ -30,7 +30,8 @@ struct SFCORE_API FResource
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	FGameplayTag MaxValueStat;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	//A value of zero will use the MaxValueStat.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = 0, ClampMax = 999999))
 	float MaxValueOverride;
 
 	FResource();

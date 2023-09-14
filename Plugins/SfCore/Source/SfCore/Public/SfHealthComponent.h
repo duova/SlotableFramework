@@ -153,7 +153,7 @@ public:
 	
 	void SecondarySetupSfHealth();
 	
-	virtual const FHealthChangeData& AddHealthChangeDataAndCompress(const float InValue, const float OutValue, UConstituent* Source,
+	virtual const void AddHealthChangeDataAndCompress(const float InValue, const float OutValue, UConstituent* Source,
 									   const TArray<TSubclassOf<UHealthChangeProcessor>>& InProcessors,
 									   const float InTimeoutTimestamp);
 
@@ -168,25 +168,26 @@ protected:
 
 	//Stat to use for max health if stats are available.
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "SfHealthComponent")
-	FGameplayTag MaxHealthStatTag;
+	FGameplayTag MaxHealthStat;
 
 	//Stat to use for constant health regeneration if stats are available.
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "SfHealthComponent")
-	FGameplayTag HealthRegenerationPerSecond;
+	FGameplayTag HealthRegenerationPerSecondStat;
 
 	//Stat to use for constant health degeneration if stats are available.
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "SfHealthComponent")
-	FGameplayTag HealthDegenerationPerSecond;
+	FGameplayTag HealthDegenerationPerSecondStat;
 
-	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "SfHealthComponent", meta = (ClampMin = 0, ClampMax = 10))
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "SfHealthComponent", meta = (ClampMin = 1, ClampMax = 10))
 	int32 HealthConstantUpdatesPerSecond = 2;
 
 	float CalculatedTimeBetweenHealthUpdates = 0;
 
 	float HealthUpdateTimer = 0;
 
+	//Used if stat doesn't exist or if the component is not on a form.
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, meta = (ClampMin = 0.1, ClampMax = 999999), Category = "SfHealthComponent")
-	float MaxHealthOverride;
+	float MaxHealthFallback = 0.1;
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "SfHealthComponent")
 	TSubclassOf<UDeathHandler> DeathHandlerClass;

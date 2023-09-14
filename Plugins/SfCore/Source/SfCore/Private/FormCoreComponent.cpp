@@ -122,6 +122,11 @@ void UFormCoreComponent::BeginPlay()
 		FormResource->SetupFormResource(this);
 	}
 
+	if (FormStat)
+	{
+		FormStat->SetupFormStat();
+	}
+
 	if (SfHealth)
 	{
 		SfHealth->SecondarySetupSfHealth();

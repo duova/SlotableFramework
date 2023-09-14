@@ -73,6 +73,12 @@ void UFormResourceComponent::SetupFormResource(UFormCoreComponent* InFormCore)
 void UFormResourceComponent::SecondarySetupFormResource()
 {
 	FormStat = FormCore->GetFormStat();
+	Resources = ResourcesToRegister;
+	for (FResource& Resource : Resources)
+	{
+		const float MaxValue = GetMaxValue(Resource);
+		Resource.Value = FMath::Clamp(Resource.Value, 0, MaxValue);
+	}
 }
 
 float UFormResourceComponent::GetResourceValue(const FGameplayTag InTag) const
@@ -179,6 +185,11 @@ bool UFormResourceComponent::Predicted_SetResourceValue(const FGameplayTag InTag
 
 float UFormResourceComponent::GetMaxValue(const FResource& Resource) const
 {
+	if (!FormStat && Resource.MaxValueOverride == 0)
+	{
+		UE_LOG(LogSfCore, Error, TEXT("UFormResourceComponent class %s contains a resource that uses a max value stat, but does not have a UFormStatComponent."), *GetClass()->GetName());
+		return 0;
+	}
 	return Resource.MaxValueOverride != 0 ? Resource.MaxValueOverride : FormStat->GetStat(Resource.MaxValueStat);
 }
 

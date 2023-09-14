@@ -39,6 +39,14 @@ void FStat::PostReplicatedChange(const FStatArray& InArraySerializer)
 	InArraySerializer.OwningFormStat->OnClientStatsChange.Broadcast();
 }
 
+bool FStat::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
+{
+	bOutSuccess = true;
+	StatTag.NetSerialize(Ar, Map, bOutSuccess);
+	Ar << Value;
+	return bOutSuccess;
+}
+
 FStatArray::FStatArray(): OwningFormStat(nullptr)
 {
 }
@@ -53,7 +61,10 @@ UFormStatComponent::UFormStatComponent()
 void UFormStatComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-	DOREPLIFETIME(UFormStatComponent, CurrentStats);
+	FDoRepLifetimeParams DefaultParams;
+	DefaultParams.bIsPushBased = true;
+	DefaultParams.Condition = COND_None;
+	DOREPLIFETIME_WITH_PARAMS(UFormStatComponent, CurrentStats, DefaultParams);
 }
 
 bool UFormStatComponent::CalculateStat(const FGameplayTag& InStatTag)
@@ -72,35 +83,35 @@ bool UFormStatComponent::CalculateStat(const FGameplayTag& InStatTag)
 	{
 		if (AdditiveStat.StatTag == InStatTag)
 		{
-			//We clamp to a max value as beyond that we lose precision.
-			Value = FMath::Clamp(Value + AdditiveStat.Value, 0, MaxValue);
+			Value = FMath::Clamp(Value + AdditiveStat.Value, 0, BaseStat->MaxValue);
 		}
 	}
-	float ToMultiply = 1;
+	float ToMultiply = 1.f;
 	for (const FStat& AdditiveMultiplicativeStat : AdditiveMultiplicativeStatModifiers)
 	{
 		if (AdditiveMultiplicativeStat.StatTag == InStatTag)
 		{
-			ToMultiply = FMath::Clamp(ToMultiply + AdditiveMultiplicativeStat.Value, 0, MaxValue);
+			ToMultiply = FMath::Clamp(ToMultiply + AdditiveMultiplicativeStat.Value, 0, BaseStat->MaxValue);
 		}
 	}
-	Value = FMath::Clamp(Value * ToMultiply, 0, MaxValue);
+	Value = FMath::Clamp(Value * ToMultiply, 0, BaseStat->MaxValue);
 	for (const FStat& TrueMultiplicativeStat : TrueMultiplicativeStatModifiers)
 	{
 		if (TrueMultiplicativeStat.StatTag == InStatTag)
 		{
-			Value = FMath::Clamp(Value * TrueMultiplicativeStat.Value, 0, MaxValue);
+			Value = FMath::Clamp(Value * TrueMultiplicativeStat.Value, 0, BaseStat->MaxValue);
 		}
 	}
 	for (const FStat& FlatAdditiveStat : FlatAdditiveStatModifiers)
 	{
 		if (FlatAdditiveStat.StatTag == InStatTag)
 		{
-			Value = FMath::Clamp(Value + FlatAdditiveStat.Value, 0, MaxValue);
+			Value = FMath::Clamp(Value + FlatAdditiveStat.Value, 0, BaseStat->MaxValue);
 		}
 	}
 	CurrentStat->Value = Value;
 	CurrentStats.MarkItemDirty(*CurrentStat);
+	MARK_PROPERTY_DIRTY_FROM_NAME(UFormStatComponent, CurrentStats, this);
 	return true;
 }
 
@@ -239,10 +250,9 @@ float UFormStatComponent::GetStat(const FGameplayTag StatTag)
 	return CurrentStat->Value;
 }
 
-void UFormStatComponent::BeginPlay()
+void UFormStatComponent::SetupFormStat()
 {
-	Super::BeginPlay();
-	if (!GetOwner()) return;
+	if (!GetOwner() || !GetOwner()->HasAuthority()) return;
 	for (const FStat& Stat : BaseStats)
 	{
 		if (!Stat.StatTag.IsValid())
@@ -260,4 +270,5 @@ void UFormStatComponent::BeginPlay()
 	//We set current stats to base stats and replicate since we delta serialize off it.
 	CurrentStats.Items = BaseStats;
 	CurrentStats.MarkArrayDirty();
+	MARK_PROPERTY_DIRTY_FROM_NAME(UFormStatComponent, CurrentStats, this);
 }

@@ -620,7 +620,7 @@ void UFormCharacterComponent::SecondarySetupFormCharacter()
 	FormResource = FormCore->GetFormResource();
 	if (!FormResource) return;
 	TimeBetweenResourceUpdate = FormResource->CalculatedTimeToEachResourceUpdate;
-	ResourceUpdatesPerSecond = 1/TimeBetweenResourceUpdate;
+	ResourceUpdatesPerSecond = FormResource->OwnerResourceUpdateFrequencyPerSecond;
 }
 
 float UFormCharacterComponent::CalculateFuturePredictedTimestamp(const float InAdditionalTime) const
@@ -1205,7 +1205,7 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 	//Not if we want to repredict movement or update cards only.
 	if (!IsReplaying() || (CorrectionConditionFlags & (Repredict_NetClock | Repredict_ActionSetsCardsResources)) != 0)
 	{
-		if (FormResource)
+		if (FormResource && FormStat)
 		{
 			//Apply consistent resource changes.
 			//Applies every at a specified increment of the predicted net clock only to reduce bandwidth and processing usage.

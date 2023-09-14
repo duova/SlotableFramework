@@ -375,6 +375,9 @@ protected:
 	//USfQuery classes that this UConstituent depends on.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Constituent")
 	TArray<TSubclassOf<USfQuery>> QueryDependencyClasses;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Constituent")
+	bool bQueryDependenciesAreOptional = false;
 	
 private:
 	
@@ -399,7 +402,7 @@ private:
 	//On the server, neither "time since" is relevant because actions are always executed instantly. On the simulated proxy,
 	//we always use LastActionSet paired with LastActionSetTimestamp because prediction isn't running. On the autonomous proxy,
 	//LastActionSetTimestamp will almost always be 0 since we're always relevant, so we only recreate the effects from
-	//PredictedLastActionSet using the respective "time since" and let OnRep handle LastActionSet changes.
+	//PredictedLastActionSet using the respective "time since" and let NetMulticastClientPerformActionSet handle LastActionSet changes.
 
 	TSet<FBufferedInput> BufferedInputs;
 };

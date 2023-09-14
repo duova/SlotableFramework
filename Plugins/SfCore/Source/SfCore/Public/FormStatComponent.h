@@ -21,6 +21,9 @@ struct SFCORE_API FStat : public FFastArraySerializerItem
 
 	UPROPERTY(EditAnywhere, meta = (ClampMin = 0, ClampMax = 999999))
 	float Value;
+
+	UPROPERTY(EditAnywhere, meta = (ClampMin = 0, ClampMax = 999999))
+	float MaxValue = 999999;
 	
 	FStat();
 
@@ -33,6 +36,19 @@ struct SFCORE_API FStat : public FFastArraySerializerItem
 	void PostReplicatedAdd(const FStatArray& InArraySerializer);
 	
 	void PostReplicatedChange(const FStatArray& InArraySerializer);
+
+	bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess);
+};
+
+template<>
+struct TStructOpsTypeTraits<FStat> : TStructOpsTypeTraitsBase2<FStat>
+{
+	enum 
+	{
+		WithNetSerializer = true,
+		WithIdenticalViaEquality = true,
+		WithCopy = true
+   };
 };
 
 USTRUCT(BlueprintType)
@@ -131,8 +147,9 @@ public:
 	UFUNCTION(BlueprintPure)
 	virtual float GetStat(const FGameplayTag StatTag);
 
+	void SetupFormStat();
+
 protected:
-	virtual void BeginPlay() override;
 
 	//Only stats that already exist in base stats can be modified.
 	//Even if a stat is 0 as a base, they need to be registered in base stats, or any changes to them will be ignored.
@@ -153,8 +170,6 @@ protected:
 	TArray<FStat> FlatAdditiveStatModifiers;
 
 	//Current stats will always be positive.
-	UPROPERTY(BlueprintReadOnly, VisibleAnywhere)
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, Replicated)
 	FStatArray CurrentStats;
-
-	inline static constexpr float MaxValue = 999999;
 };

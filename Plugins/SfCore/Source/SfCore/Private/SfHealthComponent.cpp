@@ -126,12 +126,13 @@ void USfHealthComponent::BeginPlay()
 		}
 		HealthChangeProcessorClassesFetched = true;
 	}
+	CalculatedTimeBetweenHealthUpdates = 1.f / HealthConstantUpdatesPerSecond;
 	if (FormCore) return;
 	//Only run if form core has not been set so SetupSfHeath called by FormCore will either not run (if it doesn't exist)
 	//or overwrite Health with the correct value. We make sure we don't overwrite FormCore's max health value since that is
 	//always correct.
 	Health = GetMaxHealth();
-	CalculatedTimeBetweenHealthUpdates = 1 / HealthConstantUpdatesPerSecond;
+	MARK_PROPERTY_DIRTY_FROM_NAME(USfHealthComponent, Health, this);
 }
 
 void USfHealthComponent::TickComponent(float DeltaTime, ELevelTick TickType,
@@ -139,13 +140,15 @@ void USfHealthComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	//Apply consistent health changes.
-	if (!FormStat) return;
+	if (!GetOwner()->HasAuthority() || !FormStat) return;
+	//Don't apply constant changes if the form is dead, they must be revived directly.
+	if (Health <= 0) return;
 	HealthUpdateTimer += DeltaTime;
 	if (HealthUpdateTimer > CalculatedTimeBetweenHealthUpdates)
 	{
 		HealthUpdateTimer -= CalculatedTimeBetweenHealthUpdates;
-		const float HealthChange = FormCore->GetFormStat()->GetStat(HealthRegenerationPerSecond) - FormCore->
-			GetFormStat()->GetStat(HealthDegenerationPerSecond);
+		const float HealthChange = FormCore->GetFormStat()->GetStat(HealthRegenerationPerSecondStat) - FormCore->
+			GetFormStat()->GetStat(HealthDegenerationPerSecondStat);
 		ApplyHealthChange(HealthChange * CalculatedTimeBetweenHealthUpdates, nullptr, TArray<TSubclassOf<UHealthChangeProcessor>>());
 	}
 }
@@ -162,6 +165,7 @@ void USfHealthComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 float USfHealthComponent::ApplyHealthChange(const float InValue, UConstituent* Source,
                                            const TArray<TSubclassOf<UHealthChangeProcessor>>& InProcessors)
 {
+	if (!GetOwner()->HasAuthority()) return 0;
 	//We pass the value through all processors.
 	float ProcessedValue = InValue;
 	for (const TSubclassOf<UHealthChangeProcessor>& Processor : InProcessors)
@@ -180,6 +184,7 @@ float USfHealthComponent::ApplyHealthChange(const float InValue, UConstituent* S
 	Server_OnHealthChange.Broadcast(OriginalHealth, NewHealth, Source, InProcessors);
 
 	Health = NewHealth;
+	MARK_PROPERTY_DIRTY_FROM_NAME(USfHealthComponent, Health, this);
 
 	//We want to return the actual health change, not the processed value.
 	const float FinalHealthChange = Health - OriginalHealth;
@@ -199,6 +204,7 @@ float USfHealthComponent::ApplyHealthChange(const float InValue, UConstituent* S
 float USfHealthComponent::ApplyHealthChangeFractionOfMax(const float InValue, UConstituent* Source,
                                                         const TArray<TSubclassOf<UHealthChangeProcessor>>& InProcessors)
 {
+	if (!GetOwner()->HasAuthority()) return 0;
 	const float ActualValue = InValue * GetMaxHealth();
 	return ApplyHealthChange(ActualValue, Source, InProcessors);
 }
@@ -207,6 +213,7 @@ float USfHealthComponent::ApplyHealthChangeFractionOfRemaining(const float InVal
                                                               const TArray<TSubclassOf<UHealthChangeProcessor>>&
                                                               InProcessors)
 {
+	if (!GetOwner()->HasAuthority()) return 0;
 	const float ActualValue = InValue * Health;
 	return ApplyHealthChange(ActualValue, Source, InProcessors);
 }
@@ -218,11 +225,11 @@ float USfHealthComponent::GetHealth() const
 
 float USfHealthComponent::GetMaxHealth()
 {
-	if (!FormCore) return MaxHealthOverride;
-	if (!FormCore->GetFormStat()) return MaxHealthOverride;
-	const float MaxHealthStat = FormCore->GetFormStat()->GetStat(MaxHealthStatTag);
-	if (MaxHealthStat > 0) return MaxHealthStat;
-	return MaxHealthOverride;
+	if (!FormCore) return MaxHealthFallback;
+	if (!FormCore->GetFormStat()) return MaxHealthFallback;
+	const float MaxHealthStatValue = FormCore->GetFormStat()->GetStat(MaxHealthStat);
+	if (MaxHealthStatValue > 0) return MaxHealthStatValue;
+	return MaxHealthFallback;
 }
 
 UFormCoreComponent* USfHealthComponent::GetFormCore() const
@@ -233,16 +240,17 @@ UFormCoreComponent* USfHealthComponent::GetFormCore() const
 void USfHealthComponent::SetupSfHealth(UFormCoreComponent* InFormCore)
 {
 	FormCore = InFormCore;
-	Health = GetMaxHealth();
 }
 
 void USfHealthComponent::SecondarySetupSfHealth()
 {
 	if (!FormCore) return;
 	FormStat = FormCore->GetFormStat();
+	Health = GetMaxHealth();
+	MARK_PROPERTY_DIRTY_FROM_NAME(USfHealthComponent, Health, this);
 }
 
-const FHealthChangeData& USfHealthComponent::AddHealthChangeDataAndCompress(
+const void USfHealthComponent::AddHealthChangeDataAndCompress(
 	const float InValue, const float OutValue, UConstituent* Source,
 	const TArray<TSubclassOf<UHealthChangeProcessor>>& InProcessors, const float InTimeoutTimestamp)
 {
@@ -265,10 +273,13 @@ const FHealthChangeData& USfHealthComponent::AddHealthChangeDataAndCompress(
 	if (bFoundSimilarData)
 	{
 		//Move to the front since it becomes the most recent.
-		OrderedRecentHealthChange.Swap(0, OrderedRecentHealthChange.Find(SimilarData));
-		return SimilarData;
+		if (OrderedRecentHealthChange.Num() > 1)
+		{
+			OrderedRecentHealthChange.Swap(0, OrderedRecentHealthChange.Find(SimilarData));
+		}
+		return;
 	}
-	return OrderedRecentHealthChange[OrderedRecentHealthChange.Insert(
+	OrderedRecentHealthChange[OrderedRecentHealthChange.Insert(
 		FHealthChangeData(InValue, OutValue, Source, InProcessors, InTimeoutTimestamp), 0)];
 }
 

@@ -259,9 +259,19 @@ void UConstituent::ServerInitialize()
 	SetFormCore();
 	FormCore->ConstituentRegistry.Add(this);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, ConstituentRegistry, FormCore);
-	if (FormCore->GetFormQuery())
+	if (QueryDependencyClasses.Num() != 0)
 	{
-		FormCore->GetFormQuery()->RegisterQueryDependencies(QueryDependencyClasses);
+		if (FormCore->GetFormQuery())
+		{
+			FormCore->GetFormQuery()->RegisterQueryDependencies(QueryDependencyClasses);
+		}
+		else if (!bQueryDependenciesAreOptional)
+		{
+			UE_LOG(LogSfCore, Error,
+				   TEXT(
+					   "UConstituent class %s has query dependencies but was inserted into a form without a UFormQueryComponent. Set bQueryDependenciesAreOptional to true if this is intentional."
+				   ), *GetClass()->GetName());
+		}
 	}
 	Server_Initialize();
 }
