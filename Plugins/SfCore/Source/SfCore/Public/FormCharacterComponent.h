@@ -663,6 +663,11 @@ protected:
 	//This is where all the logic actually takes place.
 	virtual void UpdateCharacterStateBeforeMovement(float DeltaSeconds) override;
 
+	//Override to reset the client move timer when it is received.
+	virtual void ServerMove_HandleMoveData(const FCharacterNetworkMoveDataContainer& MoveDataContainer) override;
+
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+
 private:
 	FSfNetworkMoveDataContainer SfNetworkMoveDataContainer;
 
@@ -690,6 +695,14 @@ private:
 	float TimeBetweenResourceUpdate = 0;
 
 	uint8 ResourceUpdatesPerSecond = 0;
+
+	float TimeSinceLastClientMoveReceivedOnServer = 0;
+
+	float ClientMoveWaitTimeBeforeForcingServerSimulation = 0.4;
+
+	float LatestServerReceivedMoveTimestamp = 0;
+	
+	float LatestServerReceivedMoveDeltaTime = 0;
 
 	UPROPERTY()
 	UFormResourceComponent* FormResource;

@@ -275,10 +275,10 @@ public:
 	UFUNCTION(BlueprintPure)
 	UConstituent* GetOriginatingConstituent() const;
 
-	UFUNCTION(NetMulticast, Reliable)
+	UFUNCTION(NetMulticast, Unreliable)
 	void NetMulticastClientPerformActionSet(const FActionSet& InActionSet, const float InServerFormTimestamp);
 
-	//TODO: On relevancy, pass a pointer to this actor through the PlayerController to the client where this actor just became relevant.
+	//TODO: On relevancy, pass a pointer to this actor through the PlayerController to the client where this actor just became relevant. Also update card objects.
 	//The last action set and time since values will have to be passed through as those would presumably not have updated.
 	//This is so we can call internal client perform action set and play the most recent action(s).
 	void InternalClientPerformActionSet();
@@ -291,6 +291,7 @@ public:
 	//This needs to be casted to the class to get the event from the query.
 	USfQuery* GetQuery(const TSubclassOf<USfQuery> QueryClass) const;
 
+	//Buffers input until a certain card based condition is met. The timeout cannot be more than 1.5 seconds.
 	UFUNCTION(BlueprintCallable, meta = (AutoCreateRefTerm =
 		"InOwnedCardsRequiredToActivate, InOwnedCardsRequiredGoneToActivate, InSharedCardsRequiredToActivate, InSharedCardsRequiredGoneToActivate"
 	))

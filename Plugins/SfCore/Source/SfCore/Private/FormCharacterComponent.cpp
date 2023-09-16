@@ -563,6 +563,18 @@ void UFormCharacterComponent::ClientAdjustPosition_Implementation(float TimeStam
                                                                   uint8 ServerMovementMode,
                                                                   TOptional<FRotator> OptionalRotation)
 {
+	//We return if the saved move index cannot be found, which is likely due to the server creating moves as a result of
+	//the client not having sent moves recently.
+	const int32 MoveIndex = GetPredictionData_Client_Character()->GetSavedMoveIndex(TimeStamp);
+	if (MoveIndex == INDEX_NONE)
+	{
+		UE_LOG(LogSfCore, Warning,
+		       TEXT(
+			       "Server sent correction for move that doesn't exist on the local client. This is likely due to the client failing to send moves recently."
+		       ));
+		return;
+	}
+	
 	Super::ClientAdjustPosition_Implementation(TimeStamp, NewLoc, NewVel, NewBase, NewBaseBoneName, bHasBase,
 	                                           bBaseRelativePosition, ServerMovementMode,
 	                                           OptionalRotation);
@@ -1289,6 +1301,40 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 		CalculateMovementSpeed();
 		bMovementSpeedNeedsRecalculation = false;
 	}
+}
+
+void UFormCharacterComponent::ServerMove_HandleMoveData(const FCharacterNetworkMoveDataContainer& MoveDataContainer)
+{
+	Super::ServerMove_HandleMoveData(MoveDataContainer);
+	//Reset timer when move is received.
+	TimeSinceLastClientMoveReceivedOnServer = 0;
+	LatestServerReceivedMoveTimestamp = MoveDataContainer.GetNewMoveData()->TimeStamp;
+	const FNetworkPredictionData_Server_Character* ServerData = GetPredictionData_Server_Character();
+	const UWorld* MyWorld = GetWorld();
+	LatestServerReceivedMoveDeltaTime = ServerData->GetServerMoveDeltaTime(LatestServerReceivedMoveTimestamp, CharacterOwner->GetActorTimeDilation(*MyWorld));
+}
+
+void UFormCharacterComponent::TickComponent(float DeltaTime, ELevelTick TickType,
+	FActorComponentTickFunction* ThisTickFunction)
+{
+	if (GetOwner()->HasAuthority())
+	{
+		//We insert a empty move with the correct timestamp if the client failed to send a move recently to ensure that predicted
+		//time is still ticked. This will let the server continue to tick properly if the autonomous proxy doesn't send moves.
+		TimeSinceLastClientMoveReceivedOnServer += DeltaTime;
+		if (TimeSinceLastClientMoveReceivedOnServer >= ClientMoveWaitTimeBeforeForcingServerSimulation)
+		{
+			FCharacterNetworkMoveDataContainer MoveDataContainer;
+			FSavedMove_Character NewMove;
+			NewMove.TimeStamp = LatestServerReceivedMoveTimestamp + LatestServerReceivedMoveDeltaTime;
+			NewMove.DeltaTime = TimeSinceLastClientMoveReceivedOnServer;
+			NewMove.CharacterOwner = CharacterOwner;
+			MoveDataContainer.ClientFillNetworkMoveData(&NewMove, nullptr, nullptr);
+			ServerMove_HandleMoveData(MoveDataContainer);
+		}
+	}
+	
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 }
 
 uint8 UFormCharacterComponent::FindInputIndexInRegistry(const FInputActionInstance& InInstance)
