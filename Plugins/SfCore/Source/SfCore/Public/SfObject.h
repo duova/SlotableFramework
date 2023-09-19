@@ -45,21 +45,10 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	void Destroy();
 
-	class UFormCharacterComponent* GetFormCharacter();
-	
-	bool IsFormCharacter();
-
 	inline static constexpr int32 Int32MaxValue = 2147483647;
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	AActor* SpawnActorInOwnerWorld(const TSubclassOf<AActor>& InClass, const FVector& Location, const FRotator& Rotation);
-
-private:
-	UPROPERTY()
-	UFormCharacterComponent* FormCharacterComponent;
-
-	uint8 bDoesNotHaveFormCharacter:1;
-	
 };
 
 template <class T>

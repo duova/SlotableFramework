@@ -242,6 +242,15 @@ void UFormCoreComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	if (!GetOwner()) return;
 
+	if (bInputsRequireSetup && FormCharacter)
+	{
+		for (UInventory* Inventory : Inventories)
+		{
+			Inventory->SetupInputs(FormCharacter);
+		}
+		bInputsRequireSetup = false;
+	}
+
 	NonCompensatedServerFormTime += DeltaTime;
 
 	if (NonCompensatedServerFormTime * 0.1 - FMath::Floor(NonCompensatedServerFormTime * 0.1) <= DeltaTime * 0.1)

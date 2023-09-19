@@ -82,11 +82,16 @@ bool FActionSet::TryAddActionCheckIfSameFrame(const float InCurrentWorldTime, co
 
 bool FActionSet::operator==(const FActionSet& Other) const
 {
-	if (WorldTime == Other.WorldTime && NumActionsMinusOne == Other.NumActionsMinusOne &&
+	if (NumActionsMinusOne == Other.NumActionsMinusOne &&
 		ActionZero == Other.ActionZero && ActionOne == Other.ActionOne && ActionTwo == Other.ActionTwo && ActionThree ==
 		Other.ActionThree)
 		return true;
 	return false;
+}
+
+bool FActionSet::operator!=(const FActionSet& Other) const
+{
+	return !(*this == Other);
 }
 
 TArray<uint8> FActionSet::ToArray() const
@@ -157,15 +162,15 @@ bool FBufferedInput::operator==(const FBufferedInput& Other) const
 	return true;
 }
 
-bool FBufferedInput::CheckConditionsMet(const UInventory* InInventoryToCheck,
-                                        const UConstituent* InCurrentConstituent) const
+bool FBufferedInput::CheckConditionsMet(const UConstituent* InCurrentConstituent) const
 {
+	UInventory* InventoryToCheck = InCurrentConstituent->OwningSlotable->OwningInventory;
 	//This might look like a heavy check every time an input is pressed and when cards are added and removed. However,
 	//note that most of the time only 1 for loop will run as it's likely that only 1 type of card will be checked.
 	for (const TSubclassOf<UCardObject>& OwnedCardRequired : OwnedCardsRequired)
 	{
 		if (!OwnedCardRequired.Get()) continue;
-		if (!InInventoryToCheck->Cards.FindByPredicate([OwnedCardRequired, InCurrentConstituent](const FCard& Card)
+		if (!InventoryToCheck->Cards.FindByPredicate([OwnedCardRequired, InCurrentConstituent](const FCard& Card)
 		{
 			return Card.OwnerConstituentInstanceId == InCurrentConstituent->InstanceId && Card.Class ==
 				OwnedCardRequired;
@@ -177,7 +182,7 @@ bool FBufferedInput::CheckConditionsMet(const UInventory* InInventoryToCheck,
 	for (const TSubclassOf<UCardObject>& OwnedCardRequiredGone : OwnedCardsRequiredGone)
 	{
 		if (!OwnedCardRequiredGone.Get()) continue;
-		if (InInventoryToCheck->Cards.FindByPredicate([OwnedCardRequiredGone, InCurrentConstituent](const FCard& Card)
+		if (InventoryToCheck->Cards.FindByPredicate([OwnedCardRequiredGone, InCurrentConstituent](const FCard& Card)
 		{
 			return Card.OwnerConstituentInstanceId == InCurrentConstituent->InstanceId && Card.Class ==
 				OwnedCardRequiredGone;
@@ -189,7 +194,7 @@ bool FBufferedInput::CheckConditionsMet(const UInventory* InInventoryToCheck,
 	for (const TSubclassOf<UCardObject>& SharedCardRequired : SharedCardsRequired)
 	{
 		if (!SharedCardRequired.Get()) continue;
-		if (!InInventoryToCheck->Cards.FindByPredicate([SharedCardRequired](const FCard& Card)
+		if (!InventoryToCheck->Cards.FindByPredicate([SharedCardRequired](const FCard& Card)
 		{
 			return Card.OwnerConstituentInstanceId == 0 && Card.Class == SharedCardRequired;
 		}))
@@ -200,7 +205,7 @@ bool FBufferedInput::CheckConditionsMet(const UInventory* InInventoryToCheck,
 	for (const TSubclassOf<UCardObject>& SharedCardRequiredGone : SharedCardsRequiredGone)
 	{
 		if (!SharedCardRequiredGone.Get()) continue;
-		if (InInventoryToCheck->Cards.FindByPredicate([SharedCardRequiredGone](const FCard& Card)
+		if (InventoryToCheck->Cards.FindByPredicate([SharedCardRequiredGone](const FCard& Card)
 		{
 			return Card.OwnerConstituentInstanceId == 0 && Card.Class == SharedCardRequiredGone;
 		}))
@@ -303,6 +308,7 @@ void UConstituent::ExecuteAction(const int32 InActionId, const bool bInIsPredict
 void UConstituent::InternalExecuteAction(const uint8 InActionId, const bool bInIsPredictableContext)
 {
 	if (!GetOwner()) return;
+	const UFormCharacterComponent* FormCharacter = FormCore->FormCharacter;
 	if (GetOwner()->GetLocalRole() == ROLE_SimulatedProxy)
 	{
 		UE_LOG(LogSfCore, Error,
@@ -323,13 +329,12 @@ void UConstituent::InternalExecuteAction(const uint8 InActionId, const bool bInI
 			{
 				PredictedLastActionSet = FActionSet(ServerWorldTime, InActionId);
 			}
-			bPredictedLastActionSetUpdated = true;
 			TimeSincePredictedLastActionSet.SetFloat(0);
-			if (bEnableInputsAndPrediction && IsFormCharacter())
+			if (bEnableInputsAndPrediction && FormCharacter)
 			{
 				if (Predicted_OnExecute.IsBound())
 				{
-					InternalPredictedOnExecute(InActionId, GetFormCharacter()->IsReplaying(), FormCore->IsFirstPerson(), true);
+					InternalPredictedOnExecute(InActionId, FormCharacter->IsReplaying(), FormCore->IsFirstPerson(), true);
 				}
 			}
 		}
@@ -346,7 +351,7 @@ void UConstituent::InternalExecuteAction(const uint8 InActionId, const bool bInI
 		//Flag so FormCoreComponent can call NetMulticastClientPerformActionSet on the LastActionSet.
 		bLastActionSetPendingClientExecution = true;
 	}
-	else if (bEnableInputsAndPrediction && IsFormCharacter() && bInIsPredictableContext && GetOwner()->
+	else if (bEnableInputsAndPrediction && FormCharacter && bInIsPredictableContext && GetOwner()->
 		GetLocalRole() ==
 		ROLE_AutonomousProxy)
 	{
@@ -357,11 +362,10 @@ void UConstituent::InternalExecuteAction(const uint8 InActionId, const bool bInI
 		{
 			PredictedLastActionSet = FActionSet(ClientWorldTime, InActionId);
 		}
-		bPredictedLastActionSetUpdated = true;
 		TimeSincePredictedLastActionSet.SetFloat(0);
 		if (Predicted_OnExecute.IsBound())
 		{
-			InternalPredictedOnExecute(InActionId, GetFormCharacter()->IsReplaying(), FormCore->IsFirstPerson(), false);
+			InternalPredictedOnExecute(InActionId, FormCharacter->IsReplaying(), FormCore->IsFirstPerson(), false);
 		}
 	}
 }
@@ -547,6 +551,7 @@ void UConstituent::InternalBufferInput(const float InTimeout,
                                        const TArray<TSubclassOf<UCardObject>>& InSharedCardsRequiredToActivate,
                                        const TArray<TSubclassOf<UCardObject>>& InSharedCardsRequiredGoneToActivate)
 {
+	const UFormCharacterComponent* FormCharacter = FormCore->FormCharacter;
 	if (InTimeout < 0)
 	{
 		UE_LOG(LogSfCore, Error,
@@ -560,16 +565,17 @@ void UConstituent::InternalBufferInput(const float InTimeout,
 	}
 	BufferedInputs.Add(FBufferedInput(InOwnedCardsRequiredToActivate, InOwnedCardsRequiredGoneToActivate,
 	                                  InSharedCardsRequiredToActivate, InSharedCardsRequiredGoneToActivate,
-	                                  GetFormCharacter()->CalculateFuturePredictedTimestamp(InTimeout), EventToBind));
+	                                  FormCharacter->CalculateFuturePredictedTimestamp(InTimeout), EventToBind));
 	//We check buffed inputs instantly just in case they can be run already.
 	OwningSlotable->OwningInventory->UpdateAndRunBufferedInputs(this);
 }
 
 void UConstituent::HandleBufferInputTimeout()
 {
+	const UFormCharacterComponent* FormCharacter = FormCore->FormCharacter;
 	for (auto It = BufferedInputs.CreateIterator(); It; ++It)
 	{
-		if (GetFormCharacter()->CalculateTimeUntilPredictedTimestamp(It->LifetimePredictedTimestamp) < 0)
+		if (FormCharacter->CalculateTimeUntilPredictedTimestamp(It->LifetimePredictedTimestamp) < 0)
 		{
 			It.RemoveCurrent();
 		}

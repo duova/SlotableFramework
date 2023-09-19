@@ -185,4 +185,6 @@ private:
 	TMap<FGameplayTag, FTriggerDelegate> Triggers;
 	
 	float LowFrequencyTickDeltaTime = 0;
+
+	bool bInputsRequireSetup = true;
 };

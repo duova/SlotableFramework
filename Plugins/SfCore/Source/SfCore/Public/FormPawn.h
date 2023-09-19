@@ -23,4 +23,6 @@ public:
 	UFormCoreComponent* FormCore;
 
 	inline static FName FormCoreComponentName = "FormCoreComp";
+
+	virtual void PossessedBy(AController* NewController) override;
 };

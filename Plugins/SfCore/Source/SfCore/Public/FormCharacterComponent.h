@@ -297,6 +297,8 @@ struct SFCORE_API FIdentifiedActionSet
 
 	bool operator==(const FIdentifiedActionSet& Other) const;
 
+	bool operator!=(const FIdentifiedActionSet& Other) const;
+
 	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
 
 	friend FArchive& operator<<(FArchive& Ar, FIdentifiedActionSet& ConstituentActionSet)
@@ -342,13 +344,15 @@ public:
 
 	TArray<FCardIdentifiersInAnInventory> CardIdentifiersInInventories;
 
-	TArray<FResource> Resources;
+	FResourceArray Resources;
 
 	virtual void Clear() override;
 	virtual void SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& NewAccel,
 	                        FNetworkPredictionData_Client_Character& ClientData) override;
 	virtual void PrepMoveFor(ACharacter* C) override;
+	virtual void PostUpdate(ACharacter* C, EPostUpdateMode PostUpdateMode) override;
 	virtual uint8 GetCompressedFlags() const override;
+	virtual bool CanCombineWith(const FSavedMovePtr& NewMove, ACharacter* InCharacter, float MaxDelta) const override;
 };
 
 class FNetworkPredictionData_Client_Sf : public FNetworkPredictionData_Client_Character
@@ -378,7 +382,7 @@ struct FSfNetworkMoveData : FCharacterNetworkMoveData
 
 	TArray<FCardIdentifiersInAnInventory> CardIdentifiersInInventories;
 
-	TArray<FResource> Resources;
+	FResourceArray Resources;
 
 	FSfNetworkMoveData();
 
@@ -417,7 +421,7 @@ struct FSfMoveResponseDataContainer : FCharacterMoveResponseDataContainer
 
 	TArray<FInventoryCards> CardResponse;
 
-	TArray<FResource> ResourcesResponse;
+	FResourceArray ResourcesResponse;
 
 	FSfMoveResponseDataContainer();
 
@@ -590,10 +594,10 @@ protected:
 	//We copy CardResponse to the inventory and set false in PerformMovement if is true.
 	uint8 bClientCardsWereUpdated:1;
 
-	TArray<FResource> ClientSentResources;
-	TArray<FResource> OldClientSentResources;
+	FResourceArray ClientSentResources;
+	FResourceArray OldClientSentResources;
 
-	TArray<FResource> ResourcesResponse;
+	FResourceArray ResourcesResponse;
 
 	//If this is false, we shouldn't use ResourcesResponse.
 	//We copy ResourcesResponse to the FormResource and set false in PerformMovement if is true.
@@ -632,7 +636,7 @@ protected:
 	void HandleInventoryDifferencesAndSetCorrectionFlags(UInventory* Inventory,
 	                                                     const FCardIdentifiersInAnInventory& InCardIdentifierInventoryFromClient);
 
-	void HandleResourcesDifferencesAndSetCorrectionFlags(const UFormResourceComponent* FormResourceComponent, const TArray<FResource>& InResources);
+	void HandleResourcesDifferencesAndSetCorrectionFlags(const UFormResourceComponent* FormResourceComponent, const FResourceArray& InResources);
 
 	virtual void SfServerCheckClientError();
 
@@ -653,18 +657,20 @@ protected:
 	void PackResources();
 
 	void PackInventoryCardIdentifiers();
-
+	
 	void HandleCardClientSyncTimeout() const;
 
-	static void ApplyInputBitsToInventory(const uint32 InInputBits, const UInventory* InInventory);
+	static void ApplyInputBitsToInventory(const uint32 InInputBits, UInventory* InInventory);
 	
 	void RemovePredictedCardWithEndedLifetimes() const;
 
-	//This is where all the logic actually takes place.
+	//This is where all the logic actually takes place. We'll call it the prediction tick.
 	virtual void UpdateCharacterStateBeforeMovement(float DeltaSeconds) override;
 
 	//Override to reset the client move timer when it is received.
 	virtual void ServerMove_HandleMoveData(const FCharacterNetworkMoveDataContainer& MoveDataContainer) override;
+
+	virtual void ReplicateMoveToServer(float DeltaTime, const FVector& NewAcceleration) override;
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
@@ -703,6 +709,10 @@ private:
 	float LatestServerReceivedMoveTimestamp = 0;
 	
 	float LatestServerReceivedMoveDeltaTime = 0;
+	
+	bool bClientForceSerialize = false;
+
+	bool bIsReplaying = false;
 
 	UPROPERTY()
 	UFormResourceComponent* FormResource;

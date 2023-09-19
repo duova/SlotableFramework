@@ -44,6 +44,8 @@ struct SFCORE_API FActionSet
 
 	bool operator==(const FActionSet& Other) const;
 
+	bool operator!=(const FActionSet& Other) const;
+
 	TArray<uint8> ToArray() const;
 
 	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
@@ -108,7 +110,7 @@ struct SFCORE_API FBufferedInput
 
 	bool operator==(const FBufferedInput& Other) const;
 
-	bool CheckConditionsMet(const UInventory* InInventoryToCheck, const UConstituent* InCurrentConstituent) const;
+	bool CheckConditionsMet(const UConstituent* InCurrentConstituent) const;
 };
 
 template<>
@@ -330,9 +332,6 @@ public:
 	//This is changed during a predicted execution. Client version is sent to the server via FormCharacter, checked, added
 	//to LastActionSet of that frame, and corrected to the client if necessary.
 	FActionSet PredictedLastActionSet = FActionSet();
-
-	//Set to true when we predict an action. Set to false when FormCharacter collects pending actions.
-	uint8 bPredictedLastActionSetUpdated:1;
 
 	//Used to know how long ago the last action took place so we can fast forward the effects after replay.
 	FUint16_Quantize100 TimeSincePredictedLastActionSet = FUint16_Quantize100();

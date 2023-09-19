@@ -87,14 +87,16 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	bool Server_RemoveOwnedCard(const TSubclassOf<UCardObject>& InCardClass, const int32 InOwnerConstituentInstanceId);
 
+	//Leave custom lifetime at 0 to use the card's default lifetime.
 	UFUNCTION(BlueprintCallable, meta = (AutoCreateRefTerm = "InCustomLifetime"))
 	bool Predicted_AddSharedCard(const TSubclassOf<UCardObject>& InCardClass, const float InCustomLifetime = 0);
 
 	UFUNCTION(BlueprintCallable)
 	bool Predicted_RemoveSharedCard(const TSubclassOf<UCardObject>& InCardClass);
-	
-	void UpdateAndRunBufferedInputs(UConstituent* Constituent) const;
 
+	static void UpdateAndRunBufferedInputs(UConstituent* Constituent);
+
+	//Leave custom lifetime at 0 to use the card's default lifetime.
 	UFUNCTION(BlueprintCallable, meta = (AutoCreateRefTerm = "InCustomLifetime"))
 	bool Predicted_AddOwnedCard(const TSubclassOf<UCardObject>& InCardClass, const int32 InOwnerConstituentInstanceId, const float InCustomLifetime = 0);
 
@@ -135,6 +137,8 @@ public:
 	void AutonomousDeinitialize();
 
 	void ServerDeinitialize();
+
+	void SetupInputs(const UFormCharacterComponent* FormCharacterComponent);
 
 	UFUNCTION(BlueprintImplementableEvent)
 	void Autonomous_Initialize();
@@ -263,7 +267,7 @@ private:
 	TBitArray<> OrderedLastInputState;
 
 	//Does not synchronize to owner as owner should have it be predicted.
-	UPROPERTY(Replicated)
+	UPROPERTY(Replicated, ReplicatedUsing = OnRep_Cards)
 	TArray<FCard> Cards;
 
 	UPROPERTY(VisibleAnywhere, Category = "Inventory")
@@ -274,6 +278,9 @@ private:
 	UCardObject* CreateUninitializedCardObject(const TSubclassOf<UCardObject>& InCardClass) const;
 
 	void ClientCheckAndUpdateCardObjects();
+
+	UFUNCTION()
+	void OnRep_Cards();
 
 	uint8 LastAssignedConstituentId = 0;
 

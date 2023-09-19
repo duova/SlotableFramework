@@ -14,3 +14,8 @@ AFormPawn::AFormPawn()
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicateUsingRegisteredSubObjectList = true;
 }
+
+void AFormPawn::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+}

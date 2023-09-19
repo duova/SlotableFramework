@@ -118,7 +118,7 @@ void UInventory::ClientCheckAndUpdateCardObjects()
 	}
 	ClientCardObjects.Shrink();
 	//Try to add card objects that are on the cards list but doesn't exist.
-	for (FCard Card : Cards)
+	for (FCard& Card : Cards)
 	{
 		if (Card.bIsDisabledForDestroy) continue;
 		bool bHasCard = false;
@@ -141,6 +141,11 @@ void UInventory::ClientCheckAndUpdateCardObjects()
 		CardInstance->OwnerConstituentInstanceId = Card.OwnerConstituentInstanceId;
 		CardInstance->Initialize();
 	}
+}
+
+void UInventory::OnRep_Cards()
+{
+	ClientCheckAndUpdateCardObjects();
 }
 
 const TArray<USlotable*>& UInventory::GetSlotables() const
@@ -232,18 +237,16 @@ bool UInventory::HasOwnedCard(const TSubclassOf<UCardObject>& InCardClass,
 		       *GetClass()->GetName());
 		return nullptr;
 	}
-	bool Value = false;
-	for (FCard Card : Cards)
+	for (const FCard& Card : Cards)
 	{
 		//If disabled we don't count it as existing.
 		if (Card.bIsDisabledForDestroy) continue;
 		if (Card.Class == InCardClass && Card.OwnerConstituentInstanceId == InOwnerConstituentInstanceId)
 		{
-			Value = true;
-			break;
+			return true;
 		}
 	}
-	return Value;
+	return false;
 }
 
 float UInventory::GetSharedCardLifetime(const TSubclassOf<UCardObject>& InCardClass)
@@ -655,6 +658,7 @@ bool UInventory::Server_RemoveSharedCard(const TSubclassOf<UCardObject>& InCardC
 bool UInventory::Server_AddOwnedCard(const TSubclassOf<UCardObject>& InCardClass,
                                      const int32 InOwnerConstituentInstanceId, const float InCustomLifetime)
 {
+	UFormCharacterComponent* FormCharacter = OwningFormCore->FormCharacter;
 	if (!HasAuthority())
 	{
 		UE_LOG(LogSfCore, Error, TEXT("Called Server_AddOwnedCard on UInventory class %s without authority."),
@@ -679,10 +683,10 @@ bool UInventory::Server_AddOwnedCard(const TSubclassOf<UCardObject>& InCardClass
 	if (InCustomLifetime != 0)
 	{
 		//References to FormCharacter and FormCore are needed because they provide timestamps for lifetime.
-		if (IsFormCharacter())
+		if (FormCharacter)
 		{
 			Cards.Emplace(InCardClass, FCard::ECardType::UseCustomLifetimePredictedTimestamp,
-			              InOwnerConstituentInstanceId, GetFormCharacter(), nullptr, InCustomLifetime);
+			              InOwnerConstituentInstanceId, FormCharacter, nullptr, InCustomLifetime);
 		}
 		else
 		{
@@ -693,10 +697,10 @@ bool UInventory::Server_AddOwnedCard(const TSubclassOf<UCardObject>& InCardClass
 	}
 	else
 	{
-		if (IsFormCharacter())
+		if (FormCharacter)
 		{
 			Cards.Emplace(InCardClass, FCard::ECardType::UseDefaultLifetimePredictedTimestamp,
-			              InOwnerConstituentInstanceId, GetFormCharacter());
+			              InOwnerConstituentInstanceId, FormCharacter);
 		}
 		else
 		{
@@ -706,14 +710,14 @@ bool UInventory::Server_AddOwnedCard(const TSubclassOf<UCardObject>& InCardClass
 		}
 	}
 	FCard& CardAdded = Cards.Last();
-	if (IsFormCharacter())
+	if (FormCharacter)
 	{
-		GetFormCharacter()->bMovementSpeedNeedsRecalculation = true;
+		FormCharacter->bMovementSpeedNeedsRecalculation = true;
 		//We set it to be not corrected and set a timeout so the client has a chance to synchronize before we start issuing corrections.
 		CardAdded.bIsNotCorrected = true;
 		CardAdded.ServerAwaitClientSyncTimeoutTimestamp = CardAdded.ServerAwaitClientSyncTimeoutDuration + GetWorld()->
 			TimeSeconds;
-		GetFormCharacter()->MarkCardsDirty();
+		FormCharacter->MarkCardsDirty();
 	}
 	MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
 	if (InOwnerConstituentInstanceId == 0)
@@ -730,6 +734,7 @@ bool UInventory::Server_AddOwnedCard(const TSubclassOf<UCardObject>& InCardClass
 bool UInventory::Server_RemoveOwnedCard(const TSubclassOf<UCardObject>& InCardClass,
                                         const int32 InOwnerConstituentInstanceId)
 {
+	UFormCharacterComponent* FormCharacter = OwningFormCore->FormCharacter;
 	if (!HasAuthority())
 	{
 		UE_LOG(LogSfCore, Error, TEXT("Called Server_RemoveOwnedCard on UInventory class %s without authority."),
@@ -740,14 +745,14 @@ bool UInventory::Server_RemoveOwnedCard(const TSubclassOf<UCardObject>& InCardCl
 	{
 		if (Cards[i].Class == InCardClass && Cards[i].OwnerConstituentInstanceId == InOwnerConstituentInstanceId)
 		{
-			if (IsFormCharacter())
+			if (FormCharacter)
 			{
 				//Same concept as above.
 				Cards[i].bIsDisabledForDestroy = true;
 				Cards[i].ServerAwaitClientSyncTimeoutTimestamp = Cards[i].ServerAwaitClientSyncTimeoutDuration +
 					GetWorld()->
 					TimeSeconds;
-				GetFormCharacter()->MarkCardsDirty();
+				FormCharacter->MarkCardsDirty();
 				MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
 				return true;
 			}
@@ -762,9 +767,9 @@ bool UInventory::Server_RemoveOwnedCard(const TSubclassOf<UCardObject>& InCardCl
 			}
 			Cards.RemoveAt(i);
 			MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
-			if (IsFormCharacter())
+			if (FormCharacter)
 			{
-				GetFormCharacter()->bMovementSpeedNeedsRecalculation = true;
+				FormCharacter->bMovementSpeedNeedsRecalculation = true;
 			}
 			return true;
 		}
@@ -782,11 +787,11 @@ bool UInventory::Predicted_RemoveSharedCard(const TSubclassOf<UCardObject>& InCa
 	return Predicted_RemoveOwnedCard(InCardClass, 0);
 }
 
-void UInventory::UpdateAndRunBufferedInputs(UConstituent* Constituent) const
+void UInventory::UpdateAndRunBufferedInputs(UConstituent* Constituent)
 {
 	for (auto It = Constituent->BufferedInputs.CreateIterator(); It; ++It)
 	{
-		if (It->CheckConditionsMet(this, Constituent))
+		if (It->CheckConditionsMet(Constituent))
 		{
 			It->Delegate.ExecuteIfBound();
 			It.RemoveCurrent();
@@ -797,6 +802,7 @@ void UInventory::UpdateAndRunBufferedInputs(UConstituent* Constituent) const
 bool UInventory::Predicted_AddOwnedCard(const TSubclassOf<UCardObject>& InCardClass,
                                         const int32 InOwnerConstituentInstanceId, const float InCustomLifetime)
 {
+	UFormCharacterComponent* FormCharacter = OwningFormCore->FormCharacter;
 	if (!GetOwner()) return false;
 	if (GetOwner()->GetLocalRole() == ROLE_SimulatedProxy)
 	{
@@ -804,14 +810,14 @@ bool UInventory::Predicted_AddOwnedCard(const TSubclassOf<UCardObject>& InCardCl
 		       *GetClass()->GetName());
 		return false;
 	}
-	if (!IsFormCharacter())
+	if (!FormCharacter)
 	{
 		UE_LOG(LogSfCore, Error,
 		       TEXT("Called Predicted_AddOwnedCard on UInventory class %s without a UFormCharacterComponent."),
 		       *GetClass()->GetName());
 		return false;
 	}
-	GetFormCharacter()->bMovementSpeedNeedsRecalculation = true;
+	FormCharacter->bMovementSpeedNeedsRecalculation = true;
 	for (FCard Card : Cards)
 	{
 		//Check for duplicates.
@@ -824,12 +830,12 @@ bool UInventory::Predicted_AddOwnedCard(const TSubclassOf<UCardObject>& InCardCl
 	{
 		//References to FormCharacter and FormCore are needed because they provide timestamps for lifetime.
 		Cards.Emplace(InCardClass, FCard::ECardType::UseCustomLifetimePredictedTimestamp, InOwnerConstituentInstanceId,
-		              GetFormCharacter(), nullptr, InCustomLifetime);
+		              FormCharacter, nullptr, InCustomLifetime);
 	}
 	else
 	{
 		Cards.Emplace(InCardClass, FCard::ECardType::UseDefaultLifetimePredictedTimestamp, InOwnerConstituentInstanceId,
-		              GetFormCharacter());
+		              FormCharacter);
 	}
 	if (InOwnerConstituentInstanceId == 0)
 	{
@@ -862,6 +868,7 @@ bool UInventory::Predicted_AddOwnedCard(const TSubclassOf<UCardObject>& InCardCl
 bool UInventory::Predicted_RemoveOwnedCard(const TSubclassOf<UCardObject>& InCardClass,
                                            const int32 InOwnerConstituentInstanceId)
 {
+	UFormCharacterComponent* FormCharacter = OwningFormCore->FormCharacter;
 	if (!GetOwner()) return false;
 	if (GetOwner()->GetLocalRole() == ROLE_SimulatedProxy)
 	{
@@ -869,14 +876,14 @@ bool UInventory::Predicted_RemoveOwnedCard(const TSubclassOf<UCardObject>& InCar
 		       *GetClass()->GetName());
 		return false;
 	}
-	if (!IsFormCharacter())
+	if (!FormCharacter)
 	{
 		UE_LOG(LogSfCore, Error,
 		       TEXT("Called Predicted_RemoveOwnedCard on UInventory class %s without a UFormCharacterComponent."),
 		       *GetClass()->GetName());
 		return false;
 	}
-	GetFormCharacter()->bMovementSpeedNeedsRecalculation = true;
+	FormCharacter->bMovementSpeedNeedsRecalculation = true;
 	for (int16 i = Cards.Num() - 1; i >= 0; i--)
 	{
 		if (Cards[i].Class == InCardClass && Cards[i].OwnerConstituentInstanceId == InOwnerConstituentInstanceId)
@@ -913,54 +920,48 @@ bool UInventory::Predicted_RemoveOwnedCard(const TSubclassOf<UCardObject>& InCar
 	return false;
 }
 
+void UInventory::SetupInputs(const UFormCharacterComponent* FormCharacterComponent)
+{
+	if (!FormCharacterComponent) return;
+	//Clear bindings and input states as this function may be called more than once.
+	OrderedInputBindingIndices.Empty();
+	OrderedLastInputState.Empty();
+	//Translate InputActions to indices so we don't have to search when applying inputs.
+	OrderedInputBindingIndices.Reserve(OrderedInputBindings.Num());
+	OrderedLastInputState.Reserve(OrderedInputBindings.Num());
+	for (UInputAction* Input : OrderedInputBindings)
+	{
+		if (Input == nullptr)
+		{
+			//We use INDEX_NONE to represent no input.
+			OrderedInputBindingIndices.Add(INDEX_NONE);
+		}
+		else
+		{
+			const uint8 Index = FormCharacterComponent->InputActionRegistry.Find(Input);
+			if (Index == INDEX_NONE)
+			{
+				UE_LOG(LogSfCore, Error,
+				       TEXT(
+					       "Found input on UInventory class %s that is unregistered with the UFormCharacterComponent. Skipping."
+				       ), *GetClass()->GetName());
+				continue;
+			}
+			OrderedInputBindingIndices.Add(Index);
+		}
+		OrderedLastInputState.Add(false);
+	}
+}
+
 void UInventory::AutonomousInitialize()
 {
-	bIsOnFormCharacter = IsFormCharacter();
-	if (bIsOnFormCharacter)
-	{
-		//Translate InputActions to indices so we don't have to search when applying inputs.
-		OrderedInputBindingIndices.Reserve(OrderedInputBindings.Num());
-		OrderedLastInputState.Reserve(OrderedInputBindings.Num());
-		for (UInputAction* Input : OrderedInputBindings)
-		{
-			if (Input == nullptr)
-			{
-				//We use INDEX_NONE to represent no input.
-				OrderedInputBindingIndices.Add(INDEX_NONE);
-			}
-			else
-			{
-				const uint8 Index = GetFormCharacter()->InputActionRegistry.Find(Input);
-				if (Index == INDEX_NONE)
-				{
-					UE_LOG(LogSfCore, Error,
-					       TEXT(
-						       "Found input on UInventory class %s that is unregistered with the UFormCharacterComponent. Skipping."
-					       ), *GetClass()->GetName());
-					continue;
-				}
-				OrderedInputBindingIndices.Add(Index);
-			}
-			OrderedLastInputState.Add(false);
-		}
-	}
 	Autonomous_Initialize();
 	bInitialized = true;
 }
 
 void UInventory::ServerInitialize()
 {
-	bIsOnFormCharacter = IsFormCharacter();
-	if (bIsOnFormCharacter)
-	{
-		//Translate InputActions to indices so we don't have to search when applying inputs.
-		OrderedInputBindingIndices.Reserve(OrderedInputBindings.Num());
-		for (UInputAction* Input : OrderedInputBindings)
-		{
-			OrderedInputBindingIndices.Add(GetFormCharacter()->InputActionRegistry.Find(Input));
-			OrderedLastInputState.Add(false);
-		}
-	}
+	UFormCharacterComponent* FormCharacter = OwningFormCore->FormCharacter;
 	if (Capacity > 127)
 	{
 		UE_LOG(LogSfCore, Error,
@@ -1000,7 +1001,7 @@ void UInventory::ServerInitialize()
 		if (bIsOnFormCharacter)
 		{
 			Cards.Emplace(CardClass, FCard::ECardType::UseDefaultLifetimePredictedTimestamp,
-			              0, GetFormCharacter());
+			              0, FormCharacter);
 		}
 		else
 		{
@@ -1012,13 +1013,13 @@ void UInventory::ServerInitialize()
 		CardAdded.LifetimeEndTimestamp = -1.f;
 		if (bIsOnFormCharacter)
 		{
-			GetFormCharacter()->bMovementSpeedNeedsRecalculation = true;
+			FormCharacter->bMovementSpeedNeedsRecalculation = true;
 			//We set it to be not corrected and set a timeout so the client has a chance to synchronize before we start issuing corrections.
 			CardAdded.bIsNotCorrected = true;
 			CardAdded.ServerAwaitClientSyncTimeoutTimestamp = CardAdded.ServerAwaitClientSyncTimeoutDuration +
 				GetWorld()->
 				TimeSeconds;
-			GetFormCharacter()->MarkCardsDirty();
+			FormCharacter->MarkCardsDirty();
 		}
 		MARK_PROPERTY_DIRTY_FROM_NAME(UInventory, Cards, this);
 		CallBindedOnAddSharedCardDelegates(CardAdded, false);
@@ -1514,6 +1515,7 @@ void UInventory::ClientAutonomousDeinitialize_Implementation()
 
 float UInventory::GetCardLifetime(const TSubclassOf<UCardObject>& InCardClass, const int32 InOwnerConstituentInstanceId)
 {
+	const UFormCharacterComponent* FormCharacter = OwningFormCore->FormCharacter;
 	float Value = 0;
 	for (const FCard& Card : Cards)
 	{
@@ -1522,7 +1524,7 @@ float UInventory::GetCardLifetime(const TSubclassOf<UCardObject>& InCardClass, c
 		if (Card.LifetimeEndTimestamp <= 0) return 0;
 		if (Card.bUsingPredictedTimestamp)
 		{
-			Value = GetFormCharacter()->CalculateTimeUntilPredictedTimestamp(Card.LifetimeEndTimestamp);
+			Value = FormCharacter->CalculateTimeUntilPredictedTimestamp(Card.LifetimeEndTimestamp);
 		}
 		else
 		{

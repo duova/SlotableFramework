@@ -60,44 +60,10 @@ void USfObject::Destroy()
 	}
 }
 
-bool USfObject::IsFormCharacter()
-{
-	if (FormCharacterComponent) return true;
-	if (bDoesNotHaveFormCharacter) return false;
-	if (!GetOwner()) return false;
-	if (UFormCharacterComponent* Component = Cast<UFormCharacterComponent>(
-		GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass())))
-	{
-		FormCharacterComponent = Component;
-		bDoesNotHaveFormCharacter = false;
-		return true;
-	}
-	bDoesNotHaveFormCharacter = true;
-	return false;
-}
-
 AActor* USfObject::SpawnActorInOwnerWorld(const TSubclassOf<AActor>& InClass, const FVector& Location, const FRotator& Rotation)
 {
 	if (!GetOwner()) return nullptr;
 	return GetOwner()->GetWorld()->SpawnActor<AActor>(InClass, Location, Rotation);
-}
-
-UFormCharacterComponent* USfObject::GetFormCharacter()
-{
-	if (FormCharacterComponent) return FormCharacterComponent;
-	if (bDoesNotHaveFormCharacter) return nullptr;
-	if (!GetOwner()) return nullptr;
-	if (UFormCharacterComponent* Component = Cast<UFormCharacterComponent>(
-		GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass())))
-	{
-		FormCharacterComponent = Component;
-		bDoesNotHaveFormCharacter = false;
-	}
-	else
-	{
-		bDoesNotHaveFormCharacter = true;
-	}
-	return Cast<UFormCharacterComponent>(GetOwner()->FindComponentByClass(UFormCharacterComponent::StaticClass()));
 }
 
 USfObject::USfObject()

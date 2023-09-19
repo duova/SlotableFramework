@@ -23,10 +23,47 @@ bool FResource::operator!=(const FResource& Other) const
 	return !(*this == Other);
 }
 
-bool FResource::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
+FResourceArray::FResourceArray()
 {
-	//We don't serialize the tag because the index is always the same since we can't add a resource during runtime.
-	Ar << Value;
+}
+
+bool FResourceArray::operator==(const FResourceArray& Other) const
+{
+	return Items == Other.Items;
+}
+
+bool FResourceArray::operator!=(const FResourceArray& Other) const
+{
+	return !(*this == Other);
+}
+
+bool FResourceArray::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
+{
+	TArray<float> Values;
+	if (Ar.IsSaving())
+	{
+		Values.Reserve(Items.Num());
+		for (FResource Resource : Items)
+		{
+			Values.Add(Resource.Value);
+		}
+	}
+	Ar << Values;
+	if (Ar.IsLoading())
+	{
+		while (Items.Num() > Values.Num())
+		{
+			Items.RemoveAt(Items.Num() - 1);
+		}
+		while (Values.Num() > Items.Num())
+		{
+			Items.Emplace();
+		}
+		for (uint8 i = 0; i < Items.Num(); i++)
+		{
+			Items[i].Value = Values[i];
+		}
+	}
 	return bOutSuccess;
 }
 
@@ -73,8 +110,8 @@ void UFormResourceComponent::SetupFormResource(UFormCoreComponent* InFormCore)
 void UFormResourceComponent::SecondarySetupFormResource()
 {
 	FormStat = FormCore->GetFormStat();
-	Resources = ResourcesToRegister;
-	for (FResource& Resource : Resources)
+	Resources.Items = ResourcesToRegister;
+	for (FResource& Resource : Resources.Items)
 	{
 		const float MaxValue = GetMaxValue(Resource);
 		Resource.Value = FMath::Clamp(Resource.Value, 0, MaxValue);
@@ -83,7 +120,7 @@ void UFormResourceComponent::SecondarySetupFormResource()
 
 float UFormResourceComponent::GetResourceValue(const FGameplayTag InTag) const
 {
-	for (const FResource& Resource : Resources)
+	for (const FResource& Resource : Resources.Items)
 	{
 		if (Resource.Tag == InTag)
 		{
@@ -95,7 +132,7 @@ float UFormResourceComponent::GetResourceValue(const FGameplayTag InTag) const
 
 FResource* UFormResourceComponent::GetResourceFromTag(const FGameplayTag& InTag)
 {
-	for (FResource& Resource : Resources)
+	for (FResource& Resource : Resources.Items)
 	{
 		if (Resource.Tag == InTag)
 		{

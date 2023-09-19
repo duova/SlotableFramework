@@ -39,19 +39,37 @@ struct SFCORE_API FResource
 	bool operator==(const FResource& Other) const;
 
 	bool operator!=(const FResource& Other) const;
+};
 
-	friend FArchive& operator<<(FArchive& Ar, FResource& Resource)
-	{
-		//We don't serialize the tag because the index is always the same since we can't add a resource during runtime.
-		Ar << Resource.Value;
-		return Ar;
-	}
+//Wrapper for minimal resource serialization.
+USTRUCT(BlueprintType)
+struct SFCORE_API FResourceArray
+{
+	GENERATED_BODY()
+
+	TArray<FResource> Items;
+
+	FResourceArray();
+
+	bool operator==(const FResourceArray& Other) const;
+
+	bool operator!=(const FResourceArray& Other) const;
 
 	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
 };
 
 template<>
 struct TStructOpsTypeTraits<FResource> : public TStructOpsTypeTraitsBase2<FResource>
+{
+	enum
+	{
+		WithIdenticalViaEquality = true,
+		WithCopy = true
+	};
+};
+
+template<>
+struct TStructOpsTypeTraits<FResourceArray> : public TStructOpsTypeTraitsBase2<FResourceArray>
 {
 	enum
 	{
@@ -139,7 +157,7 @@ private:
 
 	//Resources are only replicated to non-owners with a lower frequency to reduce bandwidth.
 	UPROPERTY(VisibleAnywhere, Replicated)
-	TArray<FResource> Resources;
+	FResourceArray Resources;
 
 	float NextReplicationServerTimestamp;
 };

@@ -99,6 +99,11 @@ bool FIdentifiedActionSet::operator==(const FIdentifiedActionSet& Other) const
 	return false;
 }
 
+bool FIdentifiedActionSet::operator!=(const FIdentifiedActionSet& Other) const
+{
+	return !(*this == Other);
+}
+
 bool FIdentifiedActionSet::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
 {
 	Ar << ConstituentInstanceId;
@@ -126,7 +131,7 @@ void FSavedMove_Sf::Clear()
 	PredictedNetClock = 0;
 	PendingActionSets.Empty();
 	CardIdentifiersInInventories.Empty();
-	Resources.Empty();
+	Resources.Items.Empty();
 }
 
 void FSavedMove_Sf::SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& NewAccel,
@@ -150,11 +155,6 @@ void FSavedMove_Sf::SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& 
 	{
 		TertiaryInputSet = CharacterComponent->TertiaryInputSet;
 	}
-
-	PredictedNetClock = CharacterComponent->PredictedNetClock;
-	PendingActionSets = CharacterComponent->PendingActionSets;
-	CardIdentifiersInInventories = CharacterComponent->CardIdentifiersInInventories;
-	Resources = CharacterComponent->ClientSentResources;
 }
 
 void FSavedMove_Sf::PrepMoveFor(ACharacter* C)
@@ -177,11 +177,17 @@ void FSavedMove_Sf::PrepMoveFor(ACharacter* C)
 	{
 		CharacterComponent->TertiaryInputSet = TertiaryInputSet;
 	}
+}
 
-	CharacterComponent->PredictedNetClock = PredictedNetClock;
-	CharacterComponent->PendingActionSets = PendingActionSets;
-	CharacterComponent->CardIdentifiersInInventories = CardIdentifiersInInventories;
-	CharacterComponent->ClientSentResources = Resources;
+void FSavedMove_Sf::PostUpdate(ACharacter* C, EPostUpdateMode PostUpdateMode)
+{
+	const UFormCharacterComponent* CharacterComponent = Cast<UFormCharacterComponent>(C->GetCharacterMovement());
+	PredictedNetClock = CharacterComponent->PredictedNetClock;
+	PendingActionSets = CharacterComponent->PendingActionSets;
+	CardIdentifiersInInventories = CharacterComponent->CardIdentifiersInInventories;
+	Resources = CharacterComponent->ClientSentResources;
+
+	FSavedMove_Character::PostUpdate(C, PostUpdateMode);
 }
 
 uint8 FSavedMove_Sf::GetCompressedFlags() const
@@ -191,6 +197,11 @@ uint8 FSavedMove_Sf::GetCompressedFlags() const
 	if (bWantsToSprint) Result |= FLAG_Custom_0;
 
 	return Result;
+}
+
+bool FSavedMove_Sf::CanCombineWith(const FSavedMovePtr& NewMove, ACharacter* InCharacter, float MaxDelta) const
+{
+	return false;
 }
 
 FNetworkPredictionData_Client_Sf::FNetworkPredictionData_Client_Sf(const UCharacterMovementComponent& ClientMovement)
@@ -213,7 +224,7 @@ bool FSfNetworkMoveData::Serialize(UCharacterMovementComponent& CharacterMovemen
                                    UPackageMap* PackageMap, ENetworkMoveType MoveType)
 {
 	UFormCharacterComponent* CharacterComponent = Cast<UFormCharacterComponent>(&CharacterMovement);
-	
+
 	NetworkMoveType = MoveType;
 
 	bool bLocalSuccess = true;
@@ -229,7 +240,7 @@ bool FSfNetworkMoveData::Serialize(UCharacterMovementComponent& CharacterMovemen
 	ControlRotation.NetSerialize(Ar, PackageMap, bLocalSuccess);
 
 	SerializeOptionalValue<uint8>(bIsSaving, Ar, CompressedMoveFlags, 0);
-	
+
 	if (MoveType == ENetworkMoveType::NewMove)
 	{
 		// Location, relative movement base, and ending movement mode is only used for error checking, so only save for the final move.
@@ -237,7 +248,7 @@ bool FSfNetworkMoveData::Serialize(UCharacterMovementComponent& CharacterMovemen
 		SerializeOptionalValue<FName>(bIsSaving, Ar, MovementBaseBoneName, NAME_None);
 		SerializeOptionalValue<uint8>(bIsSaving, Ar, MovementMode, MOVE_Walking);
 	}
-	
+
 	//We add our flags to serialization.
 	Ar.SerializeBits(&EnabledInputSets, 2);
 	if (EnabledInputSets > 0)
@@ -262,7 +273,7 @@ bool FSfNetworkMoveData::Serialize(UCharacterMovementComponent& CharacterMovemen
 		Ar << PredictedNetClock;
 		if (bIsSaving)
 		{
-			CharacterComponent->NetClockNextInteger = floor(PredictedNetClock) + 1;
+			CharacterComponent->NetClockNextInteger = FMath::CeilToInt(PredictedNetClock);
 		}
 	}
 	else if (!bIsSaving)
@@ -270,7 +281,7 @@ bool FSfNetworkMoveData::Serialize(UCharacterMovementComponent& CharacterMovemen
 		//Negative values mean do not check on server.
 		PredictedNetClock = -1;
 	}
-	
+
 	//Only serialize pending action sets if actions were made that frame.
 	bool bDoSerializeActionSets = bIsSaving && !PendingActionSets.IsEmpty();
 	Ar.SerializeBits(&bDoSerializeActionSets, 1);
@@ -278,10 +289,10 @@ bool FSfNetworkMoveData::Serialize(UCharacterMovementComponent& CharacterMovemen
 	{
 		Ar << PendingActionSets;
 	}
-	
+
 	//Conditionally serialize InventoryCardIdentifiers if they have been changed.
-	bool bDoSerializeCardIdentifiers = bIsSaving && CardIdentifiersInInventories != CharacterComponent->
-		OldCardIdentifiersInInventories;
+	bool bDoSerializeCardIdentifiers = bIsSaving && (CardIdentifiersInInventories != CharacterComponent->
+		OldCardIdentifiersInInventories || CharacterComponent->bClientForceSerialize);
 	Ar.SerializeBits(&bDoSerializeCardIdentifiers, 1);
 	if (bDoSerializeCardIdentifiers)
 	{
@@ -300,12 +311,12 @@ bool FSfNetworkMoveData::Serialize(UCharacterMovementComponent& CharacterMovemen
 	if (CharacterComponent->FormResource)
 	{
 		//Conditionally serialize Resources if they have been changed.
-		bool bDoSerializeResources = bIsSaving && Resources != CharacterComponent->
-			OldClientSentResources;
+		bool bDoSerializeResources = bIsSaving && (Resources != CharacterComponent->
+			OldClientSentResources || CharacterComponent->bClientForceSerialize);
 		Ar.SerializeBits(&bDoSerializeResources, 1);
 		if (bDoSerializeResources)
 		{
-			Ar << Resources;
+			Resources.NetSerialize(Ar, PackageMap, bLocalSuccess);
 			//We set update OldClientSentResources on both the server and client.
 			//The client version is what we use to check if we have attempted to send our latest changes already.
 			//The server version is what is used if the client indicates they have no updates.
@@ -316,6 +327,8 @@ bool FSfNetworkMoveData::Serialize(UCharacterMovementComponent& CharacterMovemen
 			Resources = CharacterComponent->OldClientSentResources;
 		}
 	}
+
+	CharacterComponent->bClientForceSerialize = false;
 
 	return !Ar.IsError();
 }
@@ -363,38 +376,17 @@ void FSfMoveResponseDataContainer::ServerFillResponseData(const UCharacterMoveme
 {
 	FCharacterMoveResponseDataContainer::ServerFillResponseData(CharacterMovement, PendingAdjustment);
 
-	const UFormCharacterComponent* CharacterComponent = Cast<UFormCharacterComponent>(&CharacterMovement);
-
-	PredictedNetClock = CharacterComponent->PredictedNetClock;
-	ActionSetResponse = CharacterComponent->ActionSetResponses;
-	TimeSinceLastAction = CharacterComponent->TimesSinceLastAction;
-	CardResponse = CharacterComponent->CardResponse;
-	ResourcesResponse = CharacterComponent->ResourcesResponse;
+	//Data is directly serialized from the character component for the response.
 }
 
 void FSfMoveResponseDataContainer::SerializeCardResponse(FArchive& Ar, UFormCharacterComponent* CharacterComponent,
                                                          const bool bIsSaving)
 {
 	Ar << CardResponse;
-	//We update OldInventoryCardIdentifiers on the client because we do not want it to immediately send the
-	//correction back to the server. We don't update InventoryCardIdentifiers because it will just get overwritten.
 	if (!bIsSaving)
 	{
 		CharacterComponent->bClientCardsWereUpdated = true;
 		CharacterComponent->bMovementSpeedNeedsRecalculation = true;
-		CharacterComponent->OldCardIdentifiersInInventories.Empty();
-		for (FInventoryCards& InventoryCard : CardResponse)
-		{
-			//Place new element
-			const uint16 i = CharacterComponent->OldCardIdentifiersInInventories.Emplace();
-			//Reserve and add elements to the element.
-			CharacterComponent->OldCardIdentifiersInInventories[i].CardIdentifiers.Reserve(InventoryCard.Cards.Num());
-			for (FCard& Card : InventoryCard.Cards)
-			{
-				CharacterComponent->OldCardIdentifiersInInventories[i].CardIdentifiers.Emplace(
-					Card.ClassIndex, Card.OwnerConstituentInstanceId);
-			}
-		}
 	}
 }
 
@@ -454,10 +446,10 @@ bool FSfMoveResponseDataContainer::Serialize(UCharacterMovementComponent& Charac
 
 		//Conditionally serialize Resources.
 		bool bDoSerializeResources = (CharacterComponent->CorrectionConditionFlags
-			& Repredict_ActionSetsCardsResources) != 0;
+			& Repredict_ActionSetsCardsResources) != 0 && CharacterComponent->FormResource;
 		if (bDoSerializeResources)
 		{
-			Ar << CharacterComponent->ResourcesResponse;
+			CharacterComponent->ResourcesResponse.NetSerialize(Ar, PackageMap, bLocalSuccess);
 			if (!bIsSaving)
 			{
 				CharacterComponent->bClientResourcesWereUpdated = true;
@@ -533,6 +525,10 @@ UFormCharacterComponent::UFormCharacterComponent()
 	bClientActionsWereUpdated = false;
 	bClientCardsWereUpdated = false;
 	bClientResourcesWereUpdated = false;
+	NetworkMinTimeBetweenClientAdjustments = 0.2;
+	NetworkMinTimeBetweenClientAckGoodMoves = 0.01;
+	//TODO: Allow smoothing to run at a higher frame rate.
+	SetComponentTickInterval(0.01);
 }
 
 bool UFormCharacterComponent::ShouldUsePackedMovementRPCs() const
@@ -574,16 +570,10 @@ void UFormCharacterComponent::ClientAdjustPosition_Implementation(float TimeStam
 		       ));
 		return;
 	}
-	
+
 	Super::ClientAdjustPosition_Implementation(TimeStamp, NewLoc, NewVel, NewBase, NewBaseBoneName, bHasBase,
 	                                           bBaseRelativePosition, ServerMovementMode,
 	                                           OptionalRotation);
-
-	PredictedNetClock = SfMoveResponseDataContainer.PredictedNetClock;
-	ActionSetResponses = SfMoveResponseDataContainer.ActionSetResponse;
-	TimesSinceLastAction = SfMoveResponseDataContainer.TimeSinceLastAction;
-	CardResponse = SfMoveResponseDataContainer.CardResponse;
-	ResourcesResponse = SfMoveResponseDataContainer.ResourcesResponse;
 }
 
 void UFormCharacterComponent::MarkCardsDirty()
@@ -593,7 +583,7 @@ void UFormCharacterComponent::MarkCardsDirty()
 
 bool UFormCharacterComponent::IsReplaying() const
 {
-	return ClientPredictionData && ClientPredictionData->bUpdatePosition;
+	return bIsReplaying;
 }
 
 void UFormCharacterComponent::SetupFormCharacter(UFormCoreComponent* FormCoreComponent)
@@ -680,9 +670,9 @@ void UFormCharacterComponent::SetupPlayerInputComponent(UInputComponent* PlayerI
 		{
 			if (!InputAction) continue;
 			EnhancedInputComponent->BindAction(InputAction, ETriggerEvent::Started, this,
-											   &UFormCharacterComponent::OnInputDown);
+			                                   &UFormCharacterComponent::OnInputDown);
 			EnhancedInputComponent->BindAction(InputAction, ETriggerEvent::Canceled, this,
-											   &UFormCharacterComponent::OnInputUp);
+			                                   &UFormCharacterComponent::OnInputUp);
 		}
 	}
 }
@@ -829,6 +819,8 @@ void UFormCharacterComponent::HandleInventoryDifferencesAndSetCorrectionFlags(
 			{
 				//Otherwise we should correct the client with the missing card.
 				CorrectionConditionFlags |= Repredict_ActionSetsCardsResources;
+				UE_LOG(LogSfCore, Display,
+				       TEXT("Cards caused recorrection as client is missing a card that exists on the server."));
 			}
 		}
 	}
@@ -840,25 +832,31 @@ void UFormCharacterComponent::HandleInventoryDifferencesAndSetCorrectionFlags(
 		if (!CardCanBeFoundInInventory(Inventory, CardIdentifier))
 		{
 			CorrectionConditionFlags |= Repredict_ActionSetsCardsResources;
+			UE_LOG(LogSfCore, Display,
+			       TEXT("Cards caused recorrection as client has a card that doesn't exist on the server."));
 		}
 	}
 }
 
 void UFormCharacterComponent::HandleResourcesDifferencesAndSetCorrectionFlags(
-	const UFormResourceComponent* FormResourceComponent, const TArray<FResource>& InResources)
+	const UFormResourceComponent* FormResourceComponent, const FResourceArray& InResources)
 {
-	const TArray<FResource>& ServerResources = FormResourceComponent->Resources;
-	if (InResources.Num() != ServerResources.Num())
+	const FResourceArray& ServerResources = FormResourceComponent->Resources;
+	if (InResources.Items.Num() != ServerResources.Items.Num())
 	{
 		//If client sent resources array is a different size we must correct.
 		CorrectionConditionFlags |= Repredict_ActionSetsCardsResources;
+		UE_LOG(LogSfCore, Display, TEXT("Resources caused recorrection. Client length %d, server length %d."),
+		       InResources.Items.Num(), ServerResources.Items.Num());
 		return;
 	}
-	for (uint16 i = 0; i < ServerResources.Num(); i++)
+	for (uint16 i = 0; i < ServerResources.Items.Num(); i++)
 	{
-		if (ServerResources[i] != InResources[i])
+		if (ServerResources.Items[i].Value != InResources.Items[i].Value)
 		{
 			CorrectionConditionFlags |= Repredict_ActionSetsCardsResources;
+			UE_LOG(LogSfCore, Display, TEXT("Resources caused recorrection. Client value %f, server value %f."),
+			       InResources.Items[0].Value, ServerResources.Items[0].Value);
 			return;
 		}
 	}
@@ -876,12 +874,25 @@ void UFormCharacterComponent::SfServerCheckClientError()
 			|| MoveData->PredictedNetClock < PredictedNetClock - NetClockAcceptableTolerance)
 		{
 			CorrectionConditionFlags |= Repredict_NetClock;
+			UE_LOG(LogSfCore, Display, TEXT("NetClock caused recorrection %f and %f."), MoveData->PredictedNetClock,
+			       PredictedNetClock);
 		}
 	}
 
-	if (MoveData->PendingActionSets != PendingActionSets)
+	//Don't correct if there is a count mismatch as it is likely just the delay in UObject synchronization.
+	if (MoveData->PendingActionSets != PendingActionSets && MoveData->PendingActionSets.Num() == PendingActionSets.
+		Num())
 	{
 		CorrectionConditionFlags |= Repredict_ActionSetsCardsResources;
+		UE_LOG(LogSfCore, Display, TEXT("ActionSets caused recorrection. Client length %d, Server length %d."),
+		       MoveData->PendingActionSets.Num(), PendingActionSets.Num());
+		if (MoveData->PendingActionSets.Num() > 0 && PendingActionSets.Num() > 0)
+		{
+			UE_LOG(LogSfCore, Display,
+			       TEXT("Client InstanceId: %d, Server InstanceID: %d, Client Action0: %d, Server Action0: %d"),
+			       MoveData->PendingActionSets[0].ConstituentInstanceId, PendingActionSets[0].ConstituentInstanceId,
+			       MoveData->PendingActionSets[0].ActionSet.ActionZero, PendingActionSets[0].ActionSet.ActionZero);
+		}
 	}
 
 	//If there is a difference in the number of inventories, ie when the server added or removed an inventory and the
@@ -889,10 +900,7 @@ void UFormCharacterComponent::SfServerCheckClientError()
 	const TArray<UInventory*> Inventories = FormCore->GetInventories();
 	const TArray<FCardIdentifiersInAnInventory>& ClientCardIdentifiersInInventories = MoveData->
 		CardIdentifiersInInventories;
-	if (ClientCardIdentifiersInInventories.Num() != Inventories.Num())
-	{
-		return;
-	}
+	if (ClientCardIdentifiersInInventories.Num() != Inventories.Num()) return;
 
 	for (uint8 InventoryIndex = 0; InventoryIndex < Inventories.Num(); InventoryIndex++)
 	{
@@ -926,26 +934,40 @@ void UFormCharacterComponent::UpdateFromAdditionInputs()
 
 bool UFormCharacterComponent::ClientUpdatePositionAfterServerUpdate()
 {
-	const bool ReturnValue = Super::ClientUpdatePositionAfterServerUpdate();
-	if (GetOwner() && GetOwner()->GetLocalRole() == ROLE_AutonomousProxy)
+	FNetworkPredictionData_Client_Character* ClientData = GetPredictionData_Client_Character();
+	check(ClientData);
+	if (ClientData->bUpdatePosition)
 	{
-		//Reset correction condition flags after replay so we know when we're replaying and when we're not.
-		CorrectionConditionFlags = 0;
-
-		//Call a delegate so form components know to restart with their current state.
-		if (OnPostRollback.IsBound())
-		{
-			OnPostRollback.Broadcast();
-		}
+		bIsReplaying = true;
 	}
-	return ReturnValue;
+	//Call super to potentially replay moves.
+	if (Super::ClientUpdatePositionAfterServerUpdate())
+	{
+		//Clean up after replaying and call post rollback delegate.
+		bIsReplaying = false;
+		if (GetOwner() && GetOwner()->GetLocalRole() == ROLE_AutonomousProxy)
+		{
+			//Reset correction condition flags after replay so we know when we're replaying and when we're not.
+			CorrectionConditionFlags = 0;
+
+			//Call a delegate so form components know to restart with their current state.
+			if (OnPostRollback.IsBound())
+			{
+				OnPostRollback.Broadcast();
+			}
+		}
+		return true;
+	}
+	return false;
 }
 
 void UFormCharacterComponent::CorrectActionSets()
 {
-	//Constituent registry can't be used since this has to be in a deterministic order.
-	uint16 i = 0;
+	//Return if we're waiting for non-predicted objects to synchronize.
+	if (FormCore->ConstituentRegistry.Num() != ActionSetResponses.Num()) return;
 	if (ActionSetResponses.Num() == 0 || TimesSinceLastAction.Num() == 0) return;
+	uint16 i = 0;
+	//Constituent registry can't be used since this has to be in a deterministic order.
 	for (const UInventory* Inventory : FormCore->GetInventories())
 	{
 		for (const USlotable* Slotable : Inventory->GetSlotables())
@@ -963,6 +985,7 @@ void UFormCharacterComponent::CorrectActionSets()
 void UFormCharacterComponent::CorrectCards()
 {
 	const TArray<UInventory*>& Inventories = FormCore->GetInventories();
+	if (Inventories.Num() != CardResponse.Num()) return;
 	for (uint16 i = 0; i < Inventories.Num(); i++)
 	{
 		Inventories[i]->Cards = CardResponse[i].Cards;
@@ -972,7 +995,12 @@ void UFormCharacterComponent::CorrectCards()
 
 void UFormCharacterComponent::CorrectResources() const
 {
-	FormResource->Resources = ResourcesResponse;
+	//We can only copy the values since the tags are not serialized.
+	if (ResourcesResponse.Items.Num() != FormResource->Resources.Items.Num()) return;
+	for (uint8 i = 0; i < FormResource->Resources.Items.Num(); i++)
+	{
+		FormResource->Resources.Items[i].Value = ResourcesResponse.Items[i].Value;
+	}
 }
 
 void UFormCharacterComponent::PackActionSets()
@@ -1018,7 +1046,14 @@ void UFormCharacterComponent::PackCards()
 
 void UFormCharacterComponent::PackResources()
 {
-	ResourcesResponse = FormCore->GetFormResource()->Resources;
+	if (GetOwner()->HasAuthority())
+	{
+		ResourcesResponse = FormCore->GetFormResource()->Resources;
+	}
+	else
+	{
+		ClientSentResources = FormCore->GetFormResource()->Resources;
+	}
 }
 
 void UFormCharacterComponent::PackInventoryCardIdentifiers()
@@ -1062,7 +1097,7 @@ void UFormCharacterComponent::HandleCardClientSyncTimeout() const
 	}
 }
 
-void UFormCharacterComponent::ApplyInputBitsToInventory(const uint32 InInputBits, const UInventory* InInventory)
+void UFormCharacterComponent::ApplyInputBitsToInventory(const uint32 InInputBits, UInventory* InInventory)
 {
 	//Note that input indices 0-23 represent the index of the input action that is registered in the InputActionRegistry.
 	const TArray<int8>& BoundInputIndices = InInventory->OrderedInputBindingIndices;
@@ -1087,6 +1122,7 @@ void UFormCharacterComponent::ApplyInputBitsToInventory(const uint32 InInputBits
 				Constituent->OnInputUp(true);
 			}
 		}
+		InInventory->OrderedLastInputState[i] = bInputValue;
 	}
 }
 
@@ -1097,13 +1133,18 @@ void UFormCharacterComponent::RemovePredictedCardWithEndedLifetimes() const
 		TArray<FCard>& Cards = Inventory->Cards;
 		for (int16 i = Cards.Num() - 1; i >= 0; i--)
 		{
-			if (Cards[i].bUsingPredictedTimestamp && Cards[i].LifetimeEndTimestamp > -1.f &&  CalculateTimeUntilPredictedTimestamp(Cards[i].LifetimeEndTimestamp)
+			if (Cards[i].bUsingPredictedTimestamp && Cards[i].LifetimeEndTimestamp > -1.f &&
+				CalculateTimeUntilPredictedTimestamp(Cards[i].LifetimeEndTimestamp)
 				< 0)
 			{
 				Cards.RemoveAt(i, 1, false);
 			}
 		}
 		Cards.Shrink();
+	}
+	for (UConstituent* Constituent : FormCore->ConstituentRegistry)
+	{
+		UInventory::UpdateAndRunBufferedInputs(Constituent);
 	}
 }
 
@@ -1113,7 +1154,7 @@ void UFormCharacterComponent::CalculateMovementSpeed()
 	float AdditiveMovementSpeedMultiplierSum = 0;
 	//1 as the base to multiply into the modifier.
 	float AdditiveMultiplicativeMovementSpeedModifierSum = 1;
-	float TrueMultiplicativeMovementSpeedModifierProduct = 0;
+	float TrueMultiplicativeMovementSpeedModifierProduct = 1;
 	float FlatAdditiveMovementSpeedModifierSum = 0;
 
 	for (const UInventory* Inventory : FormCore->GetInventories())
@@ -1122,7 +1163,7 @@ void UFormCharacterComponent::CalculateMovementSpeed()
 		{
 			if (Card.bIsDisabledForDestroy) continue;
 			const UCardObject* CardCDO = static_cast<UCardObject*>(Card.Class->ClassDefaultObject);
-			if (CardCDO->bUseMovementSpeedModifiers) continue;
+			if (!CardCDO->bUseMovementSpeedModifiers) continue;
 			AdditiveMovementSpeedMultiplierSum += CardCDO->AdditiveMovementSpeedModifier;
 			AdditiveMultiplicativeMovementSpeedModifierSum += CardCDO->AdditiveMultiplicativeMovementSpeedModifier;
 			TrueMultiplicativeMovementSpeedModifierProduct *= CardCDO->TrueMultiplicativeMovementSpeedModifier;
@@ -1179,12 +1220,13 @@ void UFormCharacterComponent::CalculateMovementSpeed()
 		MaxAcceleration *= VariableAccelerationMultiplier;
 	}
 
-	if (GetOwner() && GetOwner()->GetLocalRole() == ROLE_AutonomousProxy)
+	FormCore->WalkSpeedStat = MaxWalkSpeed;
+	FormCore->SwimSpeedStat = MaxSwimSpeed;
+	FormCore->FlySpeedStat = MaxFlySpeed;
+	FormCore->AccelerationStat = MaxAcceleration;
+
+	if (GetOwner() && GetOwner()->GetLocalRole() == ROLE_Authority)
 	{
-		FormCore->WalkSpeedStat = MaxWalkSpeed;
-		FormCore->SwimSpeedStat = MaxSwimSpeed;
-		FormCore->FlySpeedStat = MaxFlySpeed;
-		FormCore->AccelerationStat = MaxAcceleration;
 		FormCore->SetMovementStatsDirty();
 	}
 }
@@ -1192,6 +1234,15 @@ void UFormCharacterComponent::CalculateMovementSpeed()
 void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeconds)
 {
 	Super::UpdateCharacterStateBeforeMovement(DeltaSeconds);
+
+	if (GetOwner() && GetOwner()->GetLocalRole() == ROLE_SimulatedProxy) return;
+
+	if (IsReplaying())
+	{
+		//Force serialize all client validation data to server after a correction to ensure that packet loss doesn't
+		//lead to repeated corrections as client usually only sends what it thinks it hasn't sent.
+		bClientForceSerialize = true;
+	}
 
 	//On client we extract the corrected states from the FormCharacter if necessary.
 	if (GetOwner() && GetOwner()->GetLocalRole() == ROLE_AutonomousProxy)
@@ -1217,6 +1268,29 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 	//Not if we want to repredict movement or update cards only.
 	if (!IsReplaying() || (CorrectionConditionFlags & (Repredict_NetClock | Repredict_ActionSetsCardsResources)) != 0)
 	{
+		PredictedNetClock += DeltaSeconds;
+		//We reset when it is soon to lose 2 decimal points of precision.
+		if (PredictedNetClock > 40000.0)
+		{
+			PredictedNetClock = 0;
+		}
+
+		//Run input if we're not replaying, or if we want to repredict anything that is not movement.
+		const uint32 InputBits = GetInputSetsJoinedBits();
+		for (UInventory* Inventory : FormCore->GetInventories())
+		{
+			ApplyInputBitsToInventory(InputBits, Inventory);
+		}
+
+		RemovePredictedCardWithEndedLifetimes();
+
+		//Remove timed out buffered inputs.
+		for (UConstituent* Constituent : FormCore->ConstituentRegistry)
+		{
+			Constituent->HandleBufferInputTimeout();
+			//Note that the buffered inputs firing is implemented with the addition or removal of cards.
+		}
+
 		if (FormResource && FormStat)
 		{
 			//Apply consistent resource changes.
@@ -1226,7 +1300,7 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 			if (FMath::Floor(PredictedNetClock * ResourceUpdatesPerSecond) != FMath::Floor(
 				(PredictedNetClock + DeltaSeconds) * ResourceUpdatesPerSecond))
 			{
-				for (FResource& Resource : FormResource->Resources)
+				for (FResource& Resource : FormResource->Resources.Items)
 				{
 					FormResource->LocalInternalAddResourceValue(
 						Resource, FormStat->GetStat(Resource.IncreasePerSecondStat) * TimeBetweenResourceUpdate);
@@ -1236,40 +1310,14 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 			}
 		}
 
-		PredictedNetClock += DeltaSeconds;
-		//We reset when it is soon to lose 2 decimal points of precision.
-		if (PredictedNetClock > 40000.0)
-		{
-			PredictedNetClock = 0;
-		}
-
-		RemovePredictedCardWithEndedLifetimes();
-
-		//Run input if we're not replaying, or if we want to repredict anything that is not movement.
-		const uint32 InputBits = GetInputSetsJoinedBits();
-		for (const UInventory* Inventory : FormCore->GetInventories())
-		{
-			ApplyInputBitsToInventory(InputBits, Inventory);
-		}
-
-		//Remove timed out buffered inputs.
-		for (UConstituent* Constituent : FormCore->ConstituentRegistry)
-		{
-			Constituent->HandleBufferInputTimeout();
-			//Note that the buffered inputs firing is implemented with the addition or removal of cards.
-		}
-
-		//Pack the action sets back into the FormCharacter only after we've changed them.
+		//Pack the action sets back into the FormCharacter only after we've changed them. PendingActionSets are only used
+		//for checking and isn't sent back to client on a correction.
 		PendingActionSets.Empty();
 		PendingActionSets.Reserve(FormCore->ConstituentRegistry.Num());
 		for (UConstituent* Constituent : FormCore->ConstituentRegistry)
 		{
 			Constituent->IncrementTimeSincePredictedLastActionSet(DeltaSeconds);
-			if (Constituent->bPredictedLastActionSetUpdated)
-			{
-				Constituent->bPredictedLastActionSetUpdated = false;
-				PendingActionSets.Emplace(Constituent->InstanceId, Constituent->PredictedLastActionSet);
-			}
+			PendingActionSets.Emplace(Constituent->InstanceId, Constituent->PredictedLastActionSet);
 		}
 
 		if (FormResource)
@@ -1311,11 +1359,17 @@ void UFormCharacterComponent::ServerMove_HandleMoveData(const FCharacterNetworkM
 	LatestServerReceivedMoveTimestamp = MoveDataContainer.GetNewMoveData()->TimeStamp;
 	const FNetworkPredictionData_Server_Character* ServerData = GetPredictionData_Server_Character();
 	const UWorld* MyWorld = GetWorld();
-	LatestServerReceivedMoveDeltaTime = ServerData->GetServerMoveDeltaTime(LatestServerReceivedMoveTimestamp, CharacterOwner->GetActorTimeDilation(*MyWorld));
+	LatestServerReceivedMoveDeltaTime = ServerData->GetServerMoveDeltaTime(
+		LatestServerReceivedMoveTimestamp, CharacterOwner->GetActorTimeDilation(*MyWorld));
+}
+
+void UFormCharacterComponent::ReplicateMoveToServer(float DeltaTime, const FVector& NewAcceleration)
+{
+	Super::ReplicateMoveToServer(DeltaTime, NewAcceleration);
 }
 
 void UFormCharacterComponent::TickComponent(float DeltaTime, ELevelTick TickType,
-	FActorComponentTickFunction* ThisTickFunction)
+                                            FActorComponentTickFunction* ThisTickFunction)
 {
 	if (GetOwner()->HasAuthority())
 	{
@@ -1333,7 +1387,7 @@ void UFormCharacterComponent::TickComponent(float DeltaTime, ELevelTick TickType
 			ServerMove_HandleMoveData(MoveDataContainer);
 		}
 	}
-	
+
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 }
 
