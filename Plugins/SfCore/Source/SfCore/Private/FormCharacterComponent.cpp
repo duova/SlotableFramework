@@ -939,6 +939,10 @@ bool UFormCharacterComponent::ClientUpdatePositionAfterServerUpdate()
 	if (ClientData->bUpdatePosition)
 	{
 		bIsReplaying = true;
+		if (OnBeginRollback.IsBound())
+		{
+			OnBeginRollback.Broadcast();
+		}
 	}
 	//Call super to potentially replay moves.
 	if (Super::ClientUpdatePositionAfterServerUpdate())
@@ -951,9 +955,9 @@ bool UFormCharacterComponent::ClientUpdatePositionAfterServerUpdate()
 			CorrectionConditionFlags = 0;
 
 			//Call a delegate so form components know to restart with their current state.
-			if (OnPostRollback.IsBound())
+			if (OnEndRollback.IsBound())
 			{
-				OnPostRollback.Broadcast();
+				OnEndRollback.Broadcast();
 			}
 		}
 		return true;
@@ -1231,6 +1235,11 @@ void UFormCharacterComponent::CalculateMovementSpeed()
 	}
 }
 
+float UFormCharacterComponent::GetPredictedNetClock() const
+{
+	return PredictedNetClock;
+}
+
 void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeconds)
 {
 	Super::UpdateCharacterStateBeforeMovement(DeltaSeconds);
@@ -1268,6 +1277,8 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 	//Not if we want to repredict movement or update cards only.
 	if (!IsReplaying() || (CorrectionConditionFlags & (Repredict_NetClock | Repredict_ActionSetsCardsResources)) != 0)
 	{
+		//Begin tick setup.
+		
 		PredictedNetClock += DeltaSeconds;
 		//We reset when it is soon to lose 2 decimal points of precision.
 		if (PredictedNetClock > 40000.0)
@@ -1281,6 +1292,10 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 		{
 			ApplyInputBitsToInventory(InputBits, Inventory);
 		}
+		
+		//End tick setup.
+
+		//Begin tick simulation.
 
 		RemovePredictedCardWithEndedLifetimes();
 
@@ -1290,7 +1305,7 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 			Constituent->HandleBufferInputTimeout();
 			//Note that the buffered inputs firing is implemented with the addition or removal of cards.
 		}
-
+		
 		if (FormResource && FormStat)
 		{
 			//Apply consistent resource changes.
@@ -1309,6 +1324,15 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 				}
 			}
 		}
+
+		if (OnPredictionTick.IsBound())
+		{
+			OnPredictionTick.Broadcast(PredictedNetClock, DeltaSeconds, IsReplaying());
+		}
+
+		//End tick simulation.
+
+		//Begin tick cleanup.
 
 		//Pack the action sets back into the FormCharacter only after we've changed them. PendingActionSets are only used
 		//for checking and isn't sent back to client on a correction.
@@ -1342,6 +1366,8 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 			PackActionSets();
 			PackCards();
 		}
+
+		//End tick cleanup.
 	}
 
 	if (bMovementSpeedNeedsRecalculation)

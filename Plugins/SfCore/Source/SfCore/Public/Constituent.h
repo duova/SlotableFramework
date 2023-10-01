@@ -253,11 +253,11 @@ public:
 	void InternalSimulatedOnExecute(const uint8 InActionId, const float InTimeSinceExecution, const bool bInIsFirstPerson);
 
 	//Input down for the input registered to the UConstituent in UFormCharacterComponent.
-	UFUNCTION(BlueprintImplementableEvent)
+	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable)
 	void OnInputDown(const bool bInIsPredictableContext);
 
 	//Input up for the input registered to the UConstituent in UFormCharacterComponent.
-	UFUNCTION(BlueprintImplementableEvent)
+	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable)
 	void OnInputUp(const bool bInIsPredictableContext);
 
 	//Opt in with bEnableLowFreqTick. Ticks at a rate set in UFormCoreComponent.
@@ -280,7 +280,7 @@ public:
 	UFUNCTION(NetMulticast, Unreliable)
 	void NetMulticastClientPerformActionSet(const FActionSet& InActionSet, const float InServerFormTimestamp);
 
-	//TODO: On relevancy, pass a pointer to this actor through the PlayerController to the client where this actor just became relevant. Also update card objects.
+	//TODO: On relevancy, pass a pointer to this actor through the PlayerController to the client where this actor just became relevant. Also update card objects and reset animation montages in case some are running on loop and weren't stopped.
 	//The last action set and time since values will have to be passed through as those would presumably not have updated.
 	//This is so we can call internal client perform action set and play the most recent action(s).
 	void InternalClientPerformActionSet();

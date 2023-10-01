@@ -434,8 +434,9 @@ struct FSfMoveResponseDataContainer : FCharacterMoveResponseDataContainer
 	                       UPackageMap* PackageMap) override;
 };
 
-
-DECLARE_MULTICAST_DELEGATE(FOnPostRollback);
+DECLARE_MULTICAST_DELEGATE(FOnBeginRollback);
+DECLARE_MULTICAST_DELEGATE(FOnEndRollback);
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FOnPredictionTick, const float InPredictedNetClock, const float InDeltaTime, const bool bInIsReplaying)
 
 /**
 * The FormCharacterComponent is responsible for the movement and client prediction of a form.
@@ -487,6 +488,8 @@ public:
 	bool HasPredictedTimestampPassed(const float InTimestamp) const;
 
 	void CalculateMovementSpeed();
+
+	float GetPredictedNetClock() const;
 
 	//Must be called by character to setup input.
 	void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent);
@@ -541,6 +544,12 @@ public:
 	//The server should set the calculated variables on simulated proxies.
 	//Only non-DisabledForDestroy cards with movement speed modifiers enabled should have their values included in the calculation.
 	uint8 bMovementSpeedNeedsRecalculation:1;
+
+	FOnBeginRollback OnBeginRollback;
+	
+	FOnEndRollback OnEndRollback;
+
+	FOnPredictionTick OnPredictionTick;
 
 protected:
 	
@@ -602,8 +611,6 @@ protected:
 	//If this is false, we shouldn't use ResourcesResponse.
 	//We copy ResourcesResponse to the FormResource and set false in PerformMovement if is true.
 	uint8 bClientResourcesWereUpdated:1;
-
-	FOnPostRollback OnPostRollback;
 
 	//Register InputActions that can be used for constituent implementation.
 	//Only 24 InputActions can be used.

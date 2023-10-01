@@ -8,6 +8,6 @@ public class SfTests : ModuleRules
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "SfCore", "CoreUObject", "Engine", "SfCore", "Gauntlet", "NetCore" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "SfCore", "CoreUObject", "Engine", "Gauntlet", "NetCore" });
 	}
 }
