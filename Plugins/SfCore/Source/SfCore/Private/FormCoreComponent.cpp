@@ -250,7 +250,7 @@ void UFormCoreComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 		}
 		bInputsRequireSetup = false;
 	}
-
+	
 	NonCompensatedServerFormTime += DeltaTime;
 
 	if (NonCompensatedServerFormTime * 0.1 - FMath::Floor(NonCompensatedServerFormTime * 0.1) <= DeltaTime * 0.1)
@@ -259,6 +259,12 @@ void UFormCoreComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 		for (UInventory* Inventory : Inventories)
 		{
 			Inventory->RemoveEmptyDelegateBindings();
+		}
+
+		//We reset when it is soon to lose 2 decimal points of precision.
+		if (NonCompensatedServerFormTime > 40000.0)
+		{
+			NonCompensatedServerFormTime = 0;
 		}
 	}
 	

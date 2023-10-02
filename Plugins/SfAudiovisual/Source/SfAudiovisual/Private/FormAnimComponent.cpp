@@ -5,6 +5,8 @@
 
 #include "FormCharacterComponent.h"
 #include "FormCoreComponent.h"
+#include "Kismet/KismetMathLibrary.h"
+#include "Misc/RuntimeErrors.h"
 
 DEFINE_LOG_CATEGORY(LogSfAudiovisual);
 
@@ -22,13 +24,48 @@ FRecentMontageData::FRecentMontageData(UAnimMontage* InMontage, const float InSt
 	InterruptedTimestamp = -1.f;
 }
 
+FTimestampedAnimSnapshot::FTimestampedAnimSnapshot(): Timestamp(0)
+{
+}
+
 UFormAnimComponent::UFormAnimComponent()
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	PrimaryComponentTick.bCanEverTick = true;
 	ThirdPersonSkeletalMesh = nullptr;
 	FirstPersonSkeletalMesh = nullptr;
 	FormCharacterComponent = nullptr;
+	FormCoreComponent = nullptr;
 	bReplaying = false;
+	TimeSinceLastSnapshot = 0;
+	TimeBetweenServerAnimEvaluations = 0;
+}
+
+void UFormAnimComponent::TickComponent(float DeltaTime, ELevelTick TickType,
+	FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	if (!GetOwner() || !GetOwner()->HasAuthority() || !FormCoreComponent) return;
+
+	UAnimInstance* Instance = GetAnimInstanceChecked(ThirdPersonSkeletalMesh);
+	if (!Instance) return;
+
+	TimeSinceLastSnapshot += DeltaTime;
+
+	//Update snapshot circular buffer.
+	if (TimeSinceLastSnapshot > TimeBetweenServerAnimEvaluations)
+	{
+		ServerAnimSnapshots[IndexOfOldestSnapshot].Timestamp = FormCoreComponent->GetNonCompensatedServerFormTime();
+		Instance->SnapshotPose(ServerAnimSnapshots[IndexOfOldestSnapshot].Snapshot);
+		if (IndexOfOldestSnapshot + 1 < ServerAnimSnapshots.Num())
+		{
+			IndexOfOldestSnapshot++;
+		}
+		else
+		{
+			IndexOfOldestSnapshot = 0;
+		}
+	}
 }
 
 UFormAnimComponent* UFormAnimComponent::GetFormAnimComponent(UFormCoreComponent* InFormCore)
@@ -94,10 +131,37 @@ void UFormAnimComponent::Simulated_StopMontage(const float InTimeSinceExecution,
 	                          InBlendOutTime);
 }
 
+void UFormAnimComponent::ServerRollbackAnimation(const float FormTimestamp)
+{
+	
+}
+
+void UFormAnimComponent::ServerRestoreLatestAnimation()
+{
+}
+
 void UFormAnimComponent::BeginPlay()
 {
 	Super::BeginPlay();
 	if (!GetOwner()) return;
+	if (GetOwner()->HasAuthority() && !bServerAnimRateWasSet)
+	{
+		if (!bServerAnimRateWasSet)
+		{
+			IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("a.URO.ForceAnimRate"));
+			CVar->Set(ServerAnimRate);
+			bServerAnimRateWasSet = true;
+		}
+		TimeBetweenServerAnimEvaluations = ServerAnimRate != 0 ? 1.f / ServerAnimRate : 1.f / 30.f;
+		//Initialize a circular buffer large enough to hold all snapshots for 1 second.
+		ServerAnimSnapshots.AddDefaulted(30 / (ServerAnimRate != 0 ? ServerAnimRate : 30));
+	}
+	if (GetOwner()->GetLocalRole() != ROLE_AutonomousProxy) return;
+	FormCoreComponent = GetOwner()->FindComponentByClass<UFormCoreComponent>();
+	if (!FormCoreComponent)
+	{
+		UE_LOG(LogSfAudiovisual, Error, TEXT("UFormAnimComponent was placed on an actor without a UFormCoreComponent."));
+	}
 	FormCharacterComponent = GetOwner()->FindComponentByClass<UFormCharacterComponent>();
 	if (FormCharacterComponent)
 	{
@@ -112,6 +176,7 @@ void UFormAnimComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	Super::EndPlay(EndPlayReason);
 	if (!GetOwner()) return;
+	if (GetOwner()->GetLocalRole() != ROLE_AutonomousProxy) return;
 	if (FormCharacterComponent)
 	{
 		FormCharacterComponent->OnBeginRollback.Remove(ReplayBeginDelegateHandle);
@@ -342,6 +407,60 @@ void UFormAnimComponent::RollBackMontageData(TArray<FRecentMontageData>& InRecen
 	InRecentMontages.Shrink();
 }
 
+void UFormAnimComponent::ReproducePoseSnapshot(const FPoseSnapshot& Snapshot, USkeletalMeshComponent* SkeletalMeshComponent)
+{
+	USkeletalMesh* SkelMesh = SkeletalMeshComponent->GetSkeletalMeshAsset();
+	if (ensureAsRuntimeWarning(SkelMesh != nullptr))
+	{
+		TArray<FTransform>& ComponentSpaceTMs = SkeletalMeshComponent->GetEditableComponentSpaceTransforms();
+		FReferenceSkeleton& RefSkeleton = SkelMesh->GetRefSkeleton();
+		//const TArray<FTransform>& RefPoseSpaceBaseTMs = RefSkeleton.GetRefBonePose();
+
+		if (Snapshot.SkeletalMeshName != SkelMesh->GetFName())
+		{
+			UE_LOG(LogSfAudiovisual, Error, TEXT("Called ReproducePoseSnapshot with a FPoseSnapshot that does not match the USkeletalMesh."));
+			return;
+		}
+
+		const int32 NumSpaceBases = ComponentSpaceTMs.Num();
+		//Snapshot.LocalTransforms.Reset(NumSpaceBases);
+		//Snapshot.LocalTransforms.AddUninitialized(NumSpaceBases);
+		//Snapshot.BoneNames.Reset(NumSpaceBases);
+		//Snapshot.BoneNames.AddUninitialized(NumSpaceBases);
+
+		//Set root bone which is always evaluated.
+		ComponentSpaceTMs[0] = Snapshot.LocalTransforms[0];
+		
+		//Snapshot.LocalTransforms[0] = ComponentSpaceTMs[0];
+		//Snapshot.BoneNames[0] = RefSkeleton.GetBoneName(0);
+
+		//int32 CurrentRequiredBone = 1;
+		for (int32 ComponentSpaceIdx = 1; ComponentSpaceIdx < NumSpaceBases; ++ComponentSpaceIdx)
+		{
+			//Snapshot.BoneNames[ComponentSpaceIdx] = RefSkeleton.GetBoneName(ComponentSpaceIdx);
+
+			//const bool bBoneHasEvaluated = SkeletalMeshComponent->FillComponentSpaceTransformsRequiredBones.IsValidIndex(CurrentRequiredBone) && ComponentSpaceIdx == SkeletalMeshComponent->FillComponentSpaceTransformsRequiredBones[CurrentRequiredBone];
+			const int32 ParentIndex = RefSkeleton.GetParentIndex(ComponentSpaceIdx);
+			ensureMsgf(ParentIndex != INDEX_NONE, TEXT("Getting an invalid parent bone for bone %d, but this should not be possible since this is not the root bone!"), ComponentSpaceIdx);
+
+			const FTransform& ParentTransform = ComponentSpaceTMs[ParentIndex];
+			FTransform& ChildTransform = ComponentSpaceTMs[ComponentSpaceIdx];
+			FTransform::Multiply(&ChildTransform, &Snapshot.LocalTransforms[ComponentSpaceIdx], &ParentTransform);
+			//Snapshot.LocalTransforms[ComponentSpaceIdx] = ChildTransform.GetRelativeTransform(ParentTransform);
+
+			/*
+			if (bBoneHasEvaluated)
+			{
+				CurrentRequiredBone++;
+			}
+			*/
+		}
+
+		SkeletalMeshComponent->ApplyEditedComponentSpaceTransforms();
+	}
+	
+}
+
 UAnimInstance* UFormAnimComponent::GetAnimInstanceChecked(const USkeletalMeshComponent* SkeletalMeshComponent) const
 {
 	if (!SkeletalMeshComponent)
@@ -354,6 +473,6 @@ UAnimInstance* UFormAnimComponent::GetAnimInstanceChecked(const USkeletalMeshCom
 	{
 		return Instance;
 	}
-	UE_LOG(LogSfAudiovisual, Error, TEXT("UFormAnimComponent tried to call montage on a missing UAnimInstance."));
+	UE_LOG(LogSfAudiovisual, Error, TEXT("UFormAnimComponent tried to call montage on a missing USfAnimInstance."));
 	return nullptr;
 }

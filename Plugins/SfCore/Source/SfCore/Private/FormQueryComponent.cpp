@@ -19,7 +19,7 @@ void USfQuery::Deinitialize()
 {
 }
 
-UFormQueryComponent::UFormQueryComponent()
+UFormQueryComponent::UFormQueryComponent(): FormCore(nullptr)
 {
 	PrimaryComponentTick.bCanEverTick = true;
 }

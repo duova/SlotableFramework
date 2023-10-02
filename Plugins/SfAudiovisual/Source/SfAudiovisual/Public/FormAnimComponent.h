@@ -38,6 +38,18 @@ struct SFAUDIOVISUAL_API FRecentMontageData
 	float InterruptedTimestamp;
 };
 
+USTRUCT()
+struct SFAUDIOVISUAL_API FTimestampedAnimSnapshot
+{
+	GENERATED_BODY()
+
+	FTimestampedAnimSnapshot();
+	
+	float Timestamp;
+
+	FPoseSnapshot Snapshot;
+};
+
 class UFormCoreComponent;
 
 /**
@@ -55,6 +67,9 @@ class SFAUDIOVISUAL_API UFormAnimComponent : public UActorComponent
 
 public:
 	UFormAnimComponent();
+
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
+										FActorComponentTickFunction* ThisTickFunction) override;
 
 	UFUNCTION(BlueprintCallable, BlueprintPure)
 	static UFormAnimComponent* GetFormAnimComponent(UFormCoreComponent* InFormCore);
@@ -115,6 +130,17 @@ public:
 	void Simulated_StopMontage(const float InTimeSinceExecution, UAnimMontage* InMontage,
 	                           const EPerspective InPerspective, const float InBlendOutTime);
 
+	//For lag compensated hit registration.
+	void ServerRollbackAnimation(const float FormTimestamp);
+
+	//Must be called after ServerRollbackAnimation to bring animation back to current time.
+	void ServerRestoreLatestAnimation();
+
+	//Evaluate animation every x anim frames for server hit registration.
+	//Anim FPS is generally 30, and this must be a factor ie. 3, 6, 10, 15.
+	UPROPERTY(EditAnywhere, meta = (ClampMin = 0, ClampMax = 30))
+	int32 ServerAnimRate = 6;
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -149,12 +175,17 @@ protected:
 
 	void RollBackMontageData(TArray<FRecentMontageData>& InRecentMontages, const UFormCharacterComponent* InFormCharacterComponent);
 
+	void ReproducePoseSnapshot(const FPoseSnapshot& Snapshot, USkeletalMeshComponent* SkeletalMeshComponent);
+
 	FDelegateHandle ReplayBeginDelegateHandle;
 
 	FDelegateHandle ReplayEndDelegateHandle;
 
 	UPROPERTY()
 	UFormCharacterComponent* FormCharacterComponent;
+
+	UPROPERTY()
+	UFormCoreComponent* FormCoreComponent;
 
 	UAnimInstance* GetAnimInstanceChecked(const USkeletalMeshComponent* SkeletalMeshComponent) const;
 
@@ -166,5 +197,15 @@ protected:
 	//Not in time order as we remove with swap.
 	TArray<FRecentMontageData> ThirdPersonRecentMontages;
 
+	TArray<FTimestampedAnimSnapshot> ServerAnimSnapshots;
+
+	float TimeSinceLastSnapshot;
+
 	static constexpr float RecentMontageTimeout = 0.5;
+
+	inline static bool bServerAnimRateWasSet = false;
+
+	float TimeBetweenServerAnimEvaluations;
+
+	uint8 IndexOfOldestSnapshot = 0;
 };
