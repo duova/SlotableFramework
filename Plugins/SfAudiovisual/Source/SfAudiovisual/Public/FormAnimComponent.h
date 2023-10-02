@@ -39,11 +39,11 @@ struct SFAUDIOVISUAL_API FRecentMontageData
 };
 
 USTRUCT()
-struct SFAUDIOVISUAL_API FTimestampedAnimSnapshot
+struct SFAUDIOVISUAL_API FTimestampedPoseSnapshot
 {
 	GENERATED_BODY()
 
-	FTimestampedAnimSnapshot();
+	FTimestampedPoseSnapshot();
 	
 	float Timestamp;
 
@@ -131,10 +131,10 @@ public:
 	                           const EPerspective InPerspective, const float InBlendOutTime);
 
 	//For lag compensated hit registration.
-	void ServerRollbackAnimation(const float FormTimestamp);
+	void ServerRollbackPose(const float FormTimestamp);
 
 	//Must be called after ServerRollbackAnimation to bring animation back to current time.
-	void ServerRestoreLatestAnimation();
+	void ServerRestoreLatestPose();
 
 	//Evaluate animation every x anim frames for server hit registration.
 	//Anim FPS is generally 30, and this must be a factor ie. 3, 6, 10, 15.
@@ -197,7 +197,7 @@ protected:
 	//Not in time order as we remove with swap.
 	TArray<FRecentMontageData> ThirdPersonRecentMontages;
 
-	TArray<FTimestampedAnimSnapshot> ServerAnimSnapshots;
+	TArray<FTimestampedPoseSnapshot> ServerAnimSnapshots;
 
 	float TimeSinceLastSnapshot;
 
@@ -208,4 +208,6 @@ protected:
 	float TimeBetweenServerAnimEvaluations;
 
 	uint8 IndexOfOldestSnapshot = 0;
+
+	FPoseSnapshot CurrentSnapshot;
 };

@@ -5,7 +5,6 @@
 
 #include "FormCharacterComponent.h"
 #include "FormCoreComponent.h"
-#include "Kismet/KismetMathLibrary.h"
 #include "Misc/RuntimeErrors.h"
 
 DEFINE_LOG_CATEGORY(LogSfAudiovisual);
@@ -24,7 +23,7 @@ FRecentMontageData::FRecentMontageData(UAnimMontage* InMontage, const float InSt
 	InterruptedTimestamp = -1.f;
 }
 
-FTimestampedAnimSnapshot::FTimestampedAnimSnapshot(): Timestamp(0)
+FTimestampedPoseSnapshot::FTimestampedPoseSnapshot(): Timestamp(0)
 {
 }
 
@@ -38,6 +37,7 @@ UFormAnimComponent::UFormAnimComponent()
 	bReplaying = false;
 	TimeSinceLastSnapshot = 0;
 	TimeBetweenServerAnimEvaluations = 0;
+	CurrentSnapshot = FPoseSnapshot();
 }
 
 void UFormAnimComponent::TickComponent(float DeltaTime, ELevelTick TickType,
@@ -46,9 +46,8 @@ void UFormAnimComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
 	if (!GetOwner() || !GetOwner()->HasAuthority() || !FormCoreComponent) return;
-
-	UAnimInstance* Instance = GetAnimInstanceChecked(ThirdPersonSkeletalMesh);
-	if (!Instance) return;
+	
+	if (!ThirdPersonSkeletalMesh) return;
 
 	TimeSinceLastSnapshot += DeltaTime;
 
@@ -56,7 +55,7 @@ void UFormAnimComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	if (TimeSinceLastSnapshot > TimeBetweenServerAnimEvaluations)
 	{
 		ServerAnimSnapshots[IndexOfOldestSnapshot].Timestamp = FormCoreComponent->GetNonCompensatedServerFormTime();
-		Instance->SnapshotPose(ServerAnimSnapshots[IndexOfOldestSnapshot].Snapshot);
+		ThirdPersonSkeletalMesh->SnapshotPose(ServerAnimSnapshots[IndexOfOldestSnapshot].Snapshot);
 		if (IndexOfOldestSnapshot + 1 < ServerAnimSnapshots.Num())
 		{
 			IndexOfOldestSnapshot++;
@@ -131,13 +130,33 @@ void UFormAnimComponent::Simulated_StopMontage(const float InTimeSinceExecution,
 	                          InBlendOutTime);
 }
 
-void UFormAnimComponent::ServerRollbackAnimation(const float FormTimestamp)
+void UFormAnimComponent::ServerRollbackPose(const float FormTimestamp)
 {
-	
+	if (!GetOwner() || !GetOwner()->HasAuthority()) return;
+	if (!ThirdPersonSkeletalMesh) return;
+	ThirdPersonSkeletalMesh->SnapshotPose(CurrentSnapshot);
+	const FPoseSnapshot* Snapshot = nullptr;
+	for (const FTimestampedPoseSnapshot& TimestampedSnapshot : ServerAnimSnapshots)
+	{
+		if (FMath::Abs(TimestampedSnapshot.Timestamp - FormTimestamp) < TimeBetweenServerAnimEvaluations)
+		{
+			Snapshot = &TimestampedSnapshot.Snapshot;
+			break;
+		} 
+	}
+	if (!Snapshot)
+	{
+		UE_LOG(LogSfAudiovisual, Warning, TEXT("Could not find suitable snapshot to roll animation back to. Timestamp may be too far in the past."));
+		return;
+	}
+	ReproducePoseSnapshot(*Snapshot, ThirdPersonSkeletalMesh);
 }
 
-void UFormAnimComponent::ServerRestoreLatestAnimation()
+void UFormAnimComponent::ServerRestoreLatestPose()
 {
+	if (!GetOwner() || !GetOwner()->HasAuthority()) return;
+	if (!ThirdPersonSkeletalMesh) return;
+	ReproducePoseSnapshot(CurrentSnapshot, ThirdPersonSkeletalMesh);
 }
 
 void UFormAnimComponent::BeginPlay()
