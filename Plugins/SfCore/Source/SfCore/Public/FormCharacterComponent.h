@@ -191,7 +191,7 @@ struct SFCORE_API FInventoryCards
 };
 
 template<>
-struct TStructOpsTypeTraits<FInventoryCards> : public TStructOpsTypeTraitsBase2<FCard>
+struct TStructOpsTypeTraits<FInventoryCards> : public TStructOpsTypeTraitsBase2<FInventoryCards>
 {
 	enum
 	{
@@ -239,7 +239,7 @@ struct SFCORE_API FNetCardIdentifier
 };
 
 template<>
-struct TStructOpsTypeTraits<FNetCardIdentifier> : public TStructOpsTypeTraitsBase2<FCard>
+struct TStructOpsTypeTraits<FNetCardIdentifier> : public TStructOpsTypeTraitsBase2<FNetCardIdentifier>
 {
 	enum
 	{
@@ -272,7 +272,7 @@ struct SFCORE_API FCardIdentifiersInAnInventory
 };
 
 template<>
-struct TStructOpsTypeTraits<FCardIdentifiersInAnInventory> : public TStructOpsTypeTraitsBase2<FCard>
+struct TStructOpsTypeTraits<FCardIdentifiersInAnInventory> : public TStructOpsTypeTraitsBase2<FCardIdentifiersInAnInventory>
 {
 	enum
 	{
@@ -310,7 +310,89 @@ struct SFCORE_API FIdentifiedActionSet
 };
 
 template<>
-struct TStructOpsTypeTraits<FIdentifiedActionSet> : public TStructOpsTypeTraitsBase2<FCard>
+struct TStructOpsTypeTraits<FIdentifiedActionSet> : public TStructOpsTypeTraitsBase2<FIdentifiedActionSet>
+{
+	enum
+	{
+		WithNetSerializer = true,
+		WithIdenticalViaEquality = true,
+		WithCopy = true
+	};
+};
+
+USTRUCT()
+struct SFCORE_API FTimestampedMovementCurve
+{
+	GENERATED_BODY()
+
+	float StartTimestamp;
+
+	float EndTimestamp;
+
+	FVector_NetQuantize100 Vector;
+
+	UPROPERTY()
+	UCurveFloat* MagnitudeCurve;
+
+	bool bSelfInitiated;
+
+	FTimestampedMovementCurve();
+
+	FTimestampedMovementCurve(const float InStartTimestamp, const float InEndTimestamp, const FVector& InVector, UCurveFloat* InMagnitudeCurve, const bool bInSelfInitiated);
+
+	bool operator==(const FTimestampedMovementCurve& Other) const;
+
+	bool operator!=(const FTimestampedMovementCurve& Other) const;
+
+	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+};
+
+template<>
+struct TStructOpsTypeTraits<FTimestampedMovementCurve> : public TStructOpsTypeTraitsBase2<FTimestampedMovementCurve>
+{
+	enum
+	{
+		WithNetSerializer = true,
+		WithIdenticalViaEquality = true,
+		WithCopy = true
+	};
+};
+
+FORCEINLINE uint32 GetTypeHash(const FTimestampedMovementCurve& MovementCurve)
+{
+	const uint32 Hash = FCrc::MemCrc32(&MovementCurve, sizeof(FTimestampedMovementCurve));
+	return Hash;
+}
+
+//Wrapper for hashed movement curve.
+USTRUCT(BlueprintType)
+struct SFCORE_API FMovementCurveKey
+{
+	GENERATED_BODY()
+
+	uint32 Key;
+
+	FMovementCurveKey();
+
+	explicit FMovementCurveKey(const uint32 InKey);
+
+	explicit FMovementCurveKey(const FTimestampedMovementCurve& InMovementCurve);
+
+	bool operator==(const FMovementCurveKey& Other) const;
+
+	bool operator!=(const FMovementCurveKey& Other) const;
+
+	friend FArchive& operator<<(FArchive& Ar, FMovementCurveKey& MovementCurveKey)
+	{
+		Ar << MovementCurveKey.Key;
+		return Ar;
+	}
+
+	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
+};
+
+template<>
+struct TStructOpsTypeTraits<FMovementCurveKey> : public TStructOpsTypeTraitsBase2<FMovementCurveKey>
 {
 	enum
 	{
@@ -345,6 +427,10 @@ public:
 	TArray<FCardIdentifiersInAnInventory> CardIdentifiersInInventories;
 
 	FResourceArray Resources;
+
+	TArray<FMovementCurveKey> VelocityCurveKeys;
+
+	uint8 bDisableSelfMovement:1;
 
 	virtual void Clear() override;
 	virtual void SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& NewAccel,
@@ -384,6 +470,10 @@ struct FSfNetworkMoveData : FCharacterNetworkMoveData
 
 	FResourceArray Resources;
 
+	TArray<FMovementCurveKey> VelocityCurveKeys;
+
+	bool bDisableSelfMovement;
+
 	FSfNetworkMoveData();
 
 	virtual bool Serialize(UCharacterMovementComponent& CharacterMovement, FArchive& Ar, UPackageMap* PackageMap,
@@ -396,8 +486,8 @@ enum ECorrectionConditionFlags : uint8
 {
 	Repredict_Movement = 0x01,
 	Repredict_NetClock = 0x02,
-	//We must repredict all three to repredict one because they are reliant on each other.
-	Repredict_ActionSetsCardsResources = 0x04,
+	//We must repredict all because they are reliant on each other.
+	Repredict_Sf = 0x04,
 	//This overrides the update flag as if we rollback we guarantee that we send server state anyway.
 	Update_Cards = 0x08, //If update we only want to respond with changes and not rollback cards specifically.
 };
@@ -423,6 +513,10 @@ struct FSfMoveResponseDataContainer : FCharacterMoveResponseDataContainer
 
 	FResourceArray ResourcesResponse;
 
+	TArray<FTimestampedMovementCurve> VelocityCurveResponse;
+
+	uint8 bDisableSelfMovement:1;
+
 	FSfMoveResponseDataContainer();
 
 	virtual void ServerFillResponseData(const UCharacterMovementComponent& CharacterMovement,
@@ -447,7 +541,7 @@ DECLARE_MULTICAST_DELEGATE_ThreeParams(FOnPredictionTick, const float InPredicte
 * In that case, the controllers should directly call functions on FormBaseComponent instead of writing inputs.
 * This component extends the CharacterMovementComponent to use its prediction logic to drive prediction for slotables.
 */
-UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
+UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent), Blueprintable)
 class SFCORE_API UFormCharacterComponent : public UCharacterMovementComponent
 {
 	GENERATED_BODY()
@@ -551,6 +645,40 @@ public:
 
 	FOnPredictionTick OnPredictionTick;
 
+	UFUNCTION(BlueprintCallable)
+	void Predicted_SelfMovementDisabled(const bool bIsDisabled);
+
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
+	void Server_SelfMovementDisabled(const bool bIsDisabled);
+
+	//Movement utility functions.
+
+	//Wrapper for LaunchCharacter that accounts for self-initiation.
+	UFUNCTION(BlueprintCallable)
+	void Predicted_LaunchCharacter(const FVector InLaunchVelocity, const bool bInXYOverride, const bool bInZOverride, const bool bSelfInitiated) const;
+
+	//Wrapper for LaunchCharacter that accounts for self-initiation.
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
+	void Server_LaunchCharacter(const FVector InLaunchVelocity, const bool bInXYOverride, const bool bInZOverride, const bool bSelfInitiated) const;
+
+	//Sets the velocity to FVector * UCurveFloat. Returns a key for referencing an active curve.
+	UFUNCTION(BlueprintCallable)
+	FMovementCurveKey Predicted_StartVelocityCurve(const FVector& InVector, UCurveFloat* InMagnitudeCurve, const float InDuration, const bool bInSelfInitiated);
+
+	//Stops an acceleration curve.
+	UFUNCTION(BlueprintCallable)
+	void Predicted_EndVelocityCurve(const FMovementCurveKey& InCurveKey);
+
+	//Sets the velocity to FVector * UCurveFloat. Returns a key for referencing an active curve.
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
+	FMovementCurveKey Server_StartVelocityCurve(const FVector& InVector, UCurveFloat* InMagnitudeCurve, const float InDuration, const bool bInSelfInitiated);
+
+	//Stops an acceleration curve.
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
+	void Server_EndVelocityCurve(const FMovementCurveKey& InCurveKey);
+
+	void InternalEndVelocityCurve(const FMovementCurveKey& InCurveKey);
+
 protected:
 	
 	//Number of input sets to enable, this is automatically set based on how many inputs are registered.
@@ -611,6 +739,11 @@ protected:
 	//If this is false, we shouldn't use ResourcesResponse.
 	//We copy ResourcesResponse to the FormResource and set false in PerformMovement if is true.
 	uint8 bClientResourcesWereUpdated:1;
+	
+	TArray<FMovementCurveKey> ClientSentVelocityCurveKeys;
+	TArray<FMovementCurveKey> OldClientSentVelocityCurveKeys;
+
+	TArray<FTimestampedMovementCurve> ActiveVelocityCurves;
 
 	//Register InputActions that can be used for constituent implementation.
 	//Only 24 InputActions can be used.
@@ -644,6 +777,8 @@ protected:
 	                                                     const FCardIdentifiersInAnInventory& InCardIdentifierInventoryFromClient);
 
 	void HandleResourcesDifferencesAndSetCorrectionFlags(const UFormResourceComponent* FormResourceComponent, const FResourceArray& InResources);
+	
+	void HandleVelocityCurveDifferencesAndSetCorrectionFlags(const FSfNetworkMoveData* MoveData);
 
 	virtual void SfServerCheckClientError();
 
@@ -663,6 +798,8 @@ protected:
 	
 	void PackResources();
 
+	void PackVelocityCurves();
+
 	void PackInventoryCardIdentifiers();
 	
 	void HandleCardClientSyncTimeout() const;
@@ -671,6 +808,8 @@ protected:
 	
 	void RemovePredictedCardWithEndedLifetimes() const;
 
+	void ApplyVelocityCurves();
+	
 	//This is where all the logic actually takes place. We'll call it the prediction tick.
 	virtual void UpdateCharacterStateBeforeMovement(float DeltaSeconds) override;
 
@@ -726,4 +865,10 @@ private:
 
 	UPROPERTY()
 	UFormStatComponent* FormStat;
+
+	bool bDisableSelfMovement = false;
+
+	float DefaultGroundFriction;
+
+	float DefaultBrakingFrictionFactor;
 };

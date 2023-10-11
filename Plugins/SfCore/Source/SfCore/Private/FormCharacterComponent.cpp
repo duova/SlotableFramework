@@ -111,9 +111,82 @@ bool FIdentifiedActionSet::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bO
 	return bOutSuccess;
 }
 
+FTimestampedMovementCurve::FTimestampedMovementCurve(): StartTimestamp(0), EndTimestamp(0), MagnitudeCurve(nullptr),
+                                                        bSelfInitiated(false)
+{
+}
+
+FTimestampedMovementCurve::FTimestampedMovementCurve(const float InStartTimestamp, const float InEndTimestamp,
+                                                     const FVector& InVector, UCurveFloat* InMagnitudeCurve,
+                                                     const bool bInSelfInitiated)
+{
+	StartTimestamp = InStartTimestamp;
+	EndTimestamp = InEndTimestamp;
+	Vector = FVector_NetQuantize100(InVector);
+	MagnitudeCurve = InMagnitudeCurve;
+	bSelfInitiated = bInSelfInitiated;
+}
+
+bool FTimestampedMovementCurve::operator==(const FTimestampedMovementCurve& Other) const
+{
+	if (StartTimestamp != Other.StartTimestamp) return false;
+	if (EndTimestamp != Other.EndTimestamp) return false;
+	if (Vector != Other.Vector) return false;
+	if (MagnitudeCurve != Other.MagnitudeCurve) return false;
+	if (bSelfInitiated != Other.bSelfInitiated) return false;
+	return true;
+}
+
+bool FTimestampedMovementCurve::operator!=(const FTimestampedMovementCurve& Other) const
+{
+	return !(*this == Other);
+}
+
+bool FTimestampedMovementCurve::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
+{
+	Ar << StartTimestamp;
+	Ar << EndTimestamp;
+	Vector.NetSerialize(Ar, Map, bOutSuccess);
+	UObject* NetCurveVector = MagnitudeCurve;
+	Map->SerializeObject(Ar, UCurveFloat::StaticClass(), NetCurveVector);
+	MagnitudeCurve = Cast<UCurveFloat>(NetCurveVector);
+	Ar.SerializeBits(&bSelfInitiated, 1);
+	return bOutSuccess;
+}
+
+FMovementCurveKey::FMovementCurveKey(): Key(0)
+{
+}
+
+FMovementCurveKey::FMovementCurveKey(const uint32 InKey)
+{
+	Key = InKey;
+}
+
+FMovementCurveKey::FMovementCurveKey(const FTimestampedMovementCurve& InMovementCurve)
+{
+	Key = GetTypeHash(InMovementCurve);
+}
+
+bool FMovementCurveKey::operator==(const FMovementCurveKey& Other) const
+{
+	return Key == Other.Key;
+}
+
+bool FMovementCurveKey::operator!=(const FMovementCurveKey& Other) const
+{
+	return !(*this == Other);
+}
+
+bool FMovementCurveKey::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
+{
+	Ar << Key;
+	return bOutSuccess;
+}
+
 FSavedMove_Sf::FSavedMove_Sf()
 	: bWantsToSprint(0), EnabledInputSets(0), PrimaryInputSet(0), SecondaryInputSet(0), TertiaryInputSet(0),
-	  PredictedNetClock(0)
+	  PredictedNetClock(0), bDisableSelfMovement(0)
 {
 	//We force no combine as we want to send all moves as soon as possible to reduce input latency.
 	bForceNoCombine = true;
@@ -132,6 +205,7 @@ void FSavedMove_Sf::Clear()
 	PendingActionSets.Empty();
 	CardIdentifiersInInventories.Empty();
 	Resources.Items.Empty();
+	VelocityCurveKeys.Empty();
 }
 
 void FSavedMove_Sf::SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& NewAccel,
@@ -186,6 +260,8 @@ void FSavedMove_Sf::PostUpdate(ACharacter* C, EPostUpdateMode PostUpdateMode)
 	PendingActionSets = CharacterComponent->PendingActionSets;
 	CardIdentifiersInInventories = CharacterComponent->CardIdentifiersInInventories;
 	Resources = CharacterComponent->ClientSentResources;
+	VelocityCurveKeys = CharacterComponent->ClientSentVelocityCurveKeys;
+	bDisableSelfMovement = CharacterComponent->bDisableSelfMovement;
 
 	FSavedMove_Character::PostUpdate(C, PostUpdateMode);
 }
@@ -216,7 +292,7 @@ FSavedMovePtr FNetworkPredictionData_Client_Sf::AllocateNewMove()
 
 FSfNetworkMoveData::FSfNetworkMoveData()
 	: EnabledInputSets(0), PrimaryInputSet(0), SecondaryInputSet(0), TertiaryInputSet(0),
-	  PredictedNetClock(0)
+	  PredictedNetClock(0), bDisableSelfMovement(0)
 {
 }
 
@@ -328,6 +404,25 @@ bool FSfNetworkMoveData::Serialize(UCharacterMovementComponent& CharacterMovemen
 		}
 	}
 
+	//Conditionally serialize velocity curve keys if they have been changed.
+	bool bDoSerializeVelocityCurves = bIsSaving && (VelocityCurveKeys != CharacterComponent->
+		OldClientSentVelocityCurveKeys || CharacterComponent->bClientForceSerialize);
+	Ar.SerializeBits(&bDoSerializeVelocityCurves, 1);
+	if (bDoSerializeVelocityCurves)
+	{
+		Ar << VelocityCurveKeys;
+		//We set update OldClientSentVelocityCurveKeys on both the server and client.
+		//The client version is what we use to check if we have attempted to send our latest changes already.
+		//The server version is what is used if the client indicates they have no updates.
+		CharacterComponent->OldClientSentVelocityCurveKeys = VelocityCurveKeys;
+	}
+	else if (!bIsSaving)
+	{
+		VelocityCurveKeys = CharacterComponent->OldClientSentVelocityCurveKeys;
+	}
+
+	Ar.SerializeBits(&bDisableSelfMovement, 1);
+
 	CharacterComponent->bClientForceSerialize = false;
 
 	return !Ar.IsError();
@@ -358,6 +453,9 @@ void FSfNetworkMoveData::ClientFillNetworkMoveData(const FSavedMove_Character& C
 	PendingActionSets = SavedMove->PendingActionSets;
 	CardIdentifiersInInventories = SavedMove->CardIdentifiersInInventories;
 	Resources = SavedMove->Resources;
+	VelocityCurveKeys = SavedMove->VelocityCurveKeys;
+
+	bDisableSelfMovement = SavedMove->bDisableSelfMovement;
 }
 
 FSfNetworkMoveDataContainer::FSfNetworkMoveDataContainer()
@@ -367,7 +465,7 @@ FSfNetworkMoveDataContainer::FSfNetworkMoveDataContainer()
 	OldMoveData = &OldSfMove;
 }
 
-FSfMoveResponseDataContainer::FSfMoveResponseDataContainer(): PredictedNetClock(0)
+FSfMoveResponseDataContainer::FSfMoveResponseDataContainer(): PredictedNetClock(0), bDisableSelfMovement(0)
 {
 }
 
@@ -428,7 +526,7 @@ bool FSfMoveResponseDataContainer::Serialize(UCharacterMovementComponent& Charac
 		//Conditionally serialize net clock.
 		//We need the net clock to repredict action sets and cards as they are interlinked.
 		bool bDoSerializeClock = (CharacterComponent->CorrectionConditionFlags
-			& (Repredict_NetClock | Repredict_ActionSetsCardsResources)) != 0;
+			& (Repredict_NetClock | Repredict_Sf)) != 0;
 		if (bDoSerializeClock)
 		{
 			Ar << CharacterComponent->PredictedNetClock;
@@ -438,7 +536,7 @@ bool FSfMoveResponseDataContainer::Serialize(UCharacterMovementComponent& Charac
 		//Conditionally serialize Cards.
 		//We serialize if Update_Cards or Repredict_ActionSetsCardsResources is true.
 		bool bDoSerializeCards = (CharacterComponent->CorrectionConditionFlags
-			& (Update_Cards | Repredict_ActionSetsCardsResources)) != 0;
+			& (Update_Cards | Repredict_Sf)) != 0;
 		if (bDoSerializeCards)
 		{
 			SerializeCardResponse(Ar, CharacterComponent, bIsSaving);
@@ -446,7 +544,7 @@ bool FSfMoveResponseDataContainer::Serialize(UCharacterMovementComponent& Charac
 
 		//Conditionally serialize Resources.
 		bool bDoSerializeResources = (CharacterComponent->CorrectionConditionFlags
-			& Repredict_ActionSetsCardsResources) != 0 && CharacterComponent->FormResource;
+			& Repredict_Sf) != 0 && CharacterComponent->FormResource;
 		if (bDoSerializeResources)
 		{
 			CharacterComponent->ResourcesResponse.NetSerialize(Ar, PackageMap, bLocalSuccess);
@@ -458,7 +556,7 @@ bool FSfMoveResponseDataContainer::Serialize(UCharacterMovementComponent& Charac
 
 		//Conditionally serialize ActionSets.
 		bool bDoSerializeActionSets = (CharacterComponent->CorrectionConditionFlags
-			& Repredict_ActionSetsCardsResources) != 0;
+			& Repredict_Sf) != 0;
 		if (bDoSerializeActionSets)
 		{
 			Ar << CharacterComponent->ActionSetResponses;
@@ -468,6 +566,28 @@ bool FSfMoveResponseDataContainer::Serialize(UCharacterMovementComponent& Charac
 				CharacterComponent->bClientActionsWereUpdated = true;
 			}
 		}
+
+		//Conditionally serialize VelocityCurves.
+		bool bDoSerializeVelocityCurves = (CharacterComponent->CorrectionConditionFlags
+			& Repredict_Sf) != 0;
+		if (bDoSerializeVelocityCurves)
+		{
+			uint16 NumCurves = CharacterComponent->ActiveVelocityCurves.Num();
+			Ar << NumCurves;
+			if (!bIsSaving)
+			{
+				TArray<FTimestampedMovementCurve>& Curves = CharacterComponent->ActiveVelocityCurves;
+				Curves.Empty();
+				Curves.Reserve(NumCurves);
+				Curves.AddDefaulted(NumCurves);
+			}
+			for (FTimestampedMovementCurve& Curve : CharacterComponent->ActiveVelocityCurves)
+			{
+				Curve.NetSerialize(Ar, PackageMap, bLocalSuccess);
+			}
+		}
+
+		Ar.SerializeBits(&CharacterComponent->bDisableSelfMovement, 1);
 
 		if (bHasRotation)
 		{
@@ -527,6 +647,7 @@ UFormCharacterComponent::UFormCharacterComponent()
 	bClientResourcesWereUpdated = false;
 	NetworkMinTimeBetweenClientAdjustments = 0.2;
 	NetworkMinTimeBetweenClientAckGoodMoves = 0.01;
+	DefaultGroundFriction = 0;
 	//TODO: Allow smoothing to run at a higher frame rate.
 	SetComponentTickInterval(0.01);
 }
@@ -677,6 +798,73 @@ void UFormCharacterComponent::SetupPlayerInputComponent(UInputComponent* PlayerI
 	}
 }
 
+void UFormCharacterComponent::Predicted_SelfMovementDisabled(const bool bIsDisabled)
+{
+	bDisableSelfMovement = bIsDisabled;
+}
+
+void UFormCharacterComponent::Server_SelfMovementDisabled(const bool bIsDisabled)
+{
+	bDisableSelfMovement = bIsDisabled;
+}
+
+void UFormCharacterComponent::Predicted_LaunchCharacter(const FVector InLaunchVelocity, const bool bInXYOverride,
+                                                        const bool bInZOverride, const bool bSelfInitiated) const
+{
+	if (!(bSelfInitiated && bDisableSelfMovement))
+	{
+		CharacterOwner->LaunchCharacter(InLaunchVelocity, bInXYOverride, bInZOverride);
+	}
+}
+
+void UFormCharacterComponent::Server_LaunchCharacter(const FVector InLaunchVelocity, const bool bInXYOverride,
+                                                     const bool bInZOverride, const bool bSelfInitiated) const
+{
+	if (!(bSelfInitiated && bDisableSelfMovement))
+	{
+		CharacterOwner->LaunchCharacter(InLaunchVelocity, bInXYOverride, bInZOverride);
+	}
+}
+
+FMovementCurveKey UFormCharacterComponent::Predicted_StartVelocityCurve(const FVector& InVector,
+                                                                        UCurveFloat* InMagnitudeCurve,
+                                                                        const float InDuration,
+                                                                        const bool bInSelfInitiated)
+{
+	const uint16 Index = ActiveVelocityCurves.Emplace(PredictedNetClock, CalculateFuturePredictedTimestamp(InDuration), InVector, InMagnitudeCurve, bInSelfInitiated);
+	return FMovementCurveKey(ActiveVelocityCurves[Index]);
+}
+
+void UFormCharacterComponent::Predicted_EndVelocityCurve(const FMovementCurveKey& InCurveKey)
+{
+	InternalEndVelocityCurve(InCurveKey);
+}
+
+FMovementCurveKey UFormCharacterComponent::Server_StartVelocityCurve(const FVector& InVector,
+                                                                     UCurveFloat* InMagnitudeCurve,
+                                                                     const float InDuration, const bool bInSelfInitiated)
+{
+	const uint16 Index = ActiveVelocityCurves.Emplace(PredictedNetClock, CalculateFuturePredictedTimestamp(InDuration), InVector, InMagnitudeCurve, bInSelfInitiated);
+	return FMovementCurveKey(ActiveVelocityCurves[Index]);
+}
+
+void UFormCharacterComponent::Server_EndVelocityCurve(const FMovementCurveKey& InCurveKey)
+{
+	InternalEndVelocityCurve(InCurveKey);
+}
+
+void UFormCharacterComponent::InternalEndVelocityCurve(const FMovementCurveKey& InCurveKey)
+{
+	for (uint16 i = 0; i <= ActiveVelocityCurves.Num(); i++)
+	{
+		if (InCurveKey == FMovementCurveKey(ActiveVelocityCurves[i]))
+		{
+			ActiveVelocityCurves.RemoveAt(i);
+			return;
+		}
+	}
+}
+
 void UFormCharacterComponent::OnInputDown(const FInputActionInstance& Instance)
 {
 	if (GetOwner()->GetLocalRole() != ROLE_AutonomousProxy) return;
@@ -721,6 +909,8 @@ void UFormCharacterComponent::BeginPlay()
 {
 	Super::BeginPlay();
 	if (!GetOwner()) return;
+	DefaultGroundFriction = GroundFriction;
+	DefaultBrakingFrictionFactor = BrakingFrictionFactor;
 	if (!GetOwner()->FindComponentByClass(UFormCoreComponent::StaticClass()))
 	{
 		UE_LOG(LogSfCore, Error,
@@ -818,7 +1008,7 @@ void UFormCharacterComponent::HandleInventoryDifferencesAndSetCorrectionFlags(
 			else
 			{
 				//Otherwise we should correct the client with the missing card.
-				CorrectionConditionFlags |= Repredict_ActionSetsCardsResources;
+				CorrectionConditionFlags |= Repredict_Sf;
 				UE_LOG(LogSfCore, Display,
 				       TEXT("Cards caused recorrection as client is missing a card that exists on the server."));
 			}
@@ -831,7 +1021,7 @@ void UFormCharacterComponent::HandleInventoryDifferencesAndSetCorrectionFlags(
 	{
 		if (!CardCanBeFoundInInventory(Inventory, CardIdentifier))
 		{
-			CorrectionConditionFlags |= Repredict_ActionSetsCardsResources;
+			CorrectionConditionFlags |= Repredict_Sf;
 			UE_LOG(LogSfCore, Display,
 			       TEXT("Cards caused recorrection as client has a card that doesn't exist on the server."));
 		}
@@ -845,7 +1035,7 @@ void UFormCharacterComponent::HandleResourcesDifferencesAndSetCorrectionFlags(
 	if (InResources.Items.Num() != ServerResources.Items.Num())
 	{
 		//If client sent resources array is a different size we must correct.
-		CorrectionConditionFlags |= Repredict_ActionSetsCardsResources;
+		CorrectionConditionFlags |= Repredict_Sf;
 		UE_LOG(LogSfCore, Display, TEXT("Resources caused recorrection. Client length %d, server length %d."),
 		       InResources.Items.Num(), ServerResources.Items.Num());
 		return;
@@ -854,9 +1044,31 @@ void UFormCharacterComponent::HandleResourcesDifferencesAndSetCorrectionFlags(
 	{
 		if (ServerResources.Items[i].Value != InResources.Items[i].Value)
 		{
-			CorrectionConditionFlags |= Repredict_ActionSetsCardsResources;
+			CorrectionConditionFlags |= Repredict_Sf;
 			UE_LOG(LogSfCore, Display, TEXT("Resources caused recorrection. Client value %f, server value %f."),
 			       InResources.Items[0].Value, ServerResources.Items[0].Value);
+			return;
+		}
+	}
+}
+
+void UFormCharacterComponent::HandleVelocityCurveDifferencesAndSetCorrectionFlags(const FSfNetworkMoveData* MoveData)
+{
+	const TArray<FMovementCurveKey>& Keys = MoveData->VelocityCurveKeys;
+	if (Keys.Num() != ActiveVelocityCurves.Num())
+	{
+		//If client sent array is a different size we must correct.
+		CorrectionConditionFlags |= Repredict_Sf;
+		UE_LOG(LogSfCore, Display, TEXT("Velocity curves caused recorrection. Client length %d, server length %d."),
+		       Keys.Num(), ActiveVelocityCurves.Num());
+		return;
+	}
+	for (uint16 i = 0; i < ActiveVelocityCurves.Num(); i++)
+	{
+		if (FMovementCurveKey(ActiveVelocityCurves[i]) != Keys[i])
+		{
+			CorrectionConditionFlags |= Repredict_Sf;
+			UE_LOG(LogSfCore, Display, TEXT("Resources caused recorrection."));
 			return;
 		}
 	}
@@ -883,7 +1095,7 @@ void UFormCharacterComponent::SfServerCheckClientError()
 	if (MoveData->PendingActionSets != PendingActionSets && MoveData->PendingActionSets.Num() == PendingActionSets.
 		Num())
 	{
-		CorrectionConditionFlags |= Repredict_ActionSetsCardsResources;
+		CorrectionConditionFlags |= Repredict_Sf;
 		UE_LOG(LogSfCore, Display, TEXT("ActionSets caused recorrection. Client length %d, Server length %d."),
 		       MoveData->PendingActionSets.Num(), PendingActionSets.Num());
 		if (MoveData->PendingActionSets.Num() > 0 && PendingActionSets.Num() > 0)
@@ -911,6 +1123,14 @@ void UFormCharacterComponent::SfServerCheckClientError()
 	if (FormResource)
 	{
 		HandleResourcesDifferencesAndSetCorrectionFlags(FormResource, MoveData->Resources);
+	}
+
+	HandleVelocityCurveDifferencesAndSetCorrectionFlags(MoveData);
+
+	if (MoveData->bDisableSelfMovement != bDisableSelfMovement)
+	{
+		CorrectionConditionFlags |= Repredict_Sf;
+		CorrectionConditionFlags |= Repredict_Movement;
 	}
 }
 
@@ -1060,6 +1280,16 @@ void UFormCharacterComponent::PackResources()
 	}
 }
 
+void UFormCharacterComponent::PackVelocityCurves()
+{
+	ClientSentVelocityCurveKeys.Empty();
+	ClientSentVelocityCurveKeys.Reserve(ActiveVelocityCurves.Num());
+	for (const FTimestampedMovementCurve& Curve : ActiveVelocityCurves)
+	{
+		ClientSentVelocityCurveKeys.Emplace(Curve);
+	}
+}
+
 void UFormCharacterComponent::PackInventoryCardIdentifiers()
 {
 	CardIdentifiersInInventories.Empty();
@@ -1149,6 +1379,46 @@ void UFormCharacterComponent::RemovePredictedCardWithEndedLifetimes() const
 	for (UConstituent* Constituent : FormCore->ConstituentRegistry)
 	{
 		UInventory::UpdateAndRunBufferedInputs(Constituent);
+	}
+}
+
+void UFormCharacterComponent::ApplyVelocityCurves()
+{
+	bool bUsingCurveVelocity = false;
+	for (int16 i = ActiveVelocityCurves.Num() - 1; i >= 0; i--)
+	{
+		FTimestampedMovementCurve& Curve = ActiveVelocityCurves[i];
+		if (CalculateTimeUntilPredictedTimestamp(Curve.EndTimestamp) < 0.f)
+		{
+			//We remove timed out curves.
+			ActiveVelocityCurves.RemoveAt(i, 1, false);
+		}
+		//Don't apply if self movement is disabled and the curve is owned by the character.
+		if (!(bDisableSelfMovement && Curve.bSelfInitiated))
+		{
+			//Only set velocity to zero at the start of iteration so we can stack the effects of multiple curves.
+			if (bUsingCurveVelocity == false) Velocity = FVector::Zero();
+			bUsingCurveVelocity = true;
+			//We set these to zero to ensure physics don't affect the effect of the curve.
+			GroundFriction = 0;
+			BrakingFrictionFactor = 0;
+			if (Curve.MagnitudeCurve == nullptr)
+			{
+				UE_LOG(LogSfCore, Warning, TEXT("Velocity curve has empty curve float asset."));
+				continue;
+			}
+			//Get velocity to add from the curve.
+			Velocity += Curve.MagnitudeCurve->GetFloatValue(
+				FMath::Min(CalculateTimeSincePredictedTimestamp(Curve.StartTimestamp), 0.f)) * Curve.Vector;
+		}
+	}
+	ActiveVelocityCurves.Shrink();
+	//Only reset friction when there are no more applied velocity curves.
+	//The 0 checks prevents this from running more than once.
+	if (!bUsingCurveVelocity && GroundFriction == 0 && BrakingFrictionFactor == 0)
+	{
+		GroundFriction = DefaultGroundFriction;
+		BrakingFrictionFactor = DefaultGroundFriction;
 	}
 }
 
@@ -1244,6 +1514,8 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 {
 	Super::UpdateCharacterStateBeforeMovement(DeltaSeconds);
 
+	FSfNetworkMoveData* MoveData = static_cast<FSfNetworkMoveData*>(GetCurrentNetworkMoveData());
+
 	if (GetOwner() && GetOwner()->GetLocalRole() == ROLE_SimulatedProxy) return;
 
 	if (IsReplaying())
@@ -1275,10 +1547,10 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 
 	//If we're not replaying, or if we would like to repredict the net clock or action sets, cards, or resources.
 	//Not if we want to repredict movement or update cards only.
-	if (!IsReplaying() || (CorrectionConditionFlags & (Repredict_NetClock | Repredict_ActionSetsCardsResources)) != 0)
+	if (!IsReplaying() || (CorrectionConditionFlags & (Repredict_NetClock | Repredict_Sf)) != 0)
 	{
 		//Begin tick setup.
-		
+
 		PredictedNetClock += DeltaSeconds;
 		//We reset when it is soon to lose 2 decimal points of precision.
 		if (PredictedNetClock > 40000.0)
@@ -1292,7 +1564,7 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 		{
 			ApplyInputBitsToInventory(InputBits, Inventory);
 		}
-		
+
 		//End tick setup.
 
 		//Begin tick simulation.
@@ -1305,7 +1577,7 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 			Constituent->HandleBufferInputTimeout();
 			//Note that the buffered inputs firing is implemented with the addition or removal of cards.
 		}
-		
+
 		if (FormResource && FormStat)
 		{
 			//Apply consistent resource changes.
@@ -1329,6 +1601,14 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 		{
 			OnPredictionTick.Broadcast(PredictedNetClock, DeltaSeconds, IsReplaying());
 		}
+
+		if (bDisableSelfMovement)
+		{
+			Acceleration = FVector::Zero();
+			MoveData->Acceleration = FVector_NetQuantize10(0, 0, 0);
+		}
+		
+		ApplyVelocityCurves();
 
 		//End tick simulation.
 
@@ -1355,6 +1635,10 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 			//to the actual cards in order to account for prediction skipping flags and to finalize server only card
 			//changes if the client sends them back.
 			PackInventoryCardIdentifiers();
+
+			//Server directly creates keys from current curves for comparison in check error, therefore this only
+			//needs to be on client.
+			PackVelocityCurves();
 		}
 		else
 		{

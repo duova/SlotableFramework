@@ -6,15 +6,8 @@
 #include "Components/ActorComponent.h"
 #include "FormAnimComponent.generated.h"
 
+enum class EPerspective : uint8;
 class UFormCharacterComponent;
-DECLARE_LOG_CATEGORY_EXTERN(LogSfAudiovisual, Log, All);
-
-UENUM(BlueprintType)
-enum class EPerspective : uint8
-{
-	FirstPerson,
-	ThirdPerson
-};
 
 USTRUCT()
 struct SFAUDIOVISUAL_API FRecentMontageData

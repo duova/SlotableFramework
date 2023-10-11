@@ -5,9 +5,8 @@
 
 #include "FormCharacterComponent.h"
 #include "FormCoreComponent.h"
+#include "SfAudiovisualCommon.h"
 #include "Misc/RuntimeErrors.h"
-
-DEFINE_LOG_CATEGORY(LogSfAudiovisual);
 
 FRecentMontageData::FRecentMontageData(): Montage(nullptr), StartTimestamp(0), ExpectedEndTimestamp(0),
                                           InterruptedTimestamp(-1.f)

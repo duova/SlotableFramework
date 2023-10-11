@@ -13,7 +13,6 @@
  * The logic must be stateless - i.e. it must be able to start at any TimeSinceStart given by SfNotifyBegin and
  * end whenever SfNotifyEnd runs. This is because prediction can cause early and delayed client side montage
  * execution.
- * Timelines are recommended for float, vector, and color control for cleaner representation.
  */
 UCLASS(Abstract, Blueprintable)
 class SFAUDIOVISUAL_API USfAnimNotifyState : public UAnimNotifyState
