@@ -48,11 +48,17 @@ class SFCOREEDITOR_API UK2Node_ConstituentAction : public UK2Node, public IK2Nod
 	//Perspective(s) to run this on.
 	UPROPERTY(EditAnywhere, Category="Constituent")
 	EActionExecutionPerspective ActionExecutionPerspective;
+
+	//Param struct type.
+	UPROPERTY(EditAnywhere, Category="Constituent")
+	TObjectPtr<UScriptStruct> ParamsStructType;
 	
 	inline static const FName ActionIdPinName = "InActionId";
 	inline static const FName IsServerPinName = "bIsServer";
 	inline static const FName IsReplayingPinName = "bInIsReplaying";
 	inline static const FName TimeSincePinName = "InTimeSinceExecution";
+	inline static const FName ParamsPinName = "Params";
+	inline static const FName ParamsGetterPinName = "OutStruct";
 	inline static const FName EqualEqualIntIntFunctionName = "EqualEqual_IntInt";
 	inline static const FName FirstEqualsInputPinName = "A";
 	inline static const FName SecondEqualsInputPinName = "B";
@@ -87,6 +93,8 @@ class SFCOREEDITOR_API UK2Node_ConstituentAction : public UK2Node, public IK2Nod
 	virtual FText GetMenuCategory() const override;
 	virtual FBlueprintNodeSignature GetSignature() const override;
 	virtual bool IsNodeSafeToIgnore() const override { return true; }
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+	virtual void ReconstructNode() override;
 	//~ End UK2Node Interface
 
 	//~ Begin IK2Node_EventNodeInterface Interface.
@@ -96,6 +104,7 @@ class SFCOREEDITOR_API UK2Node_ConstituentAction : public UK2Node, public IK2Nod
 	UEdGraphPin* GetExecutePin() const;
 	UEdGraphPin* GetReplayPin() const;
 	UEdGraphPin* GetTimePin() const;
+	UEdGraphPin* GetParamsPin();
 
 private:
 	/** Constructing FText strings can be costly, so we cache the node's title/tooltip */

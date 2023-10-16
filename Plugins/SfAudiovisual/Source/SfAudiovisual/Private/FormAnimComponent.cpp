@@ -441,40 +441,19 @@ void UFormAnimComponent::ReproducePoseSnapshot(const FPoseSnapshot& Snapshot, US
 		}
 
 		const int32 NumSpaceBases = ComponentSpaceTMs.Num();
-		//Snapshot.LocalTransforms.Reset(NumSpaceBases);
-		//Snapshot.LocalTransforms.AddUninitialized(NumSpaceBases);
-		//Snapshot.BoneNames.Reset(NumSpaceBases);
-		//Snapshot.BoneNames.AddUninitialized(NumSpaceBases);
 
 		//Set root bone which is always evaluated.
 		ComponentSpaceTMs[0] = Snapshot.LocalTransforms[0];
 		
-		//Snapshot.LocalTransforms[0] = ComponentSpaceTMs[0];
-		//Snapshot.BoneNames[0] = RefSkeleton.GetBoneName(0);
-
-		//int32 CurrentRequiredBone = 1;
 		for (int32 ComponentSpaceIdx = 1; ComponentSpaceIdx < NumSpaceBases; ++ComponentSpaceIdx)
 		{
-			//Snapshot.BoneNames[ComponentSpaceIdx] = RefSkeleton.GetBoneName(ComponentSpaceIdx);
-
-			//const bool bBoneHasEvaluated = SkeletalMeshComponent->FillComponentSpaceTransformsRequiredBones.IsValidIndex(CurrentRequiredBone) && ComponentSpaceIdx == SkeletalMeshComponent->FillComponentSpaceTransformsRequiredBones[CurrentRequiredBone];
 			const int32 ParentIndex = RefSkeleton.GetParentIndex(ComponentSpaceIdx);
 			ensureMsgf(ParentIndex != INDEX_NONE, TEXT("Getting an invalid parent bone for bone %d, but this should not be possible since this is not the root bone!"), ComponentSpaceIdx);
 
 			const FTransform& ParentTransform = ComponentSpaceTMs[ParentIndex];
 			FTransform& ChildTransform = ComponentSpaceTMs[ComponentSpaceIdx];
 			FTransform::Multiply(&ChildTransform, &Snapshot.LocalTransforms[ComponentSpaceIdx], &ParentTransform);
-			//Snapshot.LocalTransforms[ComponentSpaceIdx] = ChildTransform.GetRelativeTransform(ParentTransform);
-
-			/*
-			if (bBoneHasEvaluated)
-			{
-				CurrentRequiredBone++;
-			}
-			*/
 		}
-
-		SkeletalMeshComponent->ApplyEditedComponentSpaceTransforms();
 	}
 	
 }

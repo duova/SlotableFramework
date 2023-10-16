@@ -24,6 +24,10 @@
 		{
 			"Name": "SfCore",
 			"Enabled": true
+		},
+		{
+			"Name": "Niagara",
+			"Enabled": true
 		}
 	]
 }

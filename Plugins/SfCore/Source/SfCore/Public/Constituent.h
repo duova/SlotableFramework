@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "SfObject.h"
+#include "Interfaces/ITargetDevice.h"
 #include "Constituent.generated.h"
 
 class UConstituent;
@@ -23,11 +24,19 @@ struct SFCORE_API FActionSet
 
 	uint8 ActionZero; //Serialized to 6 bits.
 
+	TBitArray<> ActionZeroParams;
+
 	uint8 ActionOne; //Serialized to 6 bits.
+
+	TBitArray<> ActionOneParams;
 
 	uint8 ActionTwo; //Serialized to 6 bits.
 
+	TBitArray<> ActionTwoParams;
+
 	uint8 ActionThree; //Serialized to 6 bits.
+
+	TBitArray<> ActionThreeParams;
 	
 	//Used for checking whether actions were performed in the same frame.
 	float WorldTime;
@@ -39,32 +48,57 @@ struct SFCORE_API FActionSet
 	           const uint8 InActionTwo = 0,
 	           const uint8 InActionThree = 0);
 
+	FActionSet(const float InCurrentWorldTime, const uint8 InActionZero, const FBitWriter& InActionZeroParams = FBitWriter(),
+	           const uint8 InActionOne = 0, const FBitWriter& InActionOneParams = FBitWriter(),
+	           const uint8 InActionTwo = 0, const FBitWriter& InActionTwoParams = FBitWriter(),
+	           const uint8 InActionThree = 0, const FBitWriter& InActionThreeParams = FBitWriter());
+
 	//Returns false if the action was created on another frame.
-	bool TryAddActionCheckIfSameFrame(const float InCurrentWorldTime, const uint8 InAction);
+	bool TryAddActionCheckIfSameFrame(const float InCurrentWorldTime, const uint8 InAction, const FBitWriter& InParams);
 
 	bool operator==(const FActionSet& Other) const;
 
 	bool operator!=(const FActionSet& Other) const;
-
-	TArray<uint8> ToArray() const;
+	
+	TMap<uint8, TBitArray<>> ToMap() const;
 
 	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
 	
 	friend FArchive& operator<<(FArchive& Ar, FActionSet& Set)
 	{
 		Ar.SerializeBits(&Set.NumActionsMinusOne, 2);
+
+		bool bSendParams = Set.ActionZeroParams.Num() > 0 ||
+				Set.ActionOneParams.Num() > 0 ||
+				Set.ActionTwoParams.Num() > 0 ||
+				Set.ActionThreeParams.Num() > 0;
+
+		Ar.SerializeBits(&bSendParams, 1);
+
+		//Default action.
 		Ar.SerializeBits(&Set.ActionZero, 6);
+		if (bSendParams) Ar << Set.ActionZeroParams;
+		if (bSendParams) Ar << Set.ActionZeroParams;
+
+		//First overflow action.
 		if (Set.NumActionsMinusOne > 0)
 		{
 			Ar.SerializeBits(&Set.ActionOne, 6);
+			if (bSendParams) Ar << Set.ActionOneParams;
 		}
+
+		//Second overflow action.
 		if (Set.NumActionsMinusOne > 1)
 		{
 			Ar.SerializeBits(&Set.ActionTwo, 6);
+			if (bSendParams) Ar << Set.ActionTwoParams;
 		}
+
+		//Third overflow action.
 		if (Set.NumActionsMinusOne > 2)
 		{
 			Ar.SerializeBits(&Set.ActionThree, 6);
+			if (bSendParams) Ar << Set.ActionThreeParams;
 		}
 		return Ar;
 	}
@@ -220,10 +254,54 @@ public:
 
 	//Executes an action, which acts as an identifier for certain event graphs. See UConstituent description for details.
 	//ActionId can only be between 1-63 inclusive.
+	//Use ExecuteActionWithParams instead to pass params.
 	UFUNCTION(BlueprintCallable, meta = (AutoCreateRefTerm = "bInIsPredictableContext"))
 	void ExecuteAction(const int32 InActionId, const bool bInIsPredictableContext);
+	
+	//Executes an action, which acts as an identifier for certain event graphs. See UConstituent description for details.
+	//ActionId can only be between 1-63 inclusive.
+	//Use ExecuteAction if params aren't necessary.
+	UFUNCTION(BlueprintCallable, CustomThunk, meta = (CustomStructureParam = "InActionParams", DefaultToSelf = "Target", AutoCreateRefTerm = "bInIsPredictableContext"))
+	static void ExecuteActionWithParams(UConstituent* Target, const int32 InActionId, const bool bInIsPredictableContext, UStruct* InActionParams);
 
-	void InternalExecuteAction(const uint8 InActionId, const bool bInIsPredictableContext = false);
+	DECLARE_FUNCTION(execExecuteActionWithParams)
+	{
+		P_GET_OBJECT(UConstituent, Target);
+		P_GET_PROPERTY(FIntProperty, InActionId);
+		P_GET_PROPERTY(FBoolProperty, bInIsPredictableContext);
+		
+		Stack.Step(Stack.Object, nullptr);
+
+		//Grab the last property found walking the stack.
+		//Contains type info and not value.
+		FProperty* StructProperty = CastField<FProperty>(Stack.MostRecentProperty);
+
+		//Ptr to value.
+		void* StructPtr = Stack.MostRecentPropertyAddress;
+
+		P_FINISH;
+
+		FBitWriter Ar = FBitWriter(UINT8_MAX, true);
+		
+		SerializeGenericStruct(StructProperty, StructPtr, Ar);
+		
+		if (InActionId < 0 || InActionId > 63)
+		{
+			UE_LOG(LogSfCore, Error,
+				   TEXT("ExecuteActionWithParams called with an out of range ActionId of %i on UConstituent class %s"), InActionId,
+				   *Target->GetClass()->GetName());
+			return;
+		}
+		Target->InternalExecuteAction(InActionId, bInIsPredictableContext, Ar);
+	}
+	
+	void InternalExecuteAction(const uint8 InActionId, const bool bInIsPredictableContext, const FBitWriter& SerializedParams);
+
+	//Does both serialization and deserialization based on archive direction.
+	static void SerializeGenericStruct(FProperty* Property, void* StructPtr, FArchive& Ar);
+
+	//Does both serialization and deserialization based on archive direction.
+	static void SerializeProperty(FProperty* Property, void* ValuePtr, FArchive& Ar);
 
 	//Called when an action is executed on the server.
 	UPROPERTY(BlueprintAssignable)
@@ -243,14 +321,14 @@ public:
 	UPROPERTY(BlueprintAssignable)
 	FSimulated_OnExecute Simulated_OnExecute;
 	
-	void InternalServerOnExecute(const uint8 InActionId);
+	void InternalServerOnExecute(const uint8 InActionId, const TBitArray<>& SerializedParams);
 	
 	void InternalPredictedOnExecute(const uint8 InActionId, const bool bInIsReplaying, const bool bInIsFirstPerson,
-	                         const bool bInIsServer);
+	                         const bool bInIsServer, const TBitArray<>& SerializedParams);
 	
-	void InternalAutonomousOnExecute(const uint8 InActionId, const float InTimeSinceExecution, const bool bInIsFirstPerson);
+	void InternalAutonomousOnExecute(const uint8 InActionId, const float InTimeSinceExecution, const bool bInIsFirstPerson, const TBitArray<>& SerializedParams);
 	
-	void InternalSimulatedOnExecute(const uint8 InActionId, const float InTimeSinceExecution, const bool bInIsFirstPerson);
+	void InternalSimulatedOnExecute(const uint8 InActionId, const float InTimeSinceExecution, const bool bInIsFirstPerson, const TBitArray<>& SerializedParams);
 
 	//Input down for the input registered to the UConstituent in UFormCharacterComponent.
 	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable)
@@ -357,6 +435,27 @@ public:
 
 	UFUNCTION(BlueprintPure, BlueprintInternalUseOnly)
 	float GetCurrentTimeSinceExecution() const;
+
+	UFUNCTION(BlueprintPure, BlueprintInternalUseOnly, CustomThunk, meta = (CustomStructureParam = "OutStruct", DefaultToSelf = "Target"))
+	static void GetCurrentParams(UConstituent* Target, UStruct*& OutStruct);
+
+	DECLARE_FUNCTION(execGetCurrentParams)
+	{
+		P_GET_OBJECT(UConstituent, Target);
+		
+		Stack.Step(Stack.Object, nullptr);
+
+		//Grab the last property found walking the stack.
+		//Contains type info and not value.
+		FProperty* StructProperty = CastField<FProperty>(Stack.MostRecentProperty);
+
+		//Ptr to value.
+		void* StructPtr = Stack.MostRecentPropertyAddress;
+
+		P_FINISH;
+		
+		SerializeGenericStruct(StructProperty, StructPtr, Target->CurrentBitReader);
+	}
 	
 	int32 CurrentActionId;
 	
@@ -367,6 +466,10 @@ public:
 	bool bCurrentIsServer;
 
 	float CurrentTimeSinceExecution;
+
+	TBitArray<> CurrentParams;
+
+	FBitReader CurrentBitReader;
 
 	//True to send and execute action set on clients.
 	uint8 bLastActionSetPendingClientExecution:1;
@@ -406,3 +509,7 @@ private:
 
 	TSet<FBufferedInput> BufferedInputs;
 };
+
+TBitArray<> BitWriterToBitArray(const FBitWriter& Source);
+
+void SetBitReader(FBitReader& Reader, TBitArray<>& Source);

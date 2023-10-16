@@ -541,7 +541,7 @@ DECLARE_MULTICAST_DELEGATE_ThreeParams(FOnPredictionTick, const float InPredicte
 * In that case, the controllers should directly call functions on FormBaseComponent instead of writing inputs.
 * This component extends the CharacterMovementComponent to use its prediction logic to drive prediction for slotables.
 */
-UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent), Blueprintable)
+UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
 class SFCORE_API UFormCharacterComponent : public UCharacterMovementComponent
 {
 	GENERATED_BODY()
@@ -871,4 +871,6 @@ private:
 	float DefaultGroundFriction;
 
 	float DefaultBrakingFrictionFactor;
+
+	float DefaultGravityScale;
 };

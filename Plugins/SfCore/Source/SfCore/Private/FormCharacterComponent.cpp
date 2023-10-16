@@ -911,6 +911,7 @@ void UFormCharacterComponent::BeginPlay()
 	if (!GetOwner()) return;
 	DefaultGroundFriction = GroundFriction;
 	DefaultBrakingFrictionFactor = BrakingFrictionFactor;
+	DefaultGravityScale = GravityScale;
 	if (!GetOwner()->FindComponentByClass(UFormCoreComponent::StaticClass()))
 	{
 		UE_LOG(LogSfCore, Error,
@@ -1402,6 +1403,7 @@ void UFormCharacterComponent::ApplyVelocityCurves()
 			//We set these to zero to ensure physics don't affect the effect of the curve.
 			GroundFriction = 0;
 			BrakingFrictionFactor = 0;
+			GravityScale = 0;
 			if (Curve.MagnitudeCurve == nullptr)
 			{
 				UE_LOG(LogSfCore, Warning, TEXT("Velocity curve has empty curve float asset."));
@@ -1415,10 +1417,12 @@ void UFormCharacterComponent::ApplyVelocityCurves()
 	ActiveVelocityCurves.Shrink();
 	//Only reset friction when there are no more applied velocity curves.
 	//The 0 checks prevents this from running more than once.
-	if (!bUsingCurveVelocity && GroundFriction == 0 && BrakingFrictionFactor == 0)
+	if (!bUsingCurveVelocity && GroundFriction == 0 && BrakingFrictionFactor == 0 && GravityScale == 0)
 	{
 		GroundFriction = DefaultGroundFriction;
 		BrakingFrictionFactor = DefaultGroundFriction;
+		GravityScale = DefaultGravityScale;
+		SetMovementMode(MOVE_Falling);
 	}
 }
 
@@ -1558,16 +1562,16 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 			PredictedNetClock = 0;
 		}
 
+		//End tick setup.
+
+		//Begin tick simulation.
+
 		//Run input if we're not replaying, or if we want to repredict anything that is not movement.
 		const uint32 InputBits = GetInputSetsJoinedBits();
 		for (UInventory* Inventory : FormCore->GetInventories())
 		{
 			ApplyInputBitsToInventory(InputBits, Inventory);
 		}
-
-		//End tick setup.
-
-		//Begin tick simulation.
 
 		RemovePredictedCardWithEndedLifetimes();
 

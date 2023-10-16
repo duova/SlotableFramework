@@ -24,6 +24,7 @@ UK2Node_ConstituentAction::UK2Node_ConstituentAction()
 	ActionId = 1;
 	ActionExecutionContext = EActionExecutionContext::Server;
 	ActionExecutionPerspective = EActionExecutionPerspective::All;
+	ParamsStructType = nullptr;
 }
 
 FString UK2Node_ConstituentAction::ActionExecutionContextAsString(const EActionExecutionContext ExecutionContext)
@@ -65,6 +66,8 @@ void UK2Node_ConstituentAction::AllocateDefaultPins()
 	CreatePin(EGPD_Output, UEdGraphSchema_K2::PC_Exec, TEXT("Execute"));
 	CreatePin(EGPD_Output, UEdGraphSchema_K2::PC_Boolean, TEXT("bIsReplaying"));
 	CreatePin(EGPD_Output, UEdGraphSchema_K2::PC_Real, TEXT("TimeSinceExecution"));
+	PreloadObject(ParamsStructType);
+	CreatePin(EGPD_Output, UEdGraphSchema_K2::PC_Struct, ParamsStructType, TEXT("Params"));
 }
 
 FLinearColor UK2Node_ConstituentAction::GetNodeTitleColor() const
@@ -137,6 +140,11 @@ UEdGraphPin* UK2Node_ConstituentAction::GetTimePin() const
 	return FindPin(TEXT("TimeSinceExecution"));
 }
 
+UEdGraphPin* UK2Node_ConstituentAction::GetParamsPin()
+{
+	return FindPin(TEXT("Params"));
+}
+
 void UK2Node_ConstituentAction::ValidateNodeDuringCompilation(FCompilerResultsLog& MessageLog) const
 {
 	Super::ValidateNodeDuringCompilation(MessageLog);
@@ -192,6 +200,18 @@ void UK2Node_ConstituentAction::ExpandNode(FKismetCompilerContext& CompilerConte
 	UK2Node_CallFunction* TimeSinceExecutionNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
 	TimeSinceExecutionNode->FunctionReference.SetExternalMember(GET_FUNCTION_NAME_CHECKED(UConstituent, GetCurrentTimeSinceExecution), UConstituent::StaticClass());
 	TimeSinceExecutionNode->AllocateDefaultPins();
+
+	UK2Node_CallFunction* ParamsNode = nullptr;
+	UEdGraphPin* ParamsGetterPin = nullptr;
+	
+	//Only spawn params getter if something is connected to the params pin.
+	if (GetParamsPin()->HasAnyConnections())
+	{
+		ParamsNode = CompilerContext.SpawnIntermediateNode<UK2Node_CallFunction>(this, SourceGraph);
+		ParamsNode->FunctionReference.SetExternalMember(GET_FUNCTION_NAME_CHECKED(UConstituent, GetCurrentParams), UConstituent::StaticClass());
+		ParamsNode->AllocateDefaultPins();
+		ParamsGetterPin = ParamsNode->FindPinChecked(ParamsGetterPinName, EGPD_Output);
+	}
 
 	//Create branch node to only allow execution if the conditions match.
 	UK2Node_IfThenElse* BranchNode = CompilerContext.SpawnIntermediateNode<UK2Node_IfThenElse>(this, SourceGraph);
@@ -297,6 +317,16 @@ void UK2Node_ConstituentAction::ExpandNode(FKismetCompilerContext& CompilerConte
 	{
 		CompilerContext.MovePinLinksToIntermediate(*GetTimePin(), *TimeSinceExecutionNode->GetReturnValuePin());
 	}
+	
+	if (ParamsNode && ParamsGetterPin)
+	{
+		TArray<UEdGraphPin*> PinsToConnect = GetParamsPin()->LinkedTo;
+		for (UEdGraphPin* Pin : PinsToConnect)
+		{
+			if (!Pin) continue;
+			K2Schema->TryCreateConnection(Pin, ParamsGetterPin);
+		}
+	}
 
 	this->BreakAllNodeLinks(); 
 }
@@ -329,6 +359,21 @@ FBlueprintNodeSignature UK2Node_ConstituentAction::GetSignature() const
 	NodeSignature.AddKeyValue(NodeMenuName.ToString());
 
 	return NodeSignature;
+}
+
+void UK2Node_ConstituentAction::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+	ReconstructNode();
+}
+
+void UK2Node_ConstituentAction::ReconstructNode()
+{
+	Super::ReconstructNode();
+	//Wait for the pin to be created in allocate default pins to avoid duplication.
+	if (GetParamsPin()) return;
+	PreloadObject(ParamsStructType);
+	ReconstructSinglePin(CreatePin(EGPD_Output, UEdGraphSchema_K2::PC_Struct, ParamsStructType, TEXT("Params")), GetParamsPin(), ERedirectType_Name);
 }
 
 TSharedPtr<FEdGraphSchemaAction> UK2Node_ConstituentAction::GetEventNodeAction(const FText& ActionCategory)
