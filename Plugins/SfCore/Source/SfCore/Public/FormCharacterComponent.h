@@ -8,6 +8,7 @@
 #include "Card.h"
 #include "EnhancedInputComponent.h"
 #include "FormResourceComponent.h"
+#include "SfUtility.h"
 #include "FormCharacterComponent.generated.h"
 
 /* ***************************************************************

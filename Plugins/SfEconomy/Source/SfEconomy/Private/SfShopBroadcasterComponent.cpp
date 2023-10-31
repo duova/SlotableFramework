@@ -7,6 +7,7 @@
 #include "SfCurrencyComponent.h"
 #include "SfObject.h"
 #include "SfShopAccessorComponent.h"
+#include "SfUtility.h"
 #include "Slotable.h"
 #include "Net/UnrealNetwork.h"
 

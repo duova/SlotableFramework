@@ -6,6 +6,7 @@
 #include "GauntletModule.h"
 #include "SfGauntletController.h"
 #include "SfTest.h"
+#include "SfUtility.h"
 #include "GameFramework/GameModeBase.h"
 #include "Net/UnrealNetwork.h"
 

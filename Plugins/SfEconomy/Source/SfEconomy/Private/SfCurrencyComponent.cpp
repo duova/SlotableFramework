@@ -4,6 +4,7 @@
 #include "SfCurrencyComponent.h"
 
 #include "SfObject.h"
+#include "SfUtility.h"
 #include "Net/UnrealNetwork.h"
 
 DEFINE_LOG_CATEGORY(LogSfEconomy);

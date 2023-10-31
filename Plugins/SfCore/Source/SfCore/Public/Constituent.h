@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "SfObject.h"
-#include "Interfaces/ITargetDevice.h"
+#include "SfUtility.h"
 #include "Constituent.generated.h"
 
 class UConstituent;
