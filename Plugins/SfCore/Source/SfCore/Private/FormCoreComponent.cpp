@@ -11,6 +11,7 @@
 #include "FormQueryComponent.h"
 #include "FormResourceComponent.h"
 #include "FormStatComponent.h"
+#include "SfGameMode.h"
 #include "Net/UnrealNetwork.h"
 
 UFormCoreComponent::UFormCoreComponent()
@@ -327,14 +328,17 @@ const TArray<UInventory*>& UFormCoreComponent::GetInventories()
 	return Inventories;
 }
 
-FGameplayTag UFormCoreComponent::GetTeam()
+FGameplayTag UFormCoreComponent::GetTeam() const
 {
 	return Team;
 }
 
 void UFormCoreComponent::Server_SetTeam(const FGameplayTag InTeam)
 {
+	ASfGameMode* GameMode = Cast<ASfGameMode>(GetWorld()->GetAuthGameMode());
+	GameMode->RemoveFromTeam(this, Team);
 	Team = InTeam;
+	GameMode->AddToTeam(this, Team);
 	MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, Team, this);
 }
 

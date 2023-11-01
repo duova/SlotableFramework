@@ -22,7 +22,7 @@ DECLARE_DYNAMIC_DELEGATE_FourParams(FOnExitOverlapSignature, UPrimitiveComponent
  * AActor that can be directly spawned with SpawnTargeter on a UConstituent that is used for overlap detection.
  * This exists so that all logic relating on a UConstituent stays on a UConstituent instead of being on multiple UObjects.
  */
-UCLASS(Abstract)
+UCLASS(Abstract, Blueprintable)
 class SFTARGETING_API ASfTargeter : public AActor
 {
 	GENERATED_BODY()

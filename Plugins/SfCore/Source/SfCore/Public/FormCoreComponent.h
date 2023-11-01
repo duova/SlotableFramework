@@ -22,6 +22,8 @@ DECLARE_DYNAMIC_DELEGATE(FTriggerInputDelegate);
  * The FormCoreComponent is responsible for the core logic of a form.
  * Forms should extend APawn or ACharacter. This component must be replicated.
  * The component mainly holds the slotable hierarchy and its functions.
+ * This is not designed to work with switching ASfGameMode as team data is cached.
+ * Spawn in new forms if the game mode has to be changed.
  */
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent), Blueprintable)
 class SFCORE_API UFormCoreComponent : public UActorComponent
@@ -41,7 +43,7 @@ public:
 	const TArray<UInventory*>& GetInventories();
 
 	UFUNCTION(BlueprintPure)
-	FGameplayTag GetTeam();
+	FGameplayTag GetTeam() const;
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	void Server_SetTeam(const FGameplayTag InTeam);
