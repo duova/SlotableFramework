@@ -17,8 +17,8 @@ ASfTargeter::ASfTargeter()
 
 ASfTargeter* ASfTargeter::SpawnTargeter(UConstituent* Target, const TSubclassOf<ASfTargeter>& InClass,
 	const FVector& InLocation, const FRotator& InRotation, const TArray<AActor*>& InActorsToIgnore,
-	const TArray<FGameplayTag>& InTeamsToIgnore, const float TickInterval, FTargeterOverlap& OutOnEnter,
-	FTargeterOverlap& OutOnExit, FTargeterOverlap& OutOnTick)
+	const TArray<FGameplayTag>& InTeamsToIgnore, const float TickInterval, const FTargeterOverlap OnEnterEvent,
+	const FTargeterOverlap OnExitEvent, const FTargeterOverlap OnTickEvent)
 {
 	ASfTargeter* Targeter = Cast<ASfTargeter>(Target->GetWorld()->SpawnActor(InClass, &InLocation, &InRotation));
 	for (AActor* Actor : InActorsToIgnore)
@@ -29,10 +29,17 @@ ASfTargeter* ASfTargeter::SpawnTargeter(UConstituent* Target, const TSubclassOf<
 	{
 		Targeter->TeamsToIgnore.Add(Team);
 	}
-	Targeter->SetActorTickInterval(TickInterval);
-	Targeter->OnEnter = OutOnEnter;
-	Targeter->OnExit = OutOnExit;
-	Targeter->OnTick = OutOnTick;
+	if (TickInterval <= 0.f)
+	{
+		Targeter->SetActorTickEnabled(false);
+	}
+	else
+	{
+		Targeter->SetActorTickInterval(TickInterval);
+	}
+	Targeter->OnEnter = OnEnterEvent;
+	Targeter->OnExit = OnExitEvent;
+	Targeter->OnTick = OnTickEvent;
 	return Targeter;
 }
 
@@ -72,7 +79,7 @@ void ASfTargeter::OnEnterOverlap(UPrimitiveComponent* OverlappedComponent, AActo
 		if (TeamsToIgnore.Contains(FormCore->GetTeam())) return;
 	}
 	OverlappingActors.Add(OtherActor);
-	OnEnter.ExecuteIfBound(OtherActor);
+	OnEnter.ExecuteIfBound(OtherActor, this, GetActorLocation());
 }
 
 void ASfTargeter::OnExitOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
@@ -84,7 +91,7 @@ void ASfTargeter::OnExitOverlap(UPrimitiveComponent* OverlappedComponent, AActor
 		if (TeamsToIgnore.Contains(FormCore->GetTeam())) return;
 	}
 	OverlappingActors.Remove(OtherActor);
-	OnExit.ExecuteIfBound(OtherActor);
+	OnExit.ExecuteIfBound(OtherActor, this, GetActorLocation());
 }
 
 void ASfTargeter::Tick(float DeltaTime)
@@ -97,7 +104,7 @@ void ASfTargeter::Tick(float DeltaTime)
 	for (AActor* Actor : OverlappingActors)
 	{
 		if (!Actor) continue;
-		OnTick.ExecuteIfBound(Actor);
+		OnTick.ExecuteIfBound(Actor, this, GetActorLocation());
 	}
 }
 

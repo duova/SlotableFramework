@@ -10,8 +10,9 @@
 DECLARE_LOG_CATEGORY_EXTERN(LogSfTargeter, Log, All);
 
 class UConstituent;
+class ASfTargeter;
 
-DECLARE_DYNAMIC_DELEGATE_OneParam(FTargeterOverlap, AActor*, Actor);
+DECLARE_DYNAMIC_DELEGATE_ThreeParams(FTargeterOverlap, AActor*, Actor, ASfTargeter*, Targeter, FVector, TargeterLocation);
 
 DECLARE_DYNAMIC_DELEGATE_SixParams(FOnEnterOverlapSignature, UPrimitiveComponent*, OverlappedComponent, AActor*, OtherActor, UPrimitiveComponent*, OtherComp, int32, OtherBodyIndex, bool, bFromSweep, const FHitResult &, SweepResult);
 DECLARE_DYNAMIC_DELEGATE_FourParams(FOnExitOverlapSignature, UPrimitiveComponent*, OverlappedComponent, AActor*, OtherActor, UPrimitiveComponent*, OtherComp, int32, OtherBodyIndex);
@@ -29,12 +30,14 @@ class SFTARGETING_API ASfTargeter : public AActor
 public:
 	ASfTargeter();
 
-	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
+	//Spawns an implemented ASfTargeter.
+	//Tick is disabled if TickInterval is 0. It should not be anything less than 0.1 for performance.
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, meta = (DefaultToSelf = "Target"))
 	static ASfTargeter* SpawnTargeter(UConstituent* Target, const TSubclassOf<ASfTargeter>& InClass,
 	                                  const FVector& InLocation, const FRotator& InRotation,
 	                                  const TArray<AActor*>& InActorsToIgnore,
 	                                  const TArray<FGameplayTag>& InTeamsToIgnore, const float TickInterval,
-	                                  FTargeterOverlap& OutOnEnter, FTargeterOverlap& OutOnExit, FTargeterOverlap& OutOnTick);
+	                                  const FTargeterOverlap OnEnterEvent, const FTargeterOverlap OnExitEvent, const FTargeterOverlap OnTickEvent);
 
 protected:
 	virtual void BeginPlay() override;
