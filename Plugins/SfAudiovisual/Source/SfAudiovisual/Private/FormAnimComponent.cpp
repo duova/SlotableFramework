@@ -53,7 +53,7 @@ void UFormAnimComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	//Update snapshot circular buffer.
 	if (TimeSinceLastSnapshot > TimeBetweenServerAnimEvaluations)
 	{
-		ServerAnimSnapshots[IndexOfOldestSnapshot].Timestamp = FormCoreComponent->GetNonCompensatedServerFormTime();
+		ServerAnimSnapshots[IndexOfOldestSnapshot].Timestamp = GetWorld()->TimeSeconds;
 		ThirdPersonSkeletalMesh->SnapshotPose(ServerAnimSnapshots[IndexOfOldestSnapshot].Snapshot);
 		if (IndexOfOldestSnapshot + 1 < ServerAnimSnapshots.Num())
 		{
@@ -129,7 +129,7 @@ void UFormAnimComponent::Simulated_StopMontage(const float InTimeSinceExecution,
 	                          InBlendOutTime);
 }
 
-void UFormAnimComponent::ServerRollbackPose(const float FormTimestamp)
+void UFormAnimComponent::ServerRollbackPose(const float ServerTimestamp)
 {
 	if (!GetOwner() || !GetOwner()->HasAuthority()) return;
 	if (!ThirdPersonSkeletalMesh) return;
@@ -137,7 +137,7 @@ void UFormAnimComponent::ServerRollbackPose(const float FormTimestamp)
 	const FPoseSnapshot* Snapshot = nullptr;
 	for (const FTimestampedPoseSnapshot& TimestampedSnapshot : ServerAnimSnapshots)
 	{
-		if (FMath::Abs(TimestampedSnapshot.Timestamp - FormTimestamp) < TimeBetweenServerAnimEvaluations)
+		if (FMath::Abs(TimestampedSnapshot.Timestamp - ServerTimestamp) < TimeBetweenServerAnimEvaluations)
 		{
 			Snapshot = &TimestampedSnapshot.Snapshot;
 			break;

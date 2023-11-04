@@ -23,13 +23,14 @@ struct SFCORE_API FFormGroup
 /**
  * AGameMode with SF features. It is recommended that GameModes for projects that use SF extend off this class.
  */
-UCLASS()
+UCLASS(Blueprintable)
 class SFCORE_API ASfGameMode : public AGameMode
 {
 	GENERATED_BODY()
 
 public:
-
+	ASfGameMode();
+	
 	UFUNCTION(BlueprintCallable, BlueprintPure)
 	TArray<AActor*> GetActorsInTeam(const FGameplayTag InTeam);
 

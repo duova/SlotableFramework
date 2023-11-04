@@ -1,49 +1,49 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "SfTargeter.h"
+#include "SfArea.h"
 
 #include "Constituent.h"
 #include "FormCoreComponent.h"
 
-DEFINE_LOG_CATEGORY(LogSfTargeter);
+DEFINE_LOG_CATEGORY(LogSfTargeting);
 
-ASfTargeter::ASfTargeter()
+ASfArea::ASfArea()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
 	SetReplicatingMovement(true);
 }
 
-ASfTargeter* ASfTargeter::SpawnTargeter(UConstituent* Target, const TSubclassOf<ASfTargeter>& InClass,
+ASfArea* ASfArea::SpawnArea(UConstituent* Target, const TSubclassOf<ASfArea>& InClass,
 	const FVector& InLocation, const FRotator& InRotation, const TArray<AActor*>& InActorsToIgnore,
-	const TArray<FGameplayTag>& InTeamsToIgnore, const float TickInterval, const FTargeterOverlap OnEnterEvent,
-	const FTargeterOverlap OnExitEvent, const FTargeterOverlap OnTickEvent)
+	const TArray<FGameplayTag>& InTeamsToIgnore, const float TickInterval, const FAreaOverlap OnEnterEvent,
+	const FAreaOverlap OnExitEvent, const FAreaOverlap OnTickEvent)
 {
-	ASfTargeter* Targeter = Cast<ASfTargeter>(Target->GetWorld()->SpawnActor(InClass, &InLocation, &InRotation));
+	ASfArea* Area = Cast<ASfArea>(Target->GetWorld()->SpawnActor(InClass, &InLocation, &InRotation));
 	for (AActor* Actor : InActorsToIgnore)
 	{
-		Targeter->ActorsToIgnore.Add(Actor);
+		Area->ActorsToIgnore.Add(Actor);
 	}
 	for (const FGameplayTag& Team : InTeamsToIgnore)
 	{
-		Targeter->TeamsToIgnore.Add(Team);
+		Area->TeamsToIgnore.Add(Team);
 	}
 	if (TickInterval <= 0.f)
 	{
-		Targeter->SetActorTickEnabled(false);
+		Area->SetActorTickEnabled(false);
 	}
 	else
 	{
-		Targeter->SetActorTickInterval(TickInterval);
+		Area->SetActorTickInterval(TickInterval);
 	}
-	Targeter->OnEnter = OnEnterEvent;
-	Targeter->OnExit = OnExitEvent;
-	Targeter->OnTick = OnTickEvent;
-	return Targeter;
+	Area->OnEnter = OnEnterEvent;
+	Area->OnExit = OnExitEvent;
+	Area->OnTick = OnTickEvent;
+	return Area;
 }
 
-void ASfTargeter::BeginPlay()
+void ASfArea::BeginPlay()
 {
 	Super::BeginPlay();
 	for (UActorComponent* Component : GetComponents())
@@ -56,13 +56,13 @@ void ASfTargeter::BeginPlay()
 	}
 	if (!PrimitiveComponent)
 	{
-		UE_LOG(LogSfTargeter, Error, TEXT("Spawned SfTargeter with class %s without a primitive component. Destroying."), *GetClass()->GetName());
+		UE_LOG(LogSfTargeting, Error, TEXT("Spawned SfArea with class %s without a primitive component. Destroying."), *GetClass()->GetName());
 		Destroy(true);
 	}
 	else
 	{
-		OnEnterOverlapDelegate.BindUFunction(this, GET_FUNCTION_NAME_CHECKED(ASfTargeter, OnEnterOverlap));
-		OnExitOverlapDelegate.BindUFunction(this, GET_FUNCTION_NAME_CHECKED(ASfTargeter, OnExitOverlap));
+		OnEnterOverlapDelegate.BindUFunction(this, GET_FUNCTION_NAME_CHECKED(ASfArea, OnEnterOverlap));
+		OnExitOverlapDelegate.BindUFunction(this, GET_FUNCTION_NAME_CHECKED(ASfArea, OnExitOverlap));
 		PrimitiveComponent->OnComponentBeginOverlap.Add(OnEnterOverlapDelegate);
 		PrimitiveComponent->OnComponentEndOverlap.Add(OnExitOverlapDelegate);
 		
@@ -70,7 +70,7 @@ void ASfTargeter::BeginPlay()
 	}
 }
 
-void ASfTargeter::OnEnterOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+void ASfArea::OnEnterOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
 	if (ActorsToIgnore.Contains(OtherActor)) return;
@@ -82,7 +82,7 @@ void ASfTargeter::OnEnterOverlap(UPrimitiveComponent* OverlappedComponent, AActo
 	OnEnter.ExecuteIfBound(OtherActor, this, GetActorLocation());
 }
 
-void ASfTargeter::OnExitOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+void ASfArea::OnExitOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
 	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
 {
 	if (ActorsToIgnore.Contains(OtherActor)) return;
@@ -94,7 +94,7 @@ void ASfTargeter::OnExitOverlap(UPrimitiveComponent* OverlappedComponent, AActor
 	OnExit.ExecuteIfBound(OtherActor, this, GetActorLocation());
 }
 
-void ASfTargeter::Tick(float DeltaTime)
+void ASfArea::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 

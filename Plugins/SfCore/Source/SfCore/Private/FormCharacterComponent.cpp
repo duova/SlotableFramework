@@ -8,6 +8,7 @@
 #include "Slotable.h"
 #include "EnhancedInputComponent.h"
 #include "FormStatComponent.h"
+#include "SfGameState.h"
 #include "GameFramework/Character.h"
 
 FInventoryCards::FInventoryCards()
@@ -186,7 +187,7 @@ bool FMovementCurveKey::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutS
 
 FSavedMove_Sf::FSavedMove_Sf()
 	: bWantsToSprint(0), EnabledInputSets(0), PrimaryInputSet(0), SecondaryInputSet(0), TertiaryInputSet(0),
-	  PredictedNetClock(0), bDisableSelfMovement(0)
+	  PredictedNetClock(0), ServerWorldTimeOnClient(0), bDisableSelfMovement(0)
 {
 	//We force no combine as we want to send all moves as soon as possible to reduce input latency.
 	bForceNoCombine = true;
@@ -202,6 +203,7 @@ void FSavedMove_Sf::Clear()
 	SecondaryInputSet = 0;
 	TertiaryInputSet = 0;
 	PredictedNetClock = 0;
+	ServerWorldTimeOnClient = 0;
 	PendingActionSets.Empty();
 	CardIdentifiersInInventories.Empty();
 	Resources.Items.Empty();
@@ -229,6 +231,16 @@ void FSavedMove_Sf::SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& 
 	{
 		TertiaryInputSet = CharacterComponent->TertiaryInputSet;
 	}
+
+	//We try to use the non-averaged server world time if possible.
+	if (const ASfGameState* SfGameState = Cast<ASfGameState>(CharacterComponent->GetWorld()->GetGameState()))
+	{
+		ServerWorldTimeOnClient = SfGameState->GetRawReplicatedServerWorldTime();
+	}
+	else if (const AGameStateBase* GameStateBase = CharacterComponent->GetWorld()->GetGameState())
+	{
+		ServerWorldTimeOnClient = GameStateBase->GetServerWorldTimeSeconds();
+	}
 }
 
 void FSavedMove_Sf::PrepMoveFor(ACharacter* C)
@@ -251,6 +263,8 @@ void FSavedMove_Sf::PrepMoveFor(ACharacter* C)
 	{
 		CharacterComponent->TertiaryInputSet = TertiaryInputSet;
 	}
+
+	CharacterComponent->ServerWorldTimeOnClient = ServerWorldTimeOnClient;
 }
 
 void FSavedMove_Sf::PostUpdate(ACharacter* C, EPostUpdateMode PostUpdateMode)
@@ -292,7 +306,7 @@ FSavedMovePtr FNetworkPredictionData_Client_Sf::AllocateNewMove()
 
 FSfNetworkMoveData::FSfNetworkMoveData()
 	: EnabledInputSets(0), PrimaryInputSet(0), SecondaryInputSet(0), TertiaryInputSet(0),
-	  PredictedNetClock(0), bDisableSelfMovement(0)
+	  PredictedNetClock(0), ServerWorldTimeOnClient(0), bDisableSelfMovement(0)
 {
 }
 
@@ -363,6 +377,8 @@ bool FSfNetworkMoveData::Serialize(UCharacterMovementComponent& CharacterMovemen
 	Ar.SerializeBits(&bDoSerializeActionSets, 1);
 	if (bDoSerializeActionSets)
 	{
+		//Only serialize when ServerWorldTimeOnClient is necessary on the server for lag compensation.
+		Ar << ServerWorldTimeOnClient;
 		Ar << PendingActionSets;
 	}
 
@@ -449,6 +465,7 @@ void FSfNetworkMoveData::ClientFillNetworkMoveData(const FSavedMove_Character& C
 		TertiaryInputSet = SavedMove->TertiaryInputSet;
 	}
 
+	ServerWorldTimeOnClient = SavedMove->ServerWorldTimeOnClient;
 	PredictedNetClock = SavedMove->PredictedNetClock;
 	PendingActionSets = SavedMove->PendingActionSets;
 	CardIdentifiersInInventories = SavedMove->CardIdentifiersInInventories;
@@ -863,6 +880,11 @@ void UFormCharacterComponent::InternalEndVelocityCurve(const FMovementCurveKey& 
 			return;
 		}
 	}
+}
+
+float UFormCharacterComponent::GetServerWorldTimeOnClient() const
+{
+	return ServerWorldTimeOnClient;
 }
 
 void UFormCharacterComponent::OnInputDown(const FInputActionInstance& Instance)

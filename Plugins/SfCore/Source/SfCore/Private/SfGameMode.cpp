@@ -3,8 +3,15 @@
 
 #include "SfGameMode.h"
 
+#include "SfGameState.h"
+
 FFormGroup::FFormGroup()
 {
+}
+
+ASfGameMode::ASfGameMode()
+{
+	GameStateClass = ASfGameState::StaticClass();
 }
 
 TArray<AActor*> ASfGameMode::GetActorsInTeam(const FGameplayTag InTeam)

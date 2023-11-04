@@ -15,6 +15,18 @@ class UFormCharacterComponent;
 class UConstituent;
 class UInventory;
 
+USTRUCT()
+struct SFCORE_API FTimestampedTransformSnapshot
+{
+	GENERATED_BODY()
+
+	FTimestampedTransformSnapshot();
+	
+	float Timestamp;
+
+	FTransform Transform;
+};
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FTriggerDelegate);
 DECLARE_DYNAMIC_DELEGATE(FTriggerInputDelegate);
 
@@ -108,6 +120,12 @@ public:
 	UFUNCTION(BlueprintPure, BlueprintAuthorityOnly)
 	bool Server_HasTrigger(FGameplayTag Trigger);
 
+	//For lag compensated hit registration.
+	void ServerRollbackLocation(const float ServerTimestamp);
+
+	//Must be called after ServerRollbackLocation to bring animation back to current time.
+	void ServerRestoreLatestLocation() const;
+
 	//References to all the constituents that isn't ordered. Used to iterate through all owned constituents on a form
 	//without accessing intermediate inventories and slotables.
 	UPROPERTY(Replicated)
@@ -189,4 +207,16 @@ private:
 	float LowFrequencyTickDeltaTime = 0;
 
 	bool bInputsRequireSetup = true;
+
+	float TimeSinceLastSnapshot = 0;
+
+	uint8 IndexOfOldestSnapshot = 0;
+
+	TArray<FTimestampedTransformSnapshot> ServerLocationSnapshots;
+
+	FTransform CurrentTransform;
+
+	float TimeBetweenServerLocationSnapshots;
+
+	inline static const auto ServerTickRateCVar = IConsoleManager::Get().FindConsoleVariable(TEXT("NetServerMaxTickRate"));
 };

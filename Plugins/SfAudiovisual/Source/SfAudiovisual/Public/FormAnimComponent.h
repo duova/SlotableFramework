@@ -64,6 +64,7 @@ public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
 										FActorComponentTickFunction* ThisTickFunction) override;
 
+	//This should be saved to a blueprint variable.
 	UFUNCTION(BlueprintCallable, BlueprintPure)
 	static UFormAnimComponent* GetFormAnimComponent(UFormCoreComponent* InFormCore);
 
@@ -124,9 +125,9 @@ public:
 	                           const EPerspective InPerspective, const float InBlendOutTime);
 
 	//For lag compensated hit registration.
-	void ServerRollbackPose(const float FormTimestamp);
+	void ServerRollbackPose(const float ServerTimestamp);
 
-	//Must be called after ServerRollbackAnimation to bring animation back to current time.
+	//Must be called after ServerRollbackPose to bring animation back to current time.
 	void ServerRestoreLatestPose();
 
 	//Evaluate animation every x anim frames for server hit registration.

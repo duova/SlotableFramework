@@ -423,6 +423,8 @@ public:
 
 	float PredictedNetClock;
 
+	float ServerWorldTimeOnClient;
+
 	TArray<FIdentifiedActionSet> PendingActionSets;
 
 	TArray<FCardIdentifiersInAnInventory> CardIdentifiersInInventories;
@@ -464,6 +466,8 @@ struct FSfNetworkMoveData : FCharacterNetworkMoveData
 	uint8 TertiaryInputSet;
 
 	float PredictedNetClock;
+
+	float ServerWorldTimeOnClient;
 
 	TArray<FIdentifiedActionSet> PendingActionSets;
 
@@ -680,6 +684,8 @@ public:
 
 	void InternalEndVelocityCurve(const FMovementCurveKey& InCurveKey);
 
+	float GetServerWorldTimeOnClient() const;
+
 protected:
 	
 	//Number of input sets to enable, this is automatically set based on how many inputs are registered.
@@ -702,7 +708,12 @@ protected:
 	uint32 NetClockNextInteger = 0;
 	
 	//+/- acceptable range.
-	const float NetClockAcceptableTolerance = 0.01f;
+	constexpr float NetClockAcceptableTolerance = 0.01f;
+
+	//The most recently received server world time on the client is sent back to the server to calculate RTT for lag compensation.
+	//This is only serialized to the server if an action is made in the frame to reduce bandwidth.
+	//This isn't filled on the client.
+	float ServerWorldTimeOnClient;
 
 	//Actions executed in a given frame that we send to the server for checking.
 	//Note that this is representative of PredictedLastActionSet in Constituent and not LastActionSet.

@@ -14,6 +14,10 @@
 #include "SfGameMode.h"
 #include "Net/UnrealNetwork.h"
 
+FTimestampedTransformSnapshot::FTimestampedTransformSnapshot(): Timestamp(0)
+{
+}
+
 UFormCoreComponent::UFormCoreComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
@@ -85,6 +89,33 @@ bool UFormCoreComponent::Server_HasTrigger(const FGameplayTag Trigger)
 		}
 	}
 	return false;
+}
+
+void UFormCoreComponent::ServerRollbackLocation(const float ServerTimestamp)
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority()) return;
+	CurrentTransform = GetOwner()->GetActorTransform();
+	const FTransform* Transform = nullptr;
+	for (const FTimestampedTransformSnapshot& TimestampedSnapshot : ServerLocationSnapshots)
+	{
+		if (FMath::Abs(TimestampedSnapshot.Timestamp - ServerTimestamp) < TimeBetweenServerLocationSnapshots)
+		{
+			Transform = &TimestampedSnapshot.Transform;
+			break;
+		} 
+	}
+	if (!Transform)
+	{
+		UE_LOG(LogSfCore, Warning, TEXT("Could not find suitable snapshot to roll location back to. Timestamp may be too far in the past."));
+		return;
+	}
+	GetOwner()->SetActorTransform(*Transform);
+}
+
+void UFormCoreComponent::ServerRestoreLatestLocation() const
+{
+	if (!GetOwner() || !GetOwner()->HasAuthority()) return;
+	GetOwner()->SetActorTransform(CurrentTransform);
 }
 
 void UFormCoreComponent::BeginPlay()
@@ -186,6 +217,13 @@ void UFormCoreComponent::BeginPlay()
 			}
 			Triggers.Add(TriggerTag, FTriggerDelegate());
 		}
+
+		const uint8 TickRate = ServerTickRateCVar->GetInt();
+
+		TimeBetweenServerLocationSnapshots = 1 / TickRate;
+
+		//Initialize a circular buffer large enough to hold all snapshots for 1 second.
+		ServerLocationSnapshots.AddDefaulted(TickRate);
 	}
 
 	if (FormCharacter)
@@ -299,6 +337,22 @@ void UFormCoreComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 			Constituent->Server_LowFrequencyTick(LowFrequencyTickDeltaTime);
 		}
 		LowFrequencyTickDeltaTime -= CalculatedTimeBetweenLowFrequencyTicks;
+	}
+
+	TimeSinceLastSnapshot += DeltaTime;
+	//Update snapshot circular buffer.
+	if (TimeSinceLastSnapshot > TimeBetweenServerLocationSnapshots)
+	{
+		ServerLocationSnapshots[IndexOfOldestSnapshot].Timestamp = GetWorld()->TimeSeconds;
+		ServerLocationSnapshots[IndexOfOldestSnapshot].Transform = GetOwner()->GetActorTransform();
+		if (IndexOfOldestSnapshot + 1 < ServerLocationSnapshots.Num())
+		{
+			IndexOfOldestSnapshot++;
+		}
+		else
+		{
+			IndexOfOldestSnapshot = 0;
+		}
 	}
 }
 
