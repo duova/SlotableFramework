@@ -8,7 +8,8 @@
 #include "FormCoreComponent.h"
 
 bool USfTargetingLibrary::Predicted_SfMultiLineTrace(UConstituent* Target, const FVector Start, const FVector End,
-                                                     ETraceTypeQuery TraceChannel, bool bTraceComplex,
+                                                     ETraceTypeQuery BlockingTraceChannel,
+                                                     ETraceTypeQuery NonBlockingTraceChannel, bool bTraceComplex,
                                                      const TArray<AActor*>& ActorsToIgnore,
                                                      EDrawDebugTrace::Type DrawDebugType, TArray<FHitResult>& OutHits,
                                                      bool bIgnoreSelf, float MaxCompensationRadius,
@@ -31,7 +32,7 @@ bool USfTargetingLibrary::Predicted_SfMultiLineTrace(UConstituent* Target, const
 
 	//Run sphere trace to determine what actors can be hit considering compensation.
 	TArray<FHitResult> TargetsWithinCompensationRange;
-	UKismetSystemLibrary::SphereTraceMulti(Target->GetWorld(), Start, End, MaxCompensationRadius, TraceChannel, bTraceComplex, ActorsToIgnore, DrawDebugType, TargetsWithinCompensationRange, bIgnoreSelf, TraceColor, TraceHitColor, DrawTime);
+	UKismetSystemLibrary::SphereTraceMulti(Target->GetWorld(), Start, End, MaxCompensationRadius, NonBlockingTraceChannel, bTraceComplex, ActorsToIgnore, DrawDebugType, TargetsWithinCompensationRange, bIgnoreSelf, TraceColor, TraceHitColor, DrawTime);
 
 	//Rollback potential targets to world time indicated by the client.
 	for (FHitResult& PotentialTarget : TargetsWithinCompensationRange)
@@ -48,7 +49,7 @@ bool USfTargetingLibrary::Predicted_SfMultiLineTrace(UConstituent* Target, const
 	}
 
 	//Run the actual line trace.
-	UKismetSystemLibrary::LineTraceMulti(Target->GetWorld(), Start, End, TraceChannel, bTraceComplex, ActorsToIgnore, DrawDebugType, OutHits, bIgnoreSelf, TraceColor, TraceHitColor, DrawTime);
+	UKismetSystemLibrary::LineTraceMulti(Target->GetWorld(), Start, End, BlockingTraceChannel, bTraceComplex, ActorsToIgnore, DrawDebugType, OutHits, bIgnoreSelf, TraceColor, TraceHitColor, DrawTime);
 
 	//Return potential targets to original states.
 	for (FHitResult& PotentialTarget : TargetsWithinCompensationRange)
