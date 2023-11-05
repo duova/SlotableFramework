@@ -708,7 +708,7 @@ protected:
 	uint32 NetClockNextInteger = 0;
 	
 	//+/- acceptable range.
-	constexpr float NetClockAcceptableTolerance = 0.01f;
+	static constexpr float NetClockAcceptableTolerance = 0.01f;
 
 	//The most recently received server world time on the client is sent back to the server to calculate RTT for lag compensation.
 	//This is only serialized to the server if an action is made in the frame to reduce bandwidth.

@@ -16,9 +16,12 @@ ASfArea::ASfArea()
 }
 
 ASfArea* ASfArea::SpawnArea(UConstituent* Target, const TSubclassOf<ASfArea>& InClass,
-	const FVector& InLocation, const FRotator& InRotation, const TArray<AActor*>& InActorsToIgnore,
-	const TArray<FGameplayTag>& InTeamsToIgnore, const float TickInterval, const FAreaOverlap OnEnterEvent,
-	const FAreaOverlap OnExitEvent, const FAreaOverlap OnTickEvent)
+                            const FVector& InLocation, const FRotator& InRotation,
+                            const TArray<AActor*>& InActorsToIgnore,
+                            const TArray<FGameplayTag>& InTeamsToIgnore,
+                            const float InTickInterval, const FAreaOverlap& OnEnterEvent,
+                            const FAreaOverlap& OnExitEvent, const FAreaOverlap& OnTickEvent,
+                            const bool bInOnlyTargetForms)
 {
 	ASfArea* Area = Cast<ASfArea>(Target->GetWorld()->SpawnActor(InClass, &InLocation, &InRotation));
 	for (AActor* Actor : InActorsToIgnore)
@@ -29,18 +32,33 @@ ASfArea* ASfArea::SpawnArea(UConstituent* Target, const TSubclassOf<ASfArea>& In
 	{
 		Area->TeamsToIgnore.Add(Team);
 	}
-	if (TickInterval <= 0.f)
+	if (InTickInterval <= 0.f)
 	{
 		Area->SetActorTickEnabled(false);
 	}
 	else
 	{
-		Area->SetActorTickInterval(TickInterval);
+		Area->SetActorTickInterval(InTickInterval);
 	}
-	Area->OnEnter = OnEnterEvent;
-	Area->OnExit = OnExitEvent;
-	Area->OnTick = OnTickEvent;
+	Area->bOnlyTargetForms = bInOnlyTargetForms;
+	if (OnEnterEvent.IsBound())
+	{
+		Area->OnEnter = OnEnterEvent;
+	}
+	if (OnExitEvent.IsBound())
+	{
+		Area->OnExit = OnExitEvent;
+	}
+	if (OnTickEvent.IsBound())
+	{
+		Area->OnTick = OnTickEvent;
+	}
 	return Area;
+}
+
+TArray<AActor*> ASfArea::GetActorsInArea() const
+{
+	return OverlappingActors.Array();
 }
 
 void ASfArea::BeginPlay()
@@ -56,7 +74,8 @@ void ASfArea::BeginPlay()
 	}
 	if (!PrimitiveComponent)
 	{
-		UE_LOG(LogSfTargeting, Error, TEXT("Spawned SfArea with class %s without a primitive component. Destroying."), *GetClass()->GetName());
+		UE_LOG(LogSfTargeting, Error, TEXT("Spawned SfArea with class %s without a primitive component. Destroying."),
+		       *GetClass()->GetName());
 		Destroy(true);
 	}
 	else
@@ -65,31 +84,36 @@ void ASfArea::BeginPlay()
 		OnExitOverlapDelegate.BindUFunction(this, GET_FUNCTION_NAME_CHECKED(ASfArea, OnExitOverlap));
 		PrimitiveComponent->OnComponentBeginOverlap.Add(OnEnterOverlapDelegate);
 		PrimitiveComponent->OnComponentEndOverlap.Add(OnExitOverlapDelegate);
-		
+
 		PrimitiveComponent->SetGenerateOverlapEvents(true);
 	}
 }
 
 void ASfArea::OnEnterOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
-	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+                             UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep,
+                             const FHitResult& SweepResult)
 {
 	if (ActorsToIgnore.Contains(OtherActor)) return;
-	if (UFormCoreComponent* FormCore = Cast<UFormCoreComponent>(OtherActor->GetComponentByClass(UFormCoreComponent::StaticClass())))
+	if (UFormCoreComponent* FormCore = Cast<UFormCoreComponent>(
+		OtherActor->GetComponentByClass(UFormCoreComponent::StaticClass())))
 	{
 		if (TeamsToIgnore.Contains(FormCore->GetTeam())) return;
 	}
+	else if (bOnlyTargetForms) return;
 	OverlappingActors.Add(OtherActor);
 	OnEnter.ExecuteIfBound(OtherActor, this, GetActorLocation());
 }
 
 void ASfArea::OnExitOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
-	UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
+                            UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
 {
 	if (ActorsToIgnore.Contains(OtherActor)) return;
-	if (UFormCoreComponent* FormCore = Cast<UFormCoreComponent>(OtherActor->GetComponentByClass(UFormCoreComponent::StaticClass())))
+	if (const UFormCoreComponent* FormCore = Cast<UFormCoreComponent>(
+		OtherActor->GetComponentByClass(UFormCoreComponent::StaticClass())))
 	{
 		if (TeamsToIgnore.Contains(FormCore->GetTeam())) return;
 	}
+	else if (bOnlyTargetForms) return;
 	OverlappingActors.Remove(OtherActor);
 	OnExit.ExecuteIfBound(OtherActor, this, GetActorLocation());
 }
@@ -107,4 +131,3 @@ void ASfArea::Tick(float DeltaTime)
 		OnTick.ExecuteIfBound(Actor, this, GetActorLocation());
 	}
 }
-

@@ -14,8 +14,12 @@ class ASfArea;
 
 DECLARE_DYNAMIC_DELEGATE_ThreeParams(FAreaOverlap, AActor*, Actor, ASfArea*, Area, FVector, TargeterLocation);
 
-DECLARE_DYNAMIC_DELEGATE_SixParams(FOnEnterOverlapSignature, UPrimitiveComponent*, OverlappedComponent, AActor*, OtherActor, UPrimitiveComponent*, OtherComp, int32, OtherBodyIndex, bool, bFromSweep, const FHitResult &, SweepResult);
-DECLARE_DYNAMIC_DELEGATE_FourParams(FOnExitOverlapSignature, UPrimitiveComponent*, OverlappedComponent, AActor*, OtherActor, UPrimitiveComponent*, OtherComp, int32, OtherBodyIndex);
+DECLARE_DYNAMIC_DELEGATE_SixParams(FOnEnterOverlapSignature, UPrimitiveComponent*, OverlappedComponent, AActor*,
+                                   OtherActor, UPrimitiveComponent*, OtherComp, int32, OtherBodyIndex, bool, bFromSweep,
+                                   const FHitResult &, SweepResult);
+
+DECLARE_DYNAMIC_DELEGATE_FourParams(FOnExitOverlapSignature, UPrimitiveComponent*, OverlappedComponent, AActor*,
+                                    OtherActor, UPrimitiveComponent*, OtherComp, int32, OtherBodyIndex);
 
 /*
  * Note: This has to be implemented with a UPrimitiveComponent to function.
@@ -32,12 +36,17 @@ public:
 
 	//Spawns an implemented ASfArea.
 	//Tick is disabled if TickInterval is 0. It should not be anything less than 0.1 for performance.
-	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, meta = (DefaultToSelf = "Target"))
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, meta = (DefaultToSelf = "Target", AutoCreateRefTerm = "InActorsToIgnore, InTeamsToIgnore, OnEnterEvent, OnExitEvent, OnTickEvent"))
 	static ASfArea* SpawnArea(UConstituent* Target, const TSubclassOf<ASfArea>& InClass,
-	                                  const FVector& InLocation, const FRotator& InRotation,
-	                                  const TArray<AActor*>& InActorsToIgnore,
-	                                  const TArray<FGameplayTag>& InTeamsToIgnore, const float TickInterval,
-	                                  const FAreaOverlap OnEnterEvent, const FAreaOverlap OnExitEvent, const FAreaOverlap OnTickEvent);
+	                          const FVector& InLocation, const FRotator& InRotation,
+	                          const TArray<AActor*>& InActorsToIgnore,
+	                          const TArray<FGameplayTag>& InTeamsToIgnore,
+	                          const float InTickInterval,
+	                          const FAreaOverlap& OnEnterEvent, const FAreaOverlap& OnExitEvent,
+	                          const FAreaOverlap& OnTickEvent, const bool bInOnlyTargetForms = true);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure)
+	TArray<AActor*> GetActorsInArea() const;
 
 protected:
 	virtual void BeginPlay() override;
@@ -53,6 +62,8 @@ protected:
 	UPROPERTY()
 	UPrimitiveComponent* PrimitiveComponent;
 
+	bool bOnlyTargetForms;
+
 	//For UPrimitiveComponent.
 	FOnEnterOverlapSignature OnEnterOverlapDelegate;
 	FOnExitOverlapSignature OnExitOverlapDelegate;
@@ -62,10 +73,13 @@ protected:
 	FAreaOverlap OnExit;
 	FAreaOverlap OnTick;
 
-	virtual void OnEnterOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
+	virtual void OnEnterOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+	                            UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep,
+	                            const FHitResult& SweepResult);
 
-	virtual void OnExitOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
-	
+	virtual void OnExitOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
+	                           UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
+
 public:
 	virtual void Tick(float DeltaTime) override;
 };
