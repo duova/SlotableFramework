@@ -29,6 +29,23 @@ class SFTARGETING_API USfTargetingLibrary : public UObject
 	                                       FLinearColor TraceColor = FLinearColor::Red,
 	                                       FLinearColor TraceHitColor = FLinearColor::Green, float DrawTime = 5.0f);
 
+	//Single line trace that compensates for latency when targeting forms.
+	//This does not return values on the client.
+	//BlockingTraceChannel should be blocking on objects that should be blocking for the trace.
+	//NonBlockingTraceChannel should not be blocking for any objects, as it is used in a sphere trace to pick up
+	//targets in range of lag compensation.
+	UFUNCTION(BlueprintCallable, meta = (DefaultToSelf = "Target", bIgnoreSelf= "true", AutoCreateRefTerm = "ActorsToIgnore", AdvancedDisplay= "TraceColor, TraceHitColor, DrawTime"))
+	static bool Predicted_SfLineTrace(UConstituent* Target, const FVector Start, const FVector End,
+										   ETraceTypeQuery BlockingTraceChannel, ETraceTypeQuery NonBlockingTraceChannel, bool bTraceComplex,
+										   const TArray<AActor*>& ActorsToIgnore, EDrawDebugTrace::Type DrawDebugType,
+										   FHitResult& OutHit, bool bIgnoreSelf, float MaxCompensationRadius,
+										   FLinearColor TraceColor = FLinearColor::Red,
+										   FLinearColor TraceHitColor = FLinearColor::Green, float DrawTime = 5.0f);
+	
+	static void RollbackPotentialTargets(const float InClientSubmittedWorldTime, TArray<FHitResult>& TargetsWithinCompensationRange);
+
+	static void RestorePotentialTargets(TArray<FHitResult>& TargetsWithinCompensationRange);
+
 	//TODO: Make this a CVar
 	static constexpr float MaxCompensationTimeSeconds = 0.25;
 };
