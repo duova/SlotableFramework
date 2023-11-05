@@ -12,6 +12,7 @@
 #include "FormResourceComponent.h"
 #include "FormStatComponent.h"
 #include "SfGameMode.h"
+#include "Kismet/KismetMathLibrary.h"
 #include "Net/UnrealNetwork.h"
 
 FTimestampedTransformSnapshot::FTimestampedTransformSnapshot(): Timestamp(0)
@@ -95,21 +96,42 @@ void UFormCoreComponent::ServerRollbackLocation(const float ServerTimestamp)
 {
 	if (!GetOwner() || !GetOwner()->HasAuthority()) return;
 	CurrentTransform = GetOwner()->GetActorTransform();
-	const FTransform* Transform = nullptr;
+
+	//TimeBetweenServerLocationSnapshot is also the 1 / server tick rate.
+	//As such TimeBetweenServerLocationSnapshot/2 would roughly get the average client local latency of a replicated
+	//position (on top of network latency) due to interpolation.
+	const float InterpolationAccountedServerTimestamp = ServerTimestamp - TimeBetweenServerLocationSnapshots/2;
+	
+	const uint16 IndexOfNewestSnapshot = IndexOfOldestSnapshot == 0 ? ServerLocationSnapshots.Num() - 1 : IndexOfOldestSnapshot - 1;
+	FTimestampedTransformSnapshot& ClosestOlderSnapshot = ServerLocationSnapshots[IndexOfOldestSnapshot];
+	FTimestampedTransformSnapshot& ClosestNewerSnapshot = ServerLocationSnapshots[IndexOfNewestSnapshot];
+
+	//We compare snapshots against the oldest and newest snapshots to get the closest two snapshots in order to interpolate.
 	for (const FTimestampedTransformSnapshot& TimestampedSnapshot : ServerLocationSnapshots)
 	{
-		if (FMath::Abs(TimestampedSnapshot.Timestamp - ServerTimestamp) < TimeBetweenServerLocationSnapshots)
+		if (TimestampedSnapshot.Timestamp >= InterpolationAccountedServerTimestamp && ClosestNewerSnapshot.Timestamp > TimestampedSnapshot.Timestamp)
 		{
-			Transform = &TimestampedSnapshot.Transform;
-			break;
-		} 
+			ClosestNewerSnapshot = TimestampedSnapshot;
+		}
+		else if (TimestampedSnapshot.Timestamp <= InterpolationAccountedServerTimestamp && ClosestOlderSnapshot.Timestamp < TimestampedSnapshot.Timestamp)
+		{
+			ClosestOlderSnapshot = TimestampedSnapshot;
+		}
 	}
-	if (!Transform)
+
+	//Timestamp is likely not in range if the closest older snapshot hasn't changed.
+	if (ClosestOlderSnapshot.Timestamp == ServerLocationSnapshots[IndexOfOldestSnapshot].Timestamp)
 	{
 		UE_LOG(LogSfCore, Warning, TEXT("Could not find suitable snapshot to roll location back to. Timestamp may be too far in the past."));
 		return;
 	}
-	GetOwner()->SetActorTransform(*Transform);
+
+	//Interpolate to get the most likely accurate position that would have been on the client.
+	const float InterpAlpha = (InterpolationAccountedServerTimestamp - ClosestOlderSnapshot.Timestamp) / (ClosestNewerSnapshot.Timestamp - ClosestOlderSnapshot.Timestamp);
+	const FTransform InterpolatedTransform = UKismetMathLibrary::TLerp(ClosestOlderSnapshot.Transform,
+	                                                                   ClosestNewerSnapshot.Transform, InterpAlpha);
+	
+	GetOwner()->SetActorTransform(InterpolatedTransform);
 }
 
 void UFormCoreComponent::ServerRestoreLatestLocation() const

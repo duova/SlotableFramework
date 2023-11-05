@@ -131,6 +131,8 @@ void UFormAnimComponent::Simulated_StopMontage(const float InTimeSinceExecution,
 
 void UFormAnimComponent::ServerRollbackPose(const float ServerTimestamp)
 {
+	//Rollback logic is a lot less complicated here compared to form core as the animation accuracy is low
+	//anyway and interpolating is a lot more complicated.
 	if (!GetOwner() || !GetOwner()->HasAuthority()) return;
 	if (!ThirdPersonSkeletalMesh) return;
 	ThirdPersonSkeletalMesh->SnapshotPose(CurrentSnapshot);
