@@ -25,10 +25,40 @@ void FUint16_Quantize100::SetFloat(const float Value)
 		InternalValue = 0;
 		return;
 	}
-	InternalValue = static_cast<uint8>(Value * 100.0);
+	InternalValue = static_cast<uint16>(Value * 100.0);
 }
 
 bool FUint16_Quantize100::operator==(const FUint16_Quantize100& Other) const
+{
+	if (InternalValue == Other.InternalValue) return true;
+	return false;
+}
+
+FInt16_Quantize10::FInt16_Quantize10(): InternalValue(0)
+{
+}
+
+float FInt16_Quantize10::GetFloat() const
+{
+	return static_cast<float>(InternalValue) / 10.0;
+}
+
+void FInt16_Quantize10::SetFloat(const float Value)
+{
+	if (Value > 3276.7)
+	{
+		InternalValue = 32767;
+		return;
+	}
+	if (Value < -3276.7)
+	{
+		InternalValue = -32767;
+		return;
+	}
+	InternalValue = static_cast<int16>(Value * 10.0);
+}
+
+bool FInt16_Quantize10::operator==(const FInt16_Quantize10& Other) const
 {
 	if (InternalValue == Other.InternalValue) return true;
 	return false;

@@ -198,6 +198,7 @@ void FSavedMove_Sf::Clear()
 	FSavedMove_Character::Clear();
 
 	bWantsToSprint = 0;
+	LookPitch.InternalValue = 0;
 	EnabledInputSets = 0;
 	PrimaryInputSet = 0;
 	SecondaryInputSet = 0;
@@ -218,6 +219,7 @@ void FSavedMove_Sf::SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& 
 	const UFormCharacterComponent* CharacterComponent = Cast<UFormCharacterComponent>(C->GetCharacterMovement());
 
 	bWantsToSprint = CharacterComponent->bWantsToSprint;
+	LookPitch.SetFloat(CharacterComponent->LookComponent->GetRelativeRotation().Pitch);
 	EnabledInputSets = CharacterComponent->EnabledInputSets;
 	if (EnabledInputSets > 0)
 	{
@@ -250,6 +252,9 @@ void FSavedMove_Sf::PrepMoveFor(ACharacter* C)
 	UFormCharacterComponent* CharacterComponent = Cast<UFormCharacterComponent>(C->GetCharacterMovement());
 
 	CharacterComponent->bWantsToSprint = bWantsToSprint;
+	CharacterComponent->LookPitch = LookPitch;
+	const float Angle = FMath::ClampAngle(LookPitch.GetFloat(), -90.f, 90.f);
+	CharacterComponent->LookComponent->SetRelativeRotation(FRotator(Angle, 0, 0));
 
 	if (CharacterComponent->EnabledInputSets > 0)
 	{
@@ -354,6 +359,8 @@ bool FSfNetworkMoveData::Serialize(UCharacterMovementComponent& CharacterMovemen
 		SerializeOptionalValue<uint8>(bIsSaving, Ar, TertiaryInputSet, 0);
 	}
 
+	Ar << LookPitch;
+
 	//Conditionally serialize the clock to only send every second.
 	bool bDoSerializeClock = bIsSaving && static_cast<float>(CharacterComponent->NetClockNextInteger) <
 		PredictedNetClock;
@@ -449,6 +456,8 @@ void FSfNetworkMoveData::ClientFillNetworkMoveData(const FSavedMove_Character& C
 	FCharacterNetworkMoveData::ClientFillNetworkMoveData(ClientMove, MoveType);
 
 	const FSavedMove_Sf* SavedMove = static_cast<const FSavedMove_Sf*>(&ClientMove);
+
+	LookPitch = SavedMove->LookPitch;
 
 	//Copy additional inputs.
 	EnabledInputSets = SavedMove->EnabledInputSets;
@@ -813,6 +822,16 @@ void UFormCharacterComponent::SetupPlayerInputComponent(UInputComponent* PlayerI
 			                                   &UFormCharacterComponent::OnInputUp);
 		}
 	}
+}
+
+FVector UFormCharacterComponent::GetLookLocation() const
+{
+	return LookComponent->GetComponentLocation();
+}
+
+FVector UFormCharacterComponent::GetLookVector() const
+{
+	return LookComponent->GetComponentRotation().Vector();
 }
 
 void UFormCharacterComponent::Predicted_SelfMovementDisabled(const bool bIsDisabled)

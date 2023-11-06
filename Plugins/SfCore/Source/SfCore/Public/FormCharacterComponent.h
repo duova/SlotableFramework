@@ -413,6 +413,8 @@ public:
 	//Needs to be implemented by the user if used.
 	uint8 bWantsToSprint:1;
 
+	FInt16_Quantize10 LookPitch;
+
 	//Number of input sets to enable.
 	uint8 EnabledInputSets:2;
 
@@ -456,6 +458,8 @@ public:
 
 struct FSfNetworkMoveData : FCharacterNetworkMoveData
 {
+	FInt16_Quantize10 LookPitch;
+	
 	//Number of input sets to enable.
 	//Serialized to 2 bits.
 	uint8 EnabledInputSets;
@@ -593,6 +597,12 @@ public:
 	//Must be called by character to setup input.
 	void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent);
 
+	UFUNCTION(BlueprintCallable, BlueprintPure)
+	FVector GetLookLocation() const;
+
+	UFUNCTION(BlueprintCallable, BlueprintPure)
+	FVector GetLookVector() const;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "FormCharacterComponent", meta = (ClampMin = 0.f, ClampMax = 999999.f))
 	float BaseWalkSpeed;
 
@@ -650,6 +660,10 @@ public:
 
 	FOnPredictionTick OnPredictionTick;
 
+	//This needs to be set to the component that is used to represent the look direction of the character.
+	UPROPERTY(EditAnywhere)
+	USceneComponent* LookComponent;
+
 	UFUNCTION(BlueprintCallable)
 	void Predicted_SelfMovementDisabled(const bool bIsDisabled);
 
@@ -699,6 +713,8 @@ protected:
 	//This is used to determine how the pipeline is supposed to handle the separate sections of correction data to rollback
 	//as little as possible and send as little as possible.
 	uint8 CorrectionConditionFlags = 0; //Only first 5 bits is used, bit field can't be used due to dereferencing.
+
+	FInt16_Quantize10 LookPitch;
 
 	//This is obviously not optimal as we are already sending the client TimeStamp. However, this is the most direct way
 	//of ensuring that time discrepancies will not cause more rollbacks - by having the clock incremented in tandem with
@@ -781,9 +797,9 @@ protected:
 	virtual void MoveAutonomous(float ClientTimeStamp, float DeltaTime, uint8 CompressedFlags,
 	                            const FVector& NewAccel) override;
 
-	bool CardHasEquivalentCardIdentifierFromClient(const FCardIdentifiersInAnInventory& InCardIdentifierInventoryFromClient, const FCard& InCard);
+	static bool CardHasEquivalentCardIdentifierFromClient(const FCardIdentifiersInAnInventory& InCardIdentifierInventoryFromClient, const FCard& InCard);
 
-	bool CardCanBeFoundInInventory(UInventory* Inventory, const FNetCardIdentifier InCardIdentifier);
+	static bool CardCanBeFoundInInventory(UInventory* Inventory, const FNetCardIdentifier InCardIdentifier);
 
 	void HandleInventoryDifferencesAndSetCorrectionFlags(UInventory* Inventory,
 	                                                     const FCardIdentifiersInAnInventory& InCardIdentifierInventoryFromClient);

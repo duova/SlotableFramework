@@ -159,6 +159,38 @@ struct SFCORE_API FUint16_Quantize100
 	}
 };
 
+USTRUCT()
+struct SFCORE_API FInt16_Quantize10
+{
+	GENERATED_BODY()
+	
+	UPROPERTY()
+	int16 InternalValue = 0;
+	
+	FInt16_Quantize10();
+
+	float GetFloat() const;
+
+	void SetFloat(float Value);
+
+	bool operator==(const FInt16_Quantize10& Other) const;
+
+	friend FArchive& operator<<(FArchive& Ar, FInt16_Quantize10& Integer)
+	{
+		bool bDoSerialize = Integer.InternalValue != 0;
+		Ar.SerializeBits(&bDoSerialize, 1);
+		if (bDoSerialize)
+		{
+			Ar << Integer.InternalValue;
+		}
+		else if (Ar.IsLoading())
+		{
+			Integer.InternalValue = 0;
+		}
+		return Ar;
+	}
+};
+
 DECLARE_DELEGATE_OneParam(FSfTickFunction, const float);
 
 USTRUCT()
