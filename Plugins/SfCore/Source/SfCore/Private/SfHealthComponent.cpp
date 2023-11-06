@@ -294,3 +294,11 @@ void USfHealthComponent::TrimTimeout()
 	}
 	OrderedRecentHealthChange.Shrink();
 }
+
+void USfHealthComponent::OnRep_Health()
+{
+	if (Client_OnHealthChange.IsBound())
+	{
+		Client_OnHealthChange.Broadcast();
+	}
+}

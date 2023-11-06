@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "SfUtility.h"
 #include "Components/ActorComponent.h"
 #include "FormResourceComponent.generated.h"
 
@@ -148,6 +149,13 @@ public:
 
 	float CalculatedTimeToEachReplication = 0;
 	
+	UPROPERTY(BlueprintAssignable)
+	FClientVariableUpdateSignature Client_OnResourceUpdate;
+
+protected:
+	UFUNCTION()
+	virtual void OnRep_Resources();
+	
 private:
 	UPROPERTY()
 	UFormCoreComponent* FormCore;
@@ -156,7 +164,7 @@ private:
 	UFormStatComponent* FormStat;
 
 	//Resources are only replicated to non-owners with a lower frequency to reduce bandwidth.
-	UPROPERTY(VisibleAnywhere, Replicated)
+	UPROPERTY(VisibleAnywhere, Replicated, ReplicatedUsing = OnRep_Resources)
 	FResourceArray Resources;
 
 	float NextReplicationServerTimestamp;

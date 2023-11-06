@@ -108,3 +108,11 @@ bool USfCurrencyComponent::Server_SetCurrency(const FGameplayTag InCurrency, con
 	return false;
 }
 
+void USfCurrencyComponent::OnRep_Currency()
+{
+	if (Client_OnCurrencyUpdate.IsBound())
+	{
+		Client_OnCurrencyUpdate.Broadcast();
+	}
+}
+

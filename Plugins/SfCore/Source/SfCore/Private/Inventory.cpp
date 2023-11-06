@@ -1500,6 +1500,11 @@ void UInventory::OnRep_Slotables()
 		}
 	}
 	ClientSubObjectListRegisteredSlotables.Shrink();
+
+	if (Client_OnSlotableUpdate.IsBound())
+	{
+		Client_OnSlotableUpdate.Broadcast();
+	}
 }
 
 void UInventory::ClientAutonomousInitialize_Implementation(UFormCoreComponent* InOwningFormCore)

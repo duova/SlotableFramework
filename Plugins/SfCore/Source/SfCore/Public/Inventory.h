@@ -6,6 +6,7 @@
 #include "InputAction.h"
 #include "Card.h"
 #include "SfObject.h"
+#include "SfUtility.h"
 #include "Inventory.generated.h"
 
 struct FCard;
@@ -211,6 +212,9 @@ public:
 
 	template<class T>
 	void RemoveEmptyDelegatesFromTSet(TSet<T>& DelegateSet);
+
+	UPROPERTY(BlueprintAssignable)
+	FClientVariableUpdateSignature Client_OnSlotableUpdate;
 
 protected:
 

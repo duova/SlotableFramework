@@ -162,9 +162,15 @@ public:
 	UPROPERTY(BlueprintAssignable)
 	FOnHealthChange Server_OnHealthChange;
 
+	UPROPERTY(BlueprintAssignable)
+	FClientVariableUpdateSignature Client_OnHealthChange;
+
 protected:
-	UPROPERTY(Replicated)
+	UPROPERTY(Replicated, ReplicatedUsing = OnRep_Health)
 	float Health;
+
+	UFUNCTION()
+	virtual void OnRep_Health();
 
 	//Stat to use for max health if stats are available.
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "SfHealthComponent")

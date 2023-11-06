@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "SfUtility.h"
 #include "Components/ActorComponent.h"
 #include "SfCurrencyComponent.generated.h"
 
@@ -73,7 +74,14 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	bool Server_SetCurrency(const FGameplayTag InCurrency, const int32 InValue);
 
+	UPROPERTY(BlueprintAssignable)
+	FClientVariableUpdateSignature Client_OnCurrencyUpdate;
+
+protected:
+	UFUNCTION()
+	virtual void OnRep_Currency();
+
 private:
-	UPROPERTY(Replicated, EditAnywhere)
+	UPROPERTY(Replicated, EditAnywhere, ReplicatedUsing = OnRep_Currency)
 	TArray<FCurrencyValuePair> HeldCurrencyValues;
 };

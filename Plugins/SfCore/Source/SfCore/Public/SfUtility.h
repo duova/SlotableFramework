@@ -14,6 +14,8 @@ DECLARE_DYNAMIC_DELEGATE_SixParams(FOnEnterOverlapSignature, UPrimitiveComponent
 DECLARE_DYNAMIC_DELEGATE_FourParams(FOnExitOverlapSignature, UPrimitiveComponent*, OverlappedComponent, AActor*,
 									OtherActor, UPrimitiveComponent*, OtherComp, int32, OtherBodyIndex);
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FClientVariableUpdateSignature);
+
 template <class T>
 bool TArrayCompareOrderless(const TArray<T>& A, const TArray<T>& B)
 {

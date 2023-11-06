@@ -193,6 +193,13 @@ bool UFormResourceComponent::Predicted_AddResourceValue(const FGameplayTag InTag
 	{
 		MARK_PROPERTY_DIRTY_FROM_NAME(UFormResourceComponent, Resources, this);
 	}
+	else
+	{
+		if (Client_OnResourceUpdate.IsBound())
+		{
+			Client_OnResourceUpdate.Broadcast();
+		}
+	}
 	return true;
 }
 
@@ -205,6 +212,13 @@ bool UFormResourceComponent::Predicted_RemoveResourceValue(const FGameplayTag In
 	{
 		MARK_PROPERTY_DIRTY_FROM_NAME(UFormResourceComponent, Resources, this);
 	}
+	else
+	{
+		if (Client_OnResourceUpdate.IsBound())
+		{
+			Client_OnResourceUpdate.Broadcast();
+		}
+	}
 	return true;
 }
 
@@ -216,6 +230,13 @@ bool UFormResourceComponent::Predicted_SetResourceValue(const FGameplayTag InTag
 	if (GetOwner()->HasAuthority())
 	{
 		MARK_PROPERTY_DIRTY_FROM_NAME(UFormResourceComponent, Resources, this);
+	}
+	else
+	{
+		if (Client_OnResourceUpdate.IsBound())
+		{
+			Client_OnResourceUpdate.Broadcast();
+		}
 	}
 	return true;
 }
@@ -246,4 +267,12 @@ void UFormResourceComponent::LocalInternalSetResourceValue(FResource& Resource, 
 {
 	const float MaxValue = GetMaxValue(Resource);
 	Resource.Value = FMath::Clamp(InValue, 0, MaxValue);
+}
+
+void UFormResourceComponent::OnRep_Resources()
+{
+	if (Client_OnResourceUpdate.IsBound())
+	{
+		Client_OnResourceUpdate.Broadcast();
+	}
 }

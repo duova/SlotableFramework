@@ -867,7 +867,8 @@ FMovementCurveKey UFormCharacterComponent::Predicted_StartVelocityCurve(const FV
                                                                         const float InDuration,
                                                                         const bool bInSelfInitiated)
 {
-	const uint16 Index = ActiveVelocityCurves.Emplace(PredictedNetClock, CalculateFuturePredictedTimestamp(InDuration), InVector, InMagnitudeCurve, bInSelfInitiated);
+	const uint16 Index = ActiveVelocityCurves.Emplace(PredictedNetClock, CalculateFuturePredictedTimestamp(InDuration),
+	                                                  InVector, InMagnitudeCurve, bInSelfInitiated);
 	return FMovementCurveKey(ActiveVelocityCurves[Index]);
 }
 
@@ -878,9 +879,11 @@ void UFormCharacterComponent::Predicted_EndVelocityCurve(const FMovementCurveKey
 
 FMovementCurveKey UFormCharacterComponent::Server_StartVelocityCurve(const FVector& InVector,
                                                                      UCurveFloat* InMagnitudeCurve,
-                                                                     const float InDuration, const bool bInSelfInitiated)
+                                                                     const float InDuration,
+                                                                     const bool bInSelfInitiated)
 {
-	const uint16 Index = ActiveVelocityCurves.Emplace(PredictedNetClock, CalculateFuturePredictedTimestamp(InDuration), InVector, InMagnitudeCurve, bInSelfInitiated);
+	const uint16 Index = ActiveVelocityCurves.Emplace(PredictedNetClock, CalculateFuturePredictedTimestamp(InDuration),
+	                                                  InVector, InMagnitudeCurve, bInSelfInitiated);
 	return FMovementCurveKey(ActiveVelocityCurves[Index]);
 }
 
@@ -1267,6 +1270,10 @@ void UFormCharacterComponent::CorrectResources() const
 	{
 		FormResource->Resources.Items[i].Value = ResourcesResponse.Items[i].Value;
 	}
+	if (FormResource->Client_OnResourceUpdate.IsBound())
+	{
+		FormResource->Client_OnResourceUpdate.Broadcast();
+	}
 }
 
 void UFormCharacterComponent::PackActionSets()
@@ -1652,7 +1659,7 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 			Acceleration = FVector::Zero();
 			MoveData->Acceleration = FVector_NetQuantize10(0, 0, 0);
 		}
-		
+
 		ApplyVelocityCurves();
 
 		//End tick simulation.
