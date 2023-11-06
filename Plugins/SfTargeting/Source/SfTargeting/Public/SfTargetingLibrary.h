@@ -8,6 +8,8 @@
 #include "UObject/Object.h"
 #include "SfTargetingLibrary.generated.h"
 
+DECLARE_LOG_CATEGORY_EXTERN(LogSfTargeting, Log, All);
+
 /**
  * Library for UConstituent targeting functions.
  */

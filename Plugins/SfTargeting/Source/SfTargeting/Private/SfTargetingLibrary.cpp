@@ -7,6 +7,8 @@
 #include "FormCharacterComponent.h"
 #include "FormCoreComponent.h"
 
+DEFINE_LOG_CATEGORY(LogSfTargeting);
+
 bool USfTargetingLibrary::Predicted_SfMultiLineTrace(UConstituent* Target, const FVector Start, const FVector End,
                                                      ETraceTypeQuery BlockingTraceChannel,
                                                      ETraceTypeQuery NonBlockingTraceChannel, bool bTraceComplex,

@@ -5,8 +5,7 @@
 
 #include "Constituent.h"
 #include "FormCoreComponent.h"
-
-DEFINE_LOG_CATEGORY(LogSfTargeting);
+#include "SfTargetingLibrary.h"
 
 ASfArea::ASfArea()
 {
@@ -15,14 +14,20 @@ ASfArea::ASfArea()
 	SetReplicatingMovement(true);
 }
 
-ASfArea* ASfArea::SpawnArea(UConstituent* Target, const TSubclassOf<ASfArea>& InClass,
+ASfArea* ASfArea::Server_SpawnSfArea(UConstituent* Target, const TSubclassOf<ASfArea>& InClass,
                             const FVector& InLocation, const FRotator& InRotation,
                             const TArray<AActor*>& InActorsToIgnore,
                             const TArray<FGameplayTag>& InTeamsToIgnore,
-                            const float InTickInterval, const FAreaOverlap& OnEnterEvent,
-                            const FAreaOverlap& OnExitEvent, const FAreaOverlap& OnTickEvent,
+                            const float InTickInterval, const FAreaOverlap OnEnterEvent,
+                            const FAreaOverlap OnExitEvent, const FAreaOverlap OnTickEvent,
                             const bool bInOnlyTargetForms)
 {
+	if (InClass->HasAnyClassFlags(CLASS_Abstract))
+	{
+		UE_LOG(LogSfTargeting, Error, TEXT("Tried to spawn abstract ASfArea class."));
+		return nullptr;
+	}
+	
 	ASfArea* Area = Cast<ASfArea>(Target->GetWorld()->SpawnActor(InClass, &InLocation, &InRotation));
 	for (AActor* Actor : InActorsToIgnore)
 	{
@@ -64,6 +69,7 @@ TArray<AActor*> ASfArea::GetActorsInArea() const
 void ASfArea::BeginPlay()
 {
 	Super::BeginPlay();
+	if (!HasAuthority()) return;
 	for (UActorComponent* Component : GetComponents())
 	{
 		if (Component && Component->GetClass()->IsChildOf(UPrimitiveComponent::StaticClass()))
@@ -74,7 +80,7 @@ void ASfArea::BeginPlay()
 	}
 	if (!PrimitiveComponent)
 	{
-		UE_LOG(LogSfTargeting, Error, TEXT("Spawned SfArea with class %s without a primitive component. Destroying."),
+		UE_LOG(LogSfTargeting, Error, TEXT("Spawned ASfArea with class %s without a primitive component. Destroying."),
 		       *GetClass()->GetName());
 		Destroy(true);
 	}
@@ -93,6 +99,7 @@ void ASfArea::OnEnterOverlap(UPrimitiveComponent* OverlappedComponent, AActor* O
                              UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep,
                              const FHitResult& SweepResult)
 {
+	if (!HasAuthority()) return;
 	if (ActorsToIgnore.Contains(OtherActor)) return;
 	if (UFormCoreComponent* FormCore = Cast<UFormCoreComponent>(
 		OtherActor->GetComponentByClass(UFormCoreComponent::StaticClass())))
@@ -107,6 +114,7 @@ void ASfArea::OnEnterOverlap(UPrimitiveComponent* OverlappedComponent, AActor* O
 void ASfArea::OnExitOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
                             UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
 {
+	if (!HasAuthority()) return;
 	if (ActorsToIgnore.Contains(OtherActor)) return;
 	if (const UFormCoreComponent* FormCore = Cast<UFormCoreComponent>(
 		OtherActor->GetComponentByClass(UFormCoreComponent::StaticClass())))
@@ -121,6 +129,7 @@ void ASfArea::OnExitOverlap(UPrimitiveComponent* OverlappedComponent, AActor* Ot
 void ASfArea::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	if (!HasAuthority()) return;
 
 	if (!PrimitiveComponent) return;
 
