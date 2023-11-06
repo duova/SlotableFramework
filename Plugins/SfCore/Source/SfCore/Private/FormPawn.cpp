@@ -4,6 +4,7 @@
 #include "FormPawn.h"
 
 #include "FormCoreComponent.h"
+#include "RelevancyArea.h"
 
 
 // Sets default values
@@ -15,7 +16,15 @@ AFormPawn::AFormPawn()
 	bReplicateUsingRegisteredSubObjectList = true;
 }
 
-void AFormPawn::PossessedBy(AController* NewController)
+bool AFormPawn::IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget, const FVector& SrcLocation) const
 {
-	Super::PossessedBy(NewController);
+	for (const ARelevancyArea* Area : RelevancyAreas)
+	{
+		if (Area->Contains(ViewTarget)) return true;
+		for (const ARelevancyArea* LinkedArea : Area->VisibleFrom)
+		{
+			if (LinkedArea->Contains(ViewTarget)) return true;
+		}
+	}
+	return false;
 }

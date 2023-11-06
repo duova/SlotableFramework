@@ -11,6 +11,7 @@ ASfProjectile::ASfProjectile(): ConstituentOwner(nullptr)
 {
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
+	bAlwaysRelevant = true;
 	SetReplicatingMovement(true);
 	if (!CollisionComponent)
 	{

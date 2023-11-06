@@ -6,6 +6,7 @@
 #include "GameFramework/Character.h"
 #include "FormCharacter.generated.h"
 
+class ARelevancyArea;
 class UFormCoreComponent;
 /**
  * ACharacter using the FormCharacterComponent instead of the CharacterMovementComponent with a FormCoreComponent.
@@ -27,4 +28,10 @@ public:
 	inline static FName EnhancedInputComponentName = "EnhancedInputComp";
 
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
+
+	//Form relevancy is based on ARelevancyArea.
+	virtual bool IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget, const FVector& SrcLocation) const override;
+
+	UPROPERTY()
+	TSet<ARelevancyArea*> RelevancyAreas;
 };

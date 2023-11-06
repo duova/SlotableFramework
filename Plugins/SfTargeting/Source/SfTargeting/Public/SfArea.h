@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "SfUtility.h"
 #include "GameFramework/Actor.h"
 #include "SfArea.generated.h"
 
@@ -11,13 +12,6 @@ class UConstituent;
 class ASfArea;
 
 DECLARE_DYNAMIC_DELEGATE_ThreeParams(FAreaOverlap, AActor*, Actor, ASfArea*, Area, FVector, AreaLocation);
-
-DECLARE_DYNAMIC_DELEGATE_SixParams(FOnEnterOverlapSignature, UPrimitiveComponent*, OverlappedComponent, AActor*,
-                                   OtherActor, UPrimitiveComponent*, OtherComp, int32, OtherBodyIndex, bool, bFromSweep,
-                                   const FHitResult &, SweepResult);
-
-DECLARE_DYNAMIC_DELEGATE_FourParams(FOnExitOverlapSignature, UPrimitiveComponent*, OverlappedComponent, AActor*,
-                                    OtherActor, UPrimitiveComponent*, OtherComp, int32, OtherBodyIndex);
 
 /*
  * Note: This has to be implemented with a UPrimitiveComponent to function.

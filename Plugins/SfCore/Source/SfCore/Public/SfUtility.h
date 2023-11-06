@@ -7,6 +7,13 @@
 #include "UObject/Object.h"
 #include "SfUtility.generated.h"
 
+DECLARE_DYNAMIC_DELEGATE_SixParams(FOnEnterOverlapSignature, UPrimitiveComponent*, OverlappedComponent, AActor*,
+								   OtherActor, UPrimitiveComponent*, OtherComp, int32, OtherBodyIndex, bool, bFromSweep,
+								   const FHitResult &, SweepResult);
+
+DECLARE_DYNAMIC_DELEGATE_FourParams(FOnExitOverlapSignature, UPrimitiveComponent*, OverlappedComponent, AActor*,
+									OtherActor, UPrimitiveComponent*, OtherComp, int32, OtherBodyIndex);
+
 template <class T>
 bool TArrayCompareOrderless(const TArray<T>& A, const TArray<T>& B)
 {

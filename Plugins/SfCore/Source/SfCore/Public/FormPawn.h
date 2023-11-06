@@ -6,6 +6,7 @@
 #include "GameFramework/Actor.h"
 #include "FormPawn.generated.h"
 
+class ARelevancyArea;
 class UFormCoreComponent;
 /**
  * APawn with a FormCoreComponent.
@@ -24,5 +25,9 @@ public:
 
 	inline static FName FormCoreComponentName = "FormCoreComp";
 
-	virtual void PossessedBy(AController* NewController) override;
+	//Form relevancy is based on ARelevancyArea.
+	virtual bool IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget, const FVector& SrcLocation) const override;
+
+	UPROPERTY()
+	TSet<ARelevancyArea*> RelevancyAreas;
 };

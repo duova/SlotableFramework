@@ -4,6 +4,7 @@
 #include "FormCharacter.h"
 
 #include "FormCharacterComponent.h"
+#include "RelevancyArea.h"
 
 AFormCharacter::AFormCharacter(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer.SetDefaultSubobjectClass<UFormCharacterComponent>(CharacterMovementComponentName))
 {
@@ -17,4 +18,18 @@ void AFormCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 	Cast<UFormCharacterComponent>(GetCharacterMovement())->SetupPlayerInputComponent(PlayerInputComponent);
+}
+
+bool AFormCharacter::IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget,
+	const FVector& SrcLocation) const
+{
+	for (const ARelevancyArea* Area : RelevancyAreas)
+	{
+		if (Area->Contains(ViewTarget)) return true;
+		for (const ARelevancyArea* LinkedArea : Area->VisibleFrom)
+		{
+			if (LinkedArea->Contains(ViewTarget)) return true;
+		}
+	}
+	return false;
 }

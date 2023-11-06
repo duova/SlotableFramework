@@ -11,6 +11,7 @@ ASfArea::ASfArea()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
+	bAlwaysRelevant = true;
 	SetReplicatingMovement(true);
 }
 
