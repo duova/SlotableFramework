@@ -95,17 +95,17 @@ void ASfProjectile::Overlap(UPrimitiveComponent* OverlappedComponent, AActor* Ot
 		if (Params.TeamsToIgnore.Contains(FormCore->GetTeam())) return;
 		if (Params.TeamsToPassthrough.Contains(FormCore->GetTeam()))
 		{
-			OverlapEvent.ExecuteIfBound(OtherActor, this, GetActorLocation(), ProjectileMovementComponent->Velocity, true);
+			OverlapEvent.ExecuteIfBound(OtherActor, OtherComp, this, GetActorLocation(), ProjectileMovementComponent->Velocity, true);
 			return;
 		}
 	}
 	if (Params.ActorsToPassthrough.Contains(OtherActor))
 	{
-		OverlapEvent.ExecuteIfBound(OtherActor, this, GetActorLocation(), ProjectileMovementComponent->Velocity, true);
+		OverlapEvent.ExecuteIfBound(OtherActor, OtherComp, this, GetActorLocation(), ProjectileMovementComponent->Velocity, true);
 		return;
 	}
 	//If not ignoring or passthrough, we remove the projectile after calling overlap event.
-	OverlapEvent.ExecuteIfBound(OtherActor, this, GetActorLocation(), ProjectileMovementComponent->Velocity, false);
+	OverlapEvent.ExecuteIfBound(OtherActor, OtherComp, this, GetActorLocation(), ProjectileMovementComponent->Velocity, false);
 	Destroy(true);
 }
 

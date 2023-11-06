@@ -28,7 +28,7 @@ struct FSfProjectileParams
 	TArray<FGameplayTag> TeamsToPassthrough;
 };
 
-DECLARE_DYNAMIC_DELEGATE_FiveParams(FProjectileOverlap, AActor*, Actor, ASfProjectile*, Projectile, FVector, ProjectileLocation, FVector, ProjectileVelocity, bool, bIsPassthrough);
+DECLARE_DYNAMIC_DELEGATE_SixParams(FProjectileOverlap, AActor*, Actor, UPrimitiveComponent*, PrimitiveComponent, ASfProjectile*, Projectile, FVector, ProjectileLocation, FVector, ProjectileVelocity, bool, bIsPassthrough);
 DECLARE_DYNAMIC_DELEGATE_SixParams(FInternalProjectileOverlap, UPrimitiveComponent*, OverlappedComponent, AActor*, OtherActor, UPrimitiveComponent*, OtherComp, int32, OtherBodyIndex, bool, bFromSweep, const FHitResult &, SweepResult);
 
 /*
