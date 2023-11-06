@@ -216,8 +216,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FSimulated_OnExecute);
  * should be put into another state (many SF nodes have a delay variable that can be used for short delays). Audiovisual
  * effects obviously cannot be instantaneous, but they should be called instantaneously.
  *
- * Note: SF has special implementations for audiovisual effects (including audio, niagara, animations, and material
- * property changes). These should be used instead of directly producing these effects. The nodes are marked Predicted_,
+ * Note: SF has special implementations for form based audiovisual effects in the plugin SfAudiovisual.
+ * These should be used instead of directly producing these effects. The nodes are marked Predicted_,
  * Simulated_, and Autonomous_ (the last one is more rare since usually they are Predicted). They are designed to guarantee
  * that the effects work with complex networking scenarios such as rollback and relevancy.
  */

@@ -106,58 +106,24 @@
  * as it is incremented and checks are made inside PerformMove, so lifetime reliant actions can still function
  * properly with prediction.
  * 
- * Movement Operators
+ * Movement
  *
- * Predicted_Impulse and Predicted_Force are simply called in PerformMove. Predicted_VelocityOverTime and
- * Predicted_ForceOverTime, which can disable movement and will lock the character into a velocity/acceleration for
- * a period of time, uses the PredictiveTimer to determine when to stop the movement.
+ * Sf version of launch character and velocity curve are available to produce precise predicted movement for a short time
+ * from a curve. The prediction logic is exactly the same as normal movement.
  *
  * FX
  *
- * Whenever Predicted_ audio, animation, and vfx are called, we check whether it is part of playback or an actual
- * tick. If it is part of a playback, we save the given clip and wait until the next actual tick, where we play the
- * saved clip starting from the timestamp copied from TimeSinceLastActionSet. Otherwise, we simply play the clip. Some
- * smoothing features may be implemented to reduce how jarring the rollback is.
- * Material changes can also be predicted. It has a similar implementation to the above but instead of playing clips,
- * the provided nodes are wrappers for set parameter on material functions. They offer curves to set how the material
- * parameters should change.
- * Two custom anim notifies are added. First there is the anim notify equivalent of the material change nodes. Second
- * there is a notify that spawns actors on sockets, with a curve to set the position and rotation of them over time.
- * These lightweight actors are given a value for time every tick, and the implementer is expected to produce effects
- * based on that time value, so that the sequence of actions can start in the middle. Both of these are designed for
- * rollback.
+ * Predicted FX is based all on animation montages, as almost all the time predicted actions on the client will have an
+ * animation. On top of that, there are custom anim notifies to play niagara effects and audio clips, as well as an
+ * extendable notify used for things such as material changes or socket actor spawning. All of these features are
+ * predicted, and know how to automatically rollback if there is a mis-predict.
  *
- * Projectiles, Hitscans, and Hit Effects
+ * Projectiles and Hitscans
  *
- * Projectiles are predicted in order to keep consistency in the game - so players are not expected to lead their
- * projectiles more or less based on ping. The autonomous client will fire the projectile and simulate instantly when
- * they are supposed to fired the projectile. When the fire event gets to the server, we fire from where the autonomous
- * client is on the server, but we forward the trajectory by half-RTT, so that in real time, the projectile is in the
- * same place on the autonomous client and on the server. However, the autonomous client fired at a simulated client
- * that is delayed by RTT, whereas on the server, the target is only delayed by half-RTT compared to the autonomous
- * client. Therefore, we still need to perform lag compensation and check the projectile's trajectory against colliders
- * half-RTT back in time. This prediction model favors the autonomous client. For everyone else, they see a projectile
- * being spawned projectile velocity * half-RTT in front of where it should be, and they also are lag compensated by
- * half-RTT.
- * To make sure the target player is relatively content with this model, we can interpolate the initial spawning on
- * the non-shooter clients to make it look like a fast projectile was slowed down, rather than a projectile being
- * spawned in front of the shooter. The idea of this model is that we make half of the latency visible to the player,
- * so that they can better react to it, but lag compensate the rest so that it does not seem incredibly obvious. Unlike
- * some other projectile prediction models, this one does not need exceptions for rewinding (for reactive ability use)
- * as only the target's collider needs to be rewound, not their state. This is because the projectile on the server
- * is actually accurate to the autonomous client, and there is no need to lag compensate for time, only location as
- * the autonomous client fired at a half-RTT movement late target. What this means is that the autonomous client can
- * only mispredict a landed hit by half-RTT, and they will instantly see why afterwards. For the owning client of the
- * target, if their reactive ability (of some form of invulnerability for example) is registered first on the server,
- * they cannot get hit even if rewound.
- * Since projectiles have a predictable trajectory, if we replay and realise that we've fired a projectile on the client,
- * we can simply spawn the projectile ahead in time to make sure the server projectile is represented on the client.
- * Hitscans/line traces are to be lag compensated/rewound in location by RTT. This favors the autonomous client in
- * terms of actually hitting the shot, but favors the target in using a state change to counteract the effects of the
- * shot.
- * Basic hit effects are to be produced by the predicted projectile hit. Major hit effects and actual state changes
- * are to be produced on confirmation.
- * Projectiles that are either very slow or are not directly aimed by the autonomous client should not be predicted.
+ * Projectile are not predicted as the CMC makes the autonomous character ahead in time compared to the simulated characters.
+ * This means that there is simply no way to have a projectile both hit a player's own character properly while having their
+ * projectiles hit the other players properly, as they essentially exist in different versions of time.
+ * Sf provides multi and single line trace functions that have lag compensation.
  *
  * Movement Speed Change
  *
