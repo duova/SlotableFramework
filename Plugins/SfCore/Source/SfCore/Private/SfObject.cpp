@@ -60,7 +60,7 @@ void USfObject::Destroy()
 	}
 }
 
-AActor* USfObject::SpawnActorInOwnerWorld(const TSubclassOf<AActor>& InClass, const FVector& Location, const FRotator& Rotation)
+AActor* USfObject::SpawnActorInOwnerWorld(const TSubclassOf<AActor>& InClass, const FVector Location, const FRotator Rotation) const
 {
 	if (!GetOwner()) return nullptr;
 	return GetOwner()->GetWorld()->SpawnActor<AActor>(InClass, Location, Rotation);

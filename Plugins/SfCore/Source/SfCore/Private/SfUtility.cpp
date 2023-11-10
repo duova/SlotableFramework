@@ -64,11 +64,6 @@ bool FInt16_Quantize10::operator==(const FInt16_Quantize10& Other) const
 	return false;
 }
 
-FSfTickFunctionHelper::FSfTickFunctionHelper(): Interval(0), TickCurrentTime(0), TickStartingTime(0),
-                                                TickFunction(nullptr)
-{
-}
-
 void FSfTickFunctionHelper::DriveTick(const float DeltaTime)
 {
 	TickCurrentTime += DeltaTime;

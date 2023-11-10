@@ -3,7 +3,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "SfObject.h"
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "GameFramework/GameStateBase.h"
 #include "UObject/Object.h"
 #include "SfUtility.generated.h"
 
@@ -215,12 +217,13 @@ struct SFCORE_API FSfTickFunctionHelper
 
 	FSfTickFunction TickFunction;
 	
-	FSfTickFunctionHelper();
+	FSfTickFunctionHelper() : Interval(0), TickCurrentTime(0),
+	                          TickStartingTime(0)
+	{
+	}
 
 	template <class T>
-	FSfTickFunctionHelper(const T* InObjectToBind, void(T::*InTickFunction)(const float DeltaTime), const float InIntervalInSeconds):
-		TickCurrentTime(0),
-		TickStartingTime(0)
+	FSfTickFunctionHelper(T* InObjectToBind, void (T::*InTickFunction)(const float DeltaTime), const float InIntervalInSeconds) : FSfTickFunctionHelper()
 	{
 		TickFunction.BindUObject(InObjectToBind, InTickFunction);
 		Interval = InIntervalInSeconds;
@@ -229,3 +232,46 @@ struct SFCORE_API FSfTickFunctionHelper
 	//Must be called by a higher tick function to drive the helper.
 	void DriveTick(const float DeltaTime);
 };
+
+//For our use cases, a synchronized timestamp without latency compensation works well enough.
+
+inline float CalculateFutureServerTimestamp(const UWorld* World, const float InAdditionalTime)
+{
+	if (!World)
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Tried to call CalculateFutureServerTimestamp with null World."));
+		return 0;
+	}
+	return World->GetGameState()->GetServerWorldTimeSeconds() + InAdditionalTime;
+}
+
+inline float CalculateTimeUntilServerTimestamp(const UWorld* World, const float InTimestamp)
+{
+	if (!World)
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Tried to call CalculateTimeUntilServerTimestamp with null World."));
+		return 0;
+	}
+	return InTimestamp - World->GetGameState()->GetServerWorldTimeSeconds();
+}
+
+inline float CalculateTimeSinceServerTimestamp(const UWorld* World,const float InTimestamp)
+{
+	if (!World)
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Tried to call CalculateTimeSinceServerTimestamp with null World."));
+		return 0;
+	}
+	return World->GetGameState()->GetServerWorldTimeSeconds() - InTimestamp;
+}
+
+inline bool HasServerTimestampPassed(const UWorld* World, const float InTimestamp)
+{
+	if (!World)
+	{
+		UE_LOG(LogSfCore, Error, TEXT("Tried to call HasServerTimestampPassed with null World."));
+		return false;
+	}
+	return CalculateTimeUntilServerTimestamp(World, InTimestamp) <= 0;
+}
+

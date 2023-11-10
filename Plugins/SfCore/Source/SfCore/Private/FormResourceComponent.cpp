@@ -93,10 +93,10 @@ void UFormResourceComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	if (!GetOwner()->HasAuthority()) return;
-	if (FormCore->CalculateTimeUntilServerFormTimestamp(NextReplicationServerTimestamp) < 0)
+	if (CalculateTimeUntilServerTimestamp(GetWorld(), NextReplicationServerTimestamp) < 0)
 	{
 		MARK_PROPERTY_DIRTY_FROM_NAME(UFormResourceComponent, Resources, this);
-		NextReplicationServerTimestamp = FormCore->CalculateFutureServerFormTimestamp(CalculatedTimeToEachReplication);
+		NextReplicationServerTimestamp = CalculateFutureServerTimestamp(GetWorld(), CalculatedTimeToEachReplication);
 	}
 }
 

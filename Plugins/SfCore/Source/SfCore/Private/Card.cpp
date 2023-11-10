@@ -83,8 +83,8 @@ FCard::FCard(const TSubclassOf<UCardObject>& InCardClass, const ECardType InCard
 				UE_LOG(LogSfCore, Error, TEXT("FCard constructor requires form core reference."));
 				break;
 			}
-			LifetimeEndTimestamp = InNullUnlessUsingServerTimestampFormCore->CalculateFutureServerFormTimestamp(
-				CardCDO->DefaultLifetimeInSeconds);
+			LifetimeEndTimestamp = CalculateFutureServerTimestamp(
+				InNullUnlessUsingServerTimestampFormCore->GetWorld(), CardCDO->DefaultLifetimeInSeconds);
 		}
 		else
 		{
@@ -110,7 +110,7 @@ FCard::FCard(const TSubclassOf<UCardObject>& InCardClass, const ECardType InCard
 			UE_LOG(LogSfCore, Error, TEXT("FCard constructor requires form core reference."));
 			break;
 		}
-		LifetimeEndTimestamp = InNullUnlessUsingServerTimestampFormCore->CalculateFutureServerFormTimestamp(InCustomLifetime);
+		LifetimeEndTimestamp = CalculateFutureServerTimestamp(InNullUnlessUsingServerTimestampFormCore->GetWorld(), InCustomLifetime);
 		break;
 	}
 }

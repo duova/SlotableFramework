@@ -240,12 +240,10 @@ void UFormCoreComponent::BeginPlay()
 			Triggers.Add(TriggerTag, FTriggerDelegate());
 		}
 
-		const uint8 TickRate = ServerTickRateCVar->GetInt();
-
-		TimeBetweenServerLocationSnapshots = 1 / TickRate;
+		TimeBetweenServerLocationSnapshots = 1 / ServerTickRate;
 
 		//Initialize a circular buffer large enough to hold all snapshots for 1 second.
-		ServerLocationSnapshots.AddDefaulted(TickRate);
+		ServerLocationSnapshots.AddDefaulted(ServerTickRate);
 	}
 
 	if (FormCharacter)
@@ -289,6 +287,15 @@ void UFormCoreComponent::OnRep_Inventories()
 	}
 }
 
+void UFormCoreComponent::TenSecondTick(const float DeltaTime)
+{
+	//Remove empty delegate bindings for inventories every 10 seconds.
+	for (UInventory* Inventory : Inventories)
+	{
+		Inventory->RemoveEmptyDelegateBindings();
+	}
+}
+
 void UFormCoreComponent::SetMovementStatsDirty() const
 {
 	MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, WalkSpeedStat, this);
@@ -311,23 +318,8 @@ void UFormCoreComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 		}
 		bInputsRequireSetup = false;
 	}
-	
-	NonCompensatedServerFormTime += DeltaTime;
 
-	if (NonCompensatedServerFormTime * 0.1 - FMath::Floor(NonCompensatedServerFormTime * 0.1) <= DeltaTime * 0.1)
-	{
-		//Remove empty delegate bindings for inventories every 10 seconds.
-		for (UInventory* Inventory : Inventories)
-		{
-			Inventory->RemoveEmptyDelegateBindings();
-		}
-
-		//We reset when it is soon to lose 2 decimal points of precision.
-		if (NonCompensatedServerFormTime > 40000.0)
-		{
-			NonCompensatedServerFormTime = 0;
-		}
-	}
+	TenSecondTickHelper.DriveTick(DeltaTime);
 	
 	if (!GetOwner()->HasAuthority()) return;
 	//Server only.
@@ -342,12 +334,6 @@ void UFormCoreComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 		if (!Constituent->bLastActionSetPendingClientExecution) return;
 		Constituent->PerformLastActionSetOnClients();
 		Constituent->bLastActionSetPendingClientExecution = false;
-	}
-
-	if (NonCompensatedServerFormTime * 0.5 - FMath::Floor(NonCompensatedServerFormTime * 0.5) <= DeltaTime * 0.5)
-	{
-		//We synchronize every 2 seconds.
-		MARK_PROPERTY_DIRTY_FROM_NAME(UFormCoreComponent, NonCompensatedServerFormTime, this);
 	}
 	
 	LowFrequencyTickDeltaTime += DeltaTime;
@@ -386,7 +372,6 @@ void UFormCoreComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& O
 	DefaultParams.Condition = COND_None;
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, Inventories, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, Team, DefaultParams);
-	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, NonCompensatedServerFormTime, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, WalkSpeedStat, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, SwimSpeedStat, DefaultParams);
 	DOREPLIFETIME_WITH_PARAMS_FAST(UFormCoreComponent, FlySpeedStat, DefaultParams);
@@ -526,29 +511,4 @@ void UFormCoreComponent::InternalClientSetToThirdPerson()
 bool UFormCoreComponent::IsFirstPerson()
 {
 	return bIsFirstPerson;
-}
-
-float UFormCoreComponent::GetNonCompensatedServerFormTime() const
-{
-	return NonCompensatedServerFormTime;
-}
-
-float UFormCoreComponent::CalculateFutureServerFormTimestamp(const float InAdditionalTime) const
-{
-	return NonCompensatedServerFormTime + InAdditionalTime;
-}
-
-float UFormCoreComponent::CalculateTimeUntilServerFormTimestamp(const float InTimestamp) const
-{
-	return InTimestamp - NonCompensatedServerFormTime;
-}
-
-float UFormCoreComponent::CalculateTimeSinceServerFormTimestamp(const float InTimestamp) const
-{
-	return NonCompensatedServerFormTime - InTimestamp;
-}
-
-bool UFormCoreComponent::HasServerFormTimestampPassed(const float InTimestamp) const
-{
-	return CalculateTimeUntilServerFormTimestamp(InTimestamp) <= 0;
 }

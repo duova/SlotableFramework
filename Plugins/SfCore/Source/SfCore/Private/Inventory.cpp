@@ -40,8 +40,8 @@ void UInventory::AuthorityTick(float DeltaTime)
 	//This is synchronized to clients through the FormCharacter and normal replication depending on the role of the client.
 	for (int16 i = Cards.Num() - 1; i >= 0; i--)
 	{
-		if (!Cards[i].bUsingPredictedTimestamp && Cards[i].LifetimeEndTimestamp > -1.f && OwningFormCore->CalculateTimeUntilServerFormTimestamp(
-			Cards[i].LifetimeEndTimestamp) < 0)
+		if (!Cards[i].bUsingPredictedTimestamp && Cards[i].LifetimeEndTimestamp > -1.f && CalculateTimeUntilServerTimestamp(
+			GetWorld(), Cards[i].LifetimeEndTimestamp) < 0)
 		{
 			Server_RemoveOwnedCard(Cards[i].Class, Cards[i].OwnerConstituentInstanceId);
 		}
@@ -1534,7 +1534,7 @@ float UInventory::GetCardLifetime(const TSubclassOf<UCardObject>& InCardClass, c
 		else
 		{
 			//Same function can be used for both server and client.
-			Value = OwningFormCore->CalculateTimeUntilServerFormTimestamp(Card.LifetimeEndTimestamp);
+			Value = CalculateTimeUntilServerTimestamp(GetWorld(), Card.LifetimeEndTimestamp);
 		}
 		break;
 	}

@@ -394,7 +394,7 @@ void UConstituent::InternalExecuteAction(const uint8 InActionId, const bool bInI
 		{
 			InternalServerOnExecute(InActionId, BitWriterToBitArray(SerializedParams));
 		}
-		LastActionSetTimestamp = OwningSlotable->OwningInventory->OwningFormCore->GetNonCompensatedServerFormTime();
+		LastActionSetTimestamp = GetWorld()->GetGameState()->GetServerWorldTimeSeconds();
 		//Flag so FormCoreComponent can call NetMulticastClientPerformActionSet on the LastActionSet.
 		bLastActionSetPendingClientExecution = true;
 	}
@@ -623,9 +623,9 @@ void UConstituent::InternalClientPerformActionSet()
 		       *GetClass()->GetName());
 		return;
 	}
-	float TimeSinceExecution = FMath::Max(FormCore->CalculateTimeSinceServerFormTimestamp(LastActionSetTimestamp), 0.f);
+	float TimeSinceExecution = FMath::Max(CalculateTimeSinceServerTimestamp(GetWorld(), LastActionSetTimestamp), 0.f);
 	//We zero out minimal differences to prevent subsequent nodes from making unnecessary calculations.
-	if (TimeSinceExecution < 0.05)
+	if (TimeSinceExecution < 0.1)
 	{
 		TimeSinceExecution = 0.f;
 	}
@@ -665,7 +665,7 @@ void UConstituent::PerformLastActionSetOnClients()
 		       *GetClass()->GetName());
 		return;
 	}
-	NetMulticastClientPerformActionSet(LastActionSet, FormCore->GetNonCompensatedServerFormTime());
+	NetMulticastClientPerformActionSet(LastActionSet, GetWorld()->GetGameState()->GetServerWorldTimeSeconds());
 }
 
 USfQuery* UConstituent::GetQuery(const TSubclassOf<USfQuery> QueryClass) const

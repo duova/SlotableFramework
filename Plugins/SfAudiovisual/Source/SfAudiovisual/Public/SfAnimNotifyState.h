@@ -34,6 +34,9 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, meta=(AutoCreateRefTerm="EventReference"))
 	void SfNotifyEnd(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation, const FAnimNotifyEventReference& EventReference, const float TimeSinceStart) const;
 
+	UFUNCTION(BlueprintCallable)
+	static AActor* SpawnActor(USkeletalMeshComponent* MeshComp, const TSubclassOf<AActor>& Class, const FVector Location, const FRotator Rotation);
+
 protected:
 	float GetTimeSinceNotifyStart(const FAnimNotifyEventReference& EventReference) const;
 };

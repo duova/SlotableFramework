@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "SfUtility.h"
 #include "Components/ActorComponent.h"
 #include "FormCoreComponent.generated.h"
 
@@ -82,21 +83,6 @@ public:
 	UFUNCTION(BlueprintPure)
 	bool IsFirstPerson();
 
-	//Works for client and server.
-	float GetNonCompensatedServerFormTime() const;
-
-	//Works for client and server.
-	float CalculateFutureServerFormTimestamp(const float InAdditionalTime) const;
-
-	//Works for client and server.
-	float CalculateTimeUntilServerFormTimestamp(const float InTimestamp) const;
-
-	//Works for client and server.
-	float CalculateTimeSinceServerFormTimestamp(const float InTimestamp) const;
-
-	//Works for client and server.
-	bool HasServerFormTimestampPassed(const float InTimestamp) const;
-
 	static const TArray<UClass*>& GetAllCardObjectClassesSortedByName();
 
 	UFormQueryComponent* GetFormQuery() const;
@@ -167,6 +153,10 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly)
 	UFormResourceComponent* FormResource;
 
+	//Must also be set in DefaultEngine.ini
+	UPROPERTY(EditDefaultsOnly)
+	uint32 ServerTickRate = 50;
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -177,9 +167,6 @@ protected:
 	TArray<TSubclassOf<UInventory>> DefaultInventoryClasses;
 
 private:
-
-	UPROPERTY(Replicated)
-	float NonCompensatedServerFormTime;
 	
 	UFUNCTION()
 	void OnRep_Inventories();
@@ -218,5 +205,7 @@ private:
 
 	float TimeBetweenServerLocationSnapshots;
 
-	inline static const auto ServerTickRateCVar = IConsoleManager::Get().FindConsoleVariable(TEXT("NetServerMaxTickRate"));
+	FSfTickFunctionHelper TenSecondTickHelper{this, &UFormCoreComponent::TenSecondTick, 10.f};
+
+	void TenSecondTick(const float DeltaTime);
 };

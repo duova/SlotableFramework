@@ -1362,15 +1362,16 @@ void UFormCharacterComponent::HandleCardClientSyncTimeout() const
 		TArray<FCard>& Cards = Inventory->Cards;
 		for (int16 i = Cards.Num() - 1; i >= 0; i--)
 		{
-			if (Cards[i].bIsNotCorrected && FormCore->HasServerFormTimestampPassed(
-				Cards[i].ServerAwaitClientSyncTimeoutTimestamp))
+			if (!HasServerTimestampPassed(
+				GetWorld(), Cards[i].ServerAwaitClientSyncTimeoutTimestamp))
+				continue;
+			if (Cards[i].bIsNotCorrected)
 			{
 				//We set bIsNotCorrected to false so these cards get checked against the client ones and essentially
 				//force a correction to get the client to sync up.
 				Cards[i].bIsNotCorrected = false;
 			}
-			if (Cards[i].bIsDisabledForDestroy && FormCore->HasServerFormTimestampPassed(
-				Cards[i].ServerAwaitClientSyncTimeoutTimestamp))
+			if (Cards[i].bIsDisabledForDestroy)
 			{
 				//We remove these cards which also forces a correction to get the client to sync up.
 				Cards.RemoveAt(i, 1, false);
@@ -1634,8 +1635,9 @@ void UFormCharacterComponent::UpdateCharacterStateBeforeMovement(float DeltaSeco
 		{
 			//Apply consistent resource changes.
 			//Applies every at a specified increment of the predicted net clock only to reduce bandwidth and processing usage.
+			//This is based directly on the net clock as determinism is required here.
 			//This math is supposed to divide the clock by the time between resource updates and use FMath::Floor to determine whether
-			//the second number has crossed the threshold. Multiplication is used instead for speed.
+			//the second number has crossed the threshold.
 			if (FMath::Floor(PredictedNetClock * ResourceUpdatesPerSecond) != FMath::Floor(
 				(PredictedNetClock + DeltaSeconds) * ResourceUpdatesPerSecond))
 			{

@@ -29,6 +29,14 @@ void USfAnimNotifyState::InternalSfNotifyEnd(USkeletalMeshComponent* MeshComp, U
 	SfNotifyEnd(MeshComp, Animation, EventReference, TimeSinceStart);
 }
 
+AActor* USfAnimNotifyState::SpawnActor(USkeletalMeshComponent* MeshComp, const TSubclassOf<AActor>& Class,
+	const FVector Location, const FRotator Rotation)
+{
+	FActorSpawnParameters Params = FActorSpawnParameters();
+	Params.Owner = MeshComp->GetOwner();
+	return MeshComp->GetOwner()->GetWorld()->SpawnActor(Class, &Location, &Rotation, Params);
+}
+
 float USfAnimNotifyState::GetTimeSinceNotifyStart(const FAnimNotifyEventReference& EventReference) const
 {
 	const float Time = EventReference.GetNotify()->GetTime(EAnimLinkMethod::Relative);

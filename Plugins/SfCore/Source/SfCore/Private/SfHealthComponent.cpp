@@ -192,7 +192,7 @@ float USfHealthComponent::ApplyHealthChange(const float InValue, UConstituent* S
 	//We compress health change data with identical sources and processors together in order to prevent ticked
 	//health changes (damage over time) to bloat our buffer.
 	AddHealthChangeDataAndCompress(InValue, FinalHealthChange, Source, InProcessors,
-	                              FormCore->CalculateFutureServerFormTimestamp(RecentHealthChangeDataTimeout));
+	                              CalculateFutureServerTimestamp(GetWorld(), RecentHealthChangeDataTimeout));
 	TrimTimeout();
 	if (Health <= 0)
 	{
@@ -287,7 +287,7 @@ void USfHealthComponent::TrimTimeout()
 {
 	for (int16 i = OrderedRecentHealthChange.Num() - 1; i >= 0; i--)
 	{
-		if (FormCore->HasServerFormTimestampPassed(OrderedRecentHealthChange[i].TimeoutTimestamp))
+		if (HasServerTimestampPassed(GetWorld(), OrderedRecentHealthChange[i].TimeoutTimestamp))
 		{
 			OrderedRecentHealthChange.RemoveAt(i, 1, false);
 		}
