@@ -23,6 +23,7 @@ void AFormCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 bool AFormCharacter::IsNetRelevantFor(const AActor* RealViewer, const AActor* ViewTarget,
 	const FVector& SrcLocation) const
 {
+	if (bAlwaysRelevant) return true;
 	for (const ARelevancyArea* Area : RelevancyAreas)
 	{
 		if (Area->Contains(ViewTarget)) return true;

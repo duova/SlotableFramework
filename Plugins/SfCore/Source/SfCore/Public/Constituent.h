@@ -356,11 +356,12 @@ public:
 	UConstituent* GetOriginatingConstituent() const;
 
 	UFUNCTION(NetMulticast, Unreliable)
-	void NetMulticastClientPerformActionSet(const FActionSet& InActionSet, const float InServerFormTimestamp);
-
-	//TODO: On relevancy, pass a pointer to this actor through the PlayerController to the client where this actor just became relevant. Also update card objects and reset animation montages in case some are running on loop and weren't stopped.
+	void NetMulticastClientPerformActionSet(const FActionSet& InActionSet, const float InServerTimestamp);
+	
 	//The last action set and time since values will have to be passed through as those would presumably not have updated.
 	//This is so we can call internal client perform action set and play the most recent action(s).
+	//This might be used to add post-relevancy action synchronization in the future, where actors are expected to go relevant and irrelevant
+	//close to the line of sight of the viewer. But for the current use case RPC based actions should work well enough.
 	void InternalClientPerformActionSet();
 
 	void IncrementTimeSincePredictedLastActionSet(const float InTimePassed);

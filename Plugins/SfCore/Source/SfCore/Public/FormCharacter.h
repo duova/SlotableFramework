@@ -34,4 +34,7 @@ public:
 
 	UPROPERTY()
 	TSet<ARelevancyArea*> RelevancyAreas;
+
+private:
+	bool bWasRelevant = false;
 };

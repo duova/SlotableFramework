@@ -56,6 +56,7 @@ struct SFCORE_API FResourceArray
 
 	bool operator!=(const FResourceArray& Other) const;
 
+	//Note that this only serializes values and nothing else.
 	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess);
 };
 

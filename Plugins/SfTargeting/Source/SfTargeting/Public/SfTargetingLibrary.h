@@ -47,7 +47,6 @@ class SFTARGETING_API USfTargetingLibrary : public UObject
 	static void RollbackPotentialTargets(const float InClientSubmittedWorldTime, TArray<FHitResult>& TargetsWithinCompensationRange);
 
 	static void RestorePotentialTargets(TArray<FHitResult>& TargetsWithinCompensationRange);
-
-	//TODO: Make this a CVar
+	
 	static constexpr float MaxCompensationTimeSeconds = 0.25;
 };

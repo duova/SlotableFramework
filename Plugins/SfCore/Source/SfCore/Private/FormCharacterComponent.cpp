@@ -219,7 +219,10 @@ void FSavedMove_Sf::SetMoveFor(ACharacter* C, float InDeltaTime, FVector const& 
 	const UFormCharacterComponent* CharacterComponent = Cast<UFormCharacterComponent>(C->GetCharacterMovement());
 
 	bWantsToSprint = CharacterComponent->bWantsToSprint;
-	LookPitch.SetFloat(CharacterComponent->LookComponent->GetRelativeRotation().Pitch);
+	if (CharacterComponent->LookComponent)
+	{
+		LookPitch.SetFloat(CharacterComponent->LookComponent->GetRelativeRotation().Pitch);
+	}
 	EnabledInputSets = CharacterComponent->EnabledInputSets;
 	if (EnabledInputSets > 0)
 	{
@@ -252,9 +255,12 @@ void FSavedMove_Sf::PrepMoveFor(ACharacter* C)
 	UFormCharacterComponent* CharacterComponent = Cast<UFormCharacterComponent>(C->GetCharacterMovement());
 
 	CharacterComponent->bWantsToSprint = bWantsToSprint;
-	CharacterComponent->LookPitch = LookPitch;
-	const float Angle = FMath::ClampAngle(LookPitch.GetFloat(), -90.f, 90.f);
-	CharacterComponent->LookComponent->SetRelativeRotation(FRotator(Angle, 0, 0));
+	if (CharacterComponent->LookComponent)
+	{
+		CharacterComponent->LookPitch = LookPitch;
+		const float Angle = FMath::ClampAngle(LookPitch.GetFloat(), -90.f, 90.f);
+		CharacterComponent->LookComponent->SetRelativeRotation(FRotator(Angle, 0, 0));
+	}
 
 	if (CharacterComponent->EnabledInputSets > 0)
 	{
@@ -671,11 +677,7 @@ UFormCharacterComponent::UFormCharacterComponent()
 	bClientActionsWereUpdated = false;
 	bClientCardsWereUpdated = false;
 	bClientResourcesWereUpdated = false;
-	NetworkMinTimeBetweenClientAdjustments = 0.2;
-	NetworkMinTimeBetweenClientAckGoodMoves = 0.01;
 	DefaultGroundFriction = 0;
-	//TODO: Allow smoothing to run at a higher frame rate.
-	SetComponentTickInterval(0.01);
 }
 
 bool UFormCharacterComponent::ShouldUsePackedMovementRPCs() const
@@ -826,11 +828,13 @@ void UFormCharacterComponent::SetupPlayerInputComponent(UInputComponent* PlayerI
 
 FVector UFormCharacterComponent::GetLookLocation() const
 {
+	if (!LookComponent) return FVector::Zero();
 	return LookComponent->GetComponentLocation();
 }
 
 FVector UFormCharacterComponent::GetLookVector() const
 {
+	if (!LookComponent) return FVector::Zero();
 	return LookComponent->GetComponentRotation().Vector();
 }
 
@@ -842,6 +846,11 @@ void UFormCharacterComponent::Predicted_SelfMovementDisabled(const bool bIsDisab
 void UFormCharacterComponent::Server_SelfMovementDisabled(const bool bIsDisabled)
 {
 	bDisableSelfMovement = bIsDisabled;
+}
+
+bool UFormCharacterComponent::GetSelfMovementDisabled() const
+{
+	return bDisableSelfMovement;
 }
 
 void UFormCharacterComponent::Predicted_LaunchCharacter(const FVector InLaunchVelocity, const bool bInXYOverride,

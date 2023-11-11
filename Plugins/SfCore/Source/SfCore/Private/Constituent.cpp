@@ -598,11 +598,11 @@ UConstituent* UConstituent::GetOriginatingConstituent() const
 }
 
 void UConstituent::NetMulticastClientPerformActionSet_Implementation(const FActionSet& InActionSet,
-                                                                     const float InServerFormTimestamp)
+                                                                     const float InServerTimestamp)
 {
 	if (HasAuthority()) return;
 	LastActionSet = InActionSet;
-	LastActionSetTimestamp = InServerFormTimestamp;
+	LastActionSetTimestamp = InServerTimestamp;
 	InternalClientPerformActionSet();
 }
 
@@ -625,7 +625,7 @@ void UConstituent::InternalClientPerformActionSet()
 	}
 	float TimeSinceExecution = FMath::Max(CalculateTimeSinceServerTimestamp(GetWorld(), LastActionSetTimestamp), 0.f);
 	//We zero out minimal differences to prevent subsequent nodes from making unnecessary calculations.
-	if (TimeSinceExecution < 0.1)
+	if (TimeSinceExecution < 0.2)
 	{
 		TimeSinceExecution = 0.f;
 	}

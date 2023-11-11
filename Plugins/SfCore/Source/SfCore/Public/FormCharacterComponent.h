@@ -636,6 +636,9 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	void Server_SelfMovementDisabled(const bool bIsDisabled);
 
+	UFUNCTION(BlueprintCallable, BlueprintPure)
+	bool GetSelfMovementDisabled() const;
+
 	//Movement utility functions.
 
 	//Wrapper for LaunchCharacter that accounts for self-initiation.
@@ -650,7 +653,7 @@ public:
 	UFUNCTION(BlueprintCallable)
 	FMovementCurveKey Predicted_StartVelocityCurve(const FVector& InVector, UCurveFloat* InMagnitudeCurve, const float InDuration, const bool bInSelfInitiated);
 
-	//Stops an acceleration curve.
+	//Stops an velocity curve.
 	UFUNCTION(BlueprintCallable)
 	void Predicted_EndVelocityCurve(const FMovementCurveKey& InCurveKey);
 
@@ -658,7 +661,7 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	FMovementCurveKey Server_StartVelocityCurve(const FVector& InVector, UCurveFloat* InMagnitudeCurve, const float InDuration, const bool bInSelfInitiated);
 
-	//Stops an acceleration curve.
+	//Stops an velocity curve.
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly)
 	void Server_EndVelocityCurve(const FMovementCurveKey& InCurveKey);
 
