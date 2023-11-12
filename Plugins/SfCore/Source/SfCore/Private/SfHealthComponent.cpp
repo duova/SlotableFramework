@@ -6,6 +6,7 @@
 #include "FormCoreComponent.h"
 #include "FormStatComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "Net/Core/PushModel/PushModel.h"
 
 FHealthChangeData::FHealthChangeData(): InValue(0), OutValue(0), Source(nullptr), TimeoutTimestamp(0)
 {

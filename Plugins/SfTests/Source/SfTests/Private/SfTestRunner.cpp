@@ -9,6 +9,7 @@
 #include "SfUtility.h"
 #include "GameFramework/GameModeBase.h"
 #include "Net/UnrealNetwork.h"
+#include "Net/Core/PushModel/PushModel.h"
 
 ASfTestRunner::ASfTestRunner()
 {

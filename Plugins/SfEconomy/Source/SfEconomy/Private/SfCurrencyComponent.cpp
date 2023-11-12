@@ -6,6 +6,7 @@
 #include "SfObject.h"
 #include "SfUtility.h"
 #include "Net/UnrealNetwork.h"
+#include "Net/Core/PushModel/PushModel.h"
 
 DEFINE_LOG_CATEGORY(LogSfEconomy);
 

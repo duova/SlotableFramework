@@ -6,6 +6,7 @@
 #include "FormCoreComponent.h"
 #include "SfTargetingLibrary.h"
 #include "Net/UnrealNetwork.h"
+#include "Net/Core/PushModel/PushModel.h"
 
 ASfProjectile::ASfProjectile(): ConstituentOwner(nullptr)
 {

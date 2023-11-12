@@ -5,5 +5,5 @@
 
 float ASfGameState::GetRawReplicatedServerWorldTime() const
 {
-	return ReplicatedWorldTimeSeconds;
+	return ReplicatedWorldTimeSecondsDouble;
 }

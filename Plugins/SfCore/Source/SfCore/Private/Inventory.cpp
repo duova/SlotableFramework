@@ -8,6 +8,7 @@
 #include "FormCoreComponent.h"
 #include "Slotable.h"
 #include "Net/UnrealNetwork.h"
+#include "Net/Core/PushModel/PushModel.h"
 
 UInventory::UInventory()
 {
@@ -235,7 +236,7 @@ bool UInventory::HasOwnedCard(const TSubclassOf<UCardObject>& InCardClass,
 	{
 		UE_LOG(LogSfCore, Error, TEXT("Called HasOwnedCard on UInventory class %s with an empty TSubclassOf."),
 		       *GetClass()->GetName());
-		return nullptr;
+		return false;
 	}
 	for (const FCard& Card : Cards)
 	{

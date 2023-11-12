@@ -6,6 +6,7 @@
 #include "GauntletModule.h"
 #include "SfTestRunner.h"
 #include "Net/UnrealNetwork.h"
+#include "Net/Core/PushModel/PushModel.h"
 
 FTestProcedure::FTestProcedure(): NetRole(), PostProcedureWaitForSeconds(0)
 {

@@ -6,6 +6,7 @@
 #include "Constituent.h"
 #include "Inventory.h"
 #include "Net/UnrealNetwork.h"
+#include "Net/Core/PushModel/PushModel.h"
 
 USlotable::USlotable()
 {

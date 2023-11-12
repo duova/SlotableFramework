@@ -10,6 +10,7 @@
 #include "Slotable.h"
 #include "FormQueryComponent.h"
 #include "Net/UnrealNetwork.h"
+#include "Net/Core/PushModel/PushModel.h"
 
 FActionSet::FActionSet(): NumActionsMinusOne(0), ActionZero(0), ActionOne(0), ActionTwo(0), ActionThree(0),
                           WorldTime(0)

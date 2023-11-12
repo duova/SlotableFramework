@@ -8,8 +8,8 @@ public class SlotableFrameworkEditorTarget : TargetRules
 	public SlotableFrameworkEditorTarget( TargetInfo Target) : base(Target)
 	{
 		Type = TargetType.Editor;
-		DefaultBuildSettings = BuildSettingsVersion.V2;
-		IncludeOrderVersion = EngineIncludeOrderVersion.Unreal5_1;
+		DefaultBuildSettings = BuildSettingsVersion.V4;
+		IncludeOrderVersion = EngineIncludeOrderVersion.Latest;
 		ExtraModuleNames.Add("SlotableFramework");
 		bWithPushModel = true;
 	}

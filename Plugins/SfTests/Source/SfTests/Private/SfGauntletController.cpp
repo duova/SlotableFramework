@@ -3,6 +3,7 @@
 
 #include "SfGauntletController.h"
 
+#include "GauntletModule.h"
 #include "SfTestRunner.h"
 
 void USfGauntletController::OnPostMapChange(UWorld* World)

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
 #include "Components/ActorComponent.h"
+#include "Net/Serialization/FastArraySerializer.h"
 #include "FormStatComponent.generated.h"
 
 class UFormStatComponent;

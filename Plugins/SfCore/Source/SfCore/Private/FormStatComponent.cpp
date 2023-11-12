@@ -4,6 +4,7 @@
 #include "FormStatComponent.h"
 
 #include "SfObject.h"
+#include "SfUtility.h"
 #include "Net/UnrealNetwork.h"
 
 
