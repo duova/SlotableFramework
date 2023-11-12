@@ -62,6 +62,7 @@ public:
 protected:
 
 	//FXSystem Pointer to Spawned Effect called from Notify.
+	UPROPERTY()
 	UFXSystemComponent* SpawnedEffect;
 
 	// Cached version of the Rotation Offset already in Quat form

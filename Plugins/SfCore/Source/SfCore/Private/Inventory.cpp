@@ -10,7 +10,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Net/Core/PushModel/PushModel.h"
 
-UInventory::UInventory()
+UInventory::UInventory(): OwningFormCore(nullptr), bIsDynamic(false), bIsChangeLocked(false), LocalInventoryTime(0)
 {
 	bIsOnFormCharacter = false;
 	bInitialized = false;

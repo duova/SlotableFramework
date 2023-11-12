@@ -8,7 +8,7 @@
 #include "Net/UnrealNetwork.h"
 #include "Net/Core/PushModel/PushModel.h"
 
-USlotable::USlotable()
+USlotable::USlotable(): OwningInventory(nullptr)
 {
 }
 

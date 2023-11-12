@@ -9,7 +9,7 @@
 
 //Implementation here is mostly from AnimNotify_PlaySound.
 
-USfAnimNotifyState_PlaySound::USfAnimNotifyState_PlaySound() : Super(), bFollow(0)
+USfAnimNotifyState_PlaySound::USfAnimNotifyState_PlaySound() : Super(), bFollow(0), CurrentAudioComponent(nullptr)
 {
 	VolumeMultiplier = 1.f;
 	PitchMultiplier = 1.f;

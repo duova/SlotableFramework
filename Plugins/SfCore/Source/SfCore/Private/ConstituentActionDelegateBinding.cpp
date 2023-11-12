@@ -19,7 +19,7 @@ void UConstituentActionDelegateBinding::BindDynamicDelegates(UObject* InInstance
 			InInstance->GetClass(), Binding.DelegatePropertyName))
 		{
 			// Get the function we want to bind
-			if (UFunction* FunctionToBind = InInstance->GetClass()->FindFunctionByName(Binding.FunctionNameToBind))
+			if (InInstance->GetClass()->FindFunctionByName(Binding.FunctionNameToBind))
 			{
 				// Bind function on the instance to this delegate
 				FScriptDelegate Delegate;

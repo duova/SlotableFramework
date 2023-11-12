@@ -177,7 +177,7 @@ TArray<FStat> UFormStatComponent::Server_AddStatModifierBatch(const TArray<FStat
 
 bool UFormStatComponent::Server_RemoveStatModifier(const FStat& InModifier, const EStatModifierType InType)
 {
-	bool bRemoved = false;
+	bool bRemoved;
 	switch (InType)
 	{
 	case Additive:
@@ -204,7 +204,7 @@ bool UFormStatComponent::Server_RemoveStatModifier(const FStat& InModifier, cons
 bool UFormStatComponent::Server_RemoveStatModifierBatch(TArray<FStat> InModifiers, const EStatModifierType InType)
 {
 	bool bRemovedSomething = false;
-	TArray<FStat>* StatModifierArray = nullptr;
+	TArray<FStat>* StatModifierArray;
 	switch (InType)
 	{
 	case Additive:
