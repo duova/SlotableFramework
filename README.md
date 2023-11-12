@@ -31,4 +31,4 @@ Documentation outside of in-code commenting is WIP.
 
 # Gauntlet
 
-Gauntlet code compiled with UAT cannot be in the project directory and is kept in a separate repository here: https://github.com/duova/SfTests.Automation.git
+The fork of the Unreal Engine source code used to compile this project - which includes SF gauntlet code - can be found here: https://github.com/duova/SfUnrealEngine
